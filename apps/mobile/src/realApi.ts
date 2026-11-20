@@ -20,6 +20,7 @@ export const realApi: PulseApi = {
   getDashboard: (q) =>
     request('GET', '/api/dashboard', { query: { days: q?.days ?? 30, platform: q?.platform ?? undefined } }),
   getActivity: (limit = 30) => request('GET', '/api/activity', { query: { limit } }),
+  getInsights: (q) => request('GET', '/api/insights', { query: { days: q?.days ?? 30 } }),
 
   listPosts: (q) =>
     request('GET', '/api/posts', {
