@@ -9,7 +9,6 @@
 import { Linking, Platform as RNPlatform } from 'react-native';
 
 import { getToken, isMock } from './http';
-import { mockApi, mockClickLink } from './mock';
 import { realApi } from './realApi';
 import type { Post, PulseApi } from './types';
 
@@ -30,7 +29,19 @@ export {
   setUnauthorizedHandler,
 } from './http';
 
-const current = (): PulseApi => (isMock() ? mockApi : realApi);
+/**
+ * The in-memory mock (53 KB) is only needed for the offline demo and mock builds, so it is loaded on first use
+ * instead of sitting in the first-load chunk of real web builds. Every PulseApi method already returns a Promise.
+ */
+const loadMock = () => import('./mock');
+const lazyMockApi: PulseApi = new Proxy({} as PulseApi, {
+  get:
+    (_target, prop: string) =>
+    (...args: unknown[]) =>
+      loadMock().then((m) => (m.mockApi as unknown as Record<string, (...a: unknown[]) => unknown>)[prop](...args)),
+});
+
+const current = (): PulseApi => (isMock() ? lazyMockApi : realApi);
 
 /** Delegates every call to whichever implementation is active right now. */
 export const api: PulseApi = new Proxy({} as PulseApi, {
@@ -48,7 +59,10 @@ export const api: PulseApi = new Proxy({} as PulseApi, {
 export async function openTrackedLink(post: Pick<Post, 'link_url' | 'link_code'>): Promise<void> {
   if (!post.link_url) return;
   if (isMock()) {
-    if (post.link_code) mockClickLink(post.link_code);
+    if (post.link_code) {
+      const code = post.link_code;
+      void loadMock().then((m) => m.mockClickLink(code));
+    }
     return;
   }
   if (RNPlatform.OS === 'web' && typeof window !== 'undefined') {

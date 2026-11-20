@@ -53,3 +53,23 @@ public/             PWA manifest + icons (copied into dist/)
 
 `eas.json` profiles: `preview` (Android APK, internal), `ios-sim` (iOS simulator build), `production`.
 `EXPO_PUBLIC_API_URL` is set per profile to the placeholder `https://pulse-hackathon.fly.dev`.
+
+## Desktop layout, rooms, share (wide >= 1024 px)
+
+- **Wide board.** `src/layout` (`useWide()`, `Grid`, `Col`) switches every tab to a desktop board at >= 1024 px and a
+  left sidebar replaces the bottom tab bar (tab testIDs `tab-dashboard|trends|create|queue|settings` on both). Below
+  1024 px the phone layout is untouched. Dashboard = whiteboard (header + KPIs + Real people | Outside trends; donut +
+  funnel + 30-day chart | Generate column; connectors; Themes (Jev AI); top posts + live activity), Create = form left
+  and preview cards right, Queue = three status columns, Trends = 3-column grid, Settings = 2-column grid.
+- **Post it for real.** `src/components/share`: `share-<platform>` buttons on every Create and Queue card call
+  `GET /api/posts/{id}/share` (falls back to `src/shareLinks.ts` when that answers 404) and open the composer in a new
+  tab; Instagram/TikTok copy the caption. The post is marked published afterwards.
+- **Rooms.** `start-room` (`POST /api/rooms`) opens `screen_url?token=<session token>` and shows the join link.
+  `/?room=<code>` (web) and `pulse://?room=<code>` create a guest workspace ("My brand") with no form and show the
+  `room-welcome` banner; `install-banner` offers the Android APK or the iPhone "Add to Home Screen" hint (web only).
+- **Insights.** The Themes (Jev AI) card reads `GET /api/insights` (`docs/LEARNING.md`).
+- **Web budget.** See `docs/PERF.md`: first screen JS ~1.29 MB (new visitor) / ~1.45 MB (dashboard), raw.
+- **Layout check.** `EXPO_PUBLIC_MOCK=1 npx expo export --platform web --clear --output-dir dist-mock`, then
+  `cd e2e && npx playwright test -c playwright.layout.config.ts` (1440x900 and 390x844, every tab: screenshots, no
+  horizontal overflow, no console errors). Use `--clear` whenever you switch between mock and real exports (Metro's
+  cache ignores `EXPO_PUBLIC_*` changes).
