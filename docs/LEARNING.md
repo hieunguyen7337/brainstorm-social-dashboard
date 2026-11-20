@@ -87,7 +87,9 @@ back to `posts.theme_id` (treated as manual), which is what makes seeded workspa
 block but not in the theme block.
 
 `top_themes` = the best three themes by onboard rate, then click rate, then engagement rate, with at least two
-posts. `sources` counts the window's posts by `posts.metrics_source` (`sim` is simulated, anything else is real).
+posts and some views. `themes` also lists every active theme without posts in the window (`posts: 0`, `lift: 0.0`).
+`classifiers` (per theme and overall) counts the themed posts by how they were assigned (`jev`, `claude`,
+`keyword`, `manual`; zero keys omitted), which is what the app's "classified by Jev" label reads. `sources` counts the window's posts by `posts.metrics_source` (`sim` is simulated, anything else is real).
 `summary` is a template-built plain-English paragraph. `POST /api/insights/refresh` asks Claude for a better
 paragraph, stores it in the `insights` table and returns it (template text when the AI is not allowed or fails);
 `GET /api/insights` surfaces the stored paragraph as `cached_summary`.
@@ -121,10 +123,26 @@ records one `ai_usage` row for the whole generation.
 | `reddit` | reddit | title + body, no hashtags, `Suggested subreddit: r/...`, community tone |
 | `facebook` | facebook | friendly, ends with a question, 0-3 hashtags |
 
-If a channel's Claude output cannot meet its limits after normalisation (for example a LinkedIn post that is too
-short), that channel alone falls back to its template; the other channels keep their AI output.
+Claude output is normalised against the channel's limits (extra hashtags clipped, hashtags moved out of the text, an
+over-long X post clipped, a missing Instagram/TikTok visual plan replaced by the template's, a LinkedIn post under
+1200 characters topped up with generic paragraphs before its closing line). Output that cannot be repaired (for
+example a LinkedIn post over 1800 characters) makes that channel alone fall back to its template; the other
+channels keep their AI output. Limits are checked on the final post, after `{link}` is replaced by the real tracked
+link.
 
 ## AI budget
 
 Each purpose (`generate`, `classify`, `insights`) has its own per-workspace budget of `AI_WORKSPACE_LIMIT` calls;
-`AI_GLOBAL_CAP_USD` is shared by all of them. `GET /api/ai/usage` still reports the `generate` budget only.
+`AI_GLOBAL_CAP_USD` is shared by all of them. `GET /api/ai/usage` still reports the `generate` budget only. A
+generation makes up to five Claude calls (one per channel) but records ONE `generate` usage row with the summed
+tokens, so the per-workspace generation count still means "generations", not calls.
+
+## Known limits
+
+- With a classifier-less workspace (no active themes) nothing is classified and no Claude call is made.
+- `classify_posts` skips posts that already have a manual row; a post carrying only `posts.theme_id` is treated as
+  manual by insights and by `POST /api/themes/classify` (which backfills it first), but if someone passes such a post
+  straight to `classify_posts` an automatic row can outrank it. `/api/generate` only passes posts without a theme.
+- Seeded theme x platform cells hold one post each, so the per-platform "what works" lines carry an "early signal"
+  caveat until real traffic arrives.
+- The MCP server (`mcp_server.py`, owned by the lead) does not expose insights or classify yet.
