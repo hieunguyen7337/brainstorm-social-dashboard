@@ -44,15 +44,22 @@ const test = base.extend<{ problems: string[] }>({
 // ---------------------------------------------------------------------------------------------------------------------
 // Navigation helpers
 
-/** Tab button: the sidebar/tab-bar testID (`tab-dashboard`, ...) first, role tab / link as the fallback. */
+/**
+ * Tab button: the sidebar/tab-bar testID (`tab-dashboard`, ...) first, role tab / link as the fallback. The accessible
+ * name of a tab carries its icon glyph ("\uf2c5 Dashboard"), so the name is matched allowing non-word chars in front.
+ */
 async function tabButton(page: Page, name: Tab): Promise<Locator> {
-  const byId = page.getByTestId(`tab-${name.toLowerCase()}`).filter({ visible: true });
-  if ((await byId.count()) > 0) return byId.first();
-  const byTab = page.getByRole('tab', { name, exact: true }).filter({ visible: true });
-  if ((await byTab.count()) > 0) return byTab.first();
-  const byLink = page.getByRole('link', { name, exact: true }).filter({ visible: true });
-  if ((await byLink.count()) > 0) return byLink.first();
-  return page.getByText(name, { exact: true }).filter({ visible: true }).first(); // same last resort as fixtures.openTab
+  const label = new RegExp(`^[^\\w]*${name}$`);
+  const candidates = [
+    page.getByTestId(`tab-${name.toLowerCase()}`),
+    page.getByRole('tab', { name: label }),
+    page.getByRole('link', { name: label }),
+  ];
+  for (const c of candidates) {
+    const visible = c.filter({ visible: true });
+    if ((await visible.count()) > 0) return visible.first();
+  }
+  throw new Error(`No visible tab button for "${name}" (tried testID tab-${name.toLowerCase()}, role tab, role link)`);
 }
 
 async function openTab(page: Page, tab: Tab) {
@@ -108,6 +115,11 @@ function measureLayout(): OverflowReport {
       right: Math.round(r.right),
     };
   };
+  // react-navigation keeps inactive tab scenes mounted under the active one (aria-hidden, z-index -1): not on screen.
+  const inactiveRoots = Array.from(document.querySelectorAll('[aria-hidden="true"], [inert]')).filter(
+    (n) => n.hasAttribute('inert') || Number(getComputedStyle(n).zIndex) < 0,
+  );
+  const inInactive = (el: Element) => inactiveRoots.some((n) => n.contains(el));
   // Position fixed/absolute and entirely right of the viewport: off-screen decoration (parked drawers, toasts, glows).
   const parkedOffscreen = (el: Element) => {
     const cs = getComputedStyle(el);
@@ -120,7 +132,7 @@ function measureLayout(): OverflowReport {
 
   for (const el of Array.from(document.body.querySelectorAll('*'))) {
     const cs = getComputedStyle(el);
-    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    if (cs.display === 'none' || cs.visibility === 'hidden' || inInactive(el)) continue;
     const r = el.getBoundingClientRect();
 
     // Inner page scroller (react-native-web ScrollView): its content height counts, and wider-than-box content is clipped.
@@ -164,7 +176,11 @@ function measureLayout(): OverflowReport {
 function findBottomBar(labels: string[]): Offender | null {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const inactiveRoots = Array.from(document.querySelectorAll('[aria-hidden="true"], [inert]')).filter(
+    (n) => n.hasAttribute('inert') || Number(getComputedStyle(n).zIndex) < 0,
+  );
   for (const el of Array.from(document.body.querySelectorAll('*'))) {
+    if (inactiveRoots.some((n) => n.contains(el))) continue;
     const r = el.getBoundingClientRect();
     if (r.width < vw * 0.5 || r.height <= 0 || r.top < vh * 0.6 || r.top >= vh) continue;
     const text = (el as HTMLElement).innerText ?? '';
@@ -258,14 +274,23 @@ async function boxOf(loc: Locator, what: string): Promise<Box> {
   return b;
 }
 
-/** Topmost, then leftmost, visible element whose text matches (headers sit above the content that repeats their words). */
+/** Boxes of the rendered matches outside aria-hidden subtrees (react-navigation keeps inactive tab scenes mounted, hidden). */
+async function activeBoxes(loc: Locator, limit = 40): Promise<Box[]> {
+  const boxes = await loc.evaluateAll((els) =>
+    els
+      .filter((el) => !el.closest('[aria-hidden="true"], [inert]') && getComputedStyle(el).visibility !== 'hidden')
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      })
+      .filter((b) => b.width > 0 && b.height > 0),
+  );
+  return boxes.slice(0, limit);
+}
+
+/** Topmost, then leftmost, rendered element whose text matches (headers sit above the content that repeats their words). */
 async function headerBox(page: Page, text: RegExp | string, what: string): Promise<Box> {
-  const all = await page.getByText(text).filter({ visible: true }).all();
-  const boxes: Box[] = [];
-  for (const l of all.slice(0, 40)) {
-    const b = await l.boundingBox();
-    if (b) boxes.push(b);
-  }
+  const boxes = await activeBoxes(page.getByText(text));
   if (boxes.length === 0) throw new Error(`${what}: no visible element matching ${String(text)}`);
   boxes.sort((a, b) => a.y - b.y || a.x - b.x);
   return boxes[0];
@@ -324,14 +349,10 @@ test.describe('wide arrangement', () => {
         .soft(outside.x, `"Outside trends" card must be to the right of "Views by platform" (x ${Math.round(outside.x)} vs ${Math.round(views.x)})`)
         .toBeGreaterThan(views.x + 200);
 
-      const generate = page
-        .getByRole('heading', { name: /^generate$/i })
-        .or(page.getByText('Generate', { exact: true }))
-        .filter({ visible: true })
-        .first();
-      await expect.soft(generate, '"Generate" heading visible').toBeVisible();
-      await expect.soft(page.getByText('Social media connectors', { exact: false }).filter({ visible: true }).first(), '"Social media connectors" heading visible').toBeVisible();
-      await expect.soft(page.getByText('Themes (Jev AI)', { exact: false }).filter({ visible: true }).first(), '"Themes (Jev AI)" heading visible').toBeVisible();
+      const generate = page.getByRole('heading', { name: /^generate$/i }).or(page.getByText('Generate', { exact: true }));
+      expect.soft((await activeBoxes(generate)).length, '"Generate" heading is visible').toBeGreaterThan(0);
+      expect.soft((await activeBoxes(page.getByText('Social media connectors'))).length, '"Social media connectors" heading is visible').toBeGreaterThan(0);
+      expect.soft((await activeBoxes(page.getByText('Themes (Jev AI)'))).length, '"Themes (Jev AI)" heading is visible').toBeGreaterThan(0);
 
       const m = await page.evaluate(measureLayout);
       const screens = m.contentHeight / m.innerHeight;
@@ -360,21 +381,12 @@ test.describe('wide arrangement', () => {
       await settle(page, 'Trends');
 
       // Card header buttons carry "<rank>. <title>. <n>% match..." as their label (identical tops within a row).
-      const heads = await page.getByRole('button', { name: /^\d+\. .*\d+% match/ }).filter({ visible: true }).all();
-      let boxes: Box[] = [];
+      let boxes = await activeBoxes(page.getByRole('button', { name: /^\d+\. .*\d+% match/ }), 30);
       let tol = 24;
-      for (const h of heads.slice(0, 30)) {
-        const b = await h.boundingBox();
-        if (b) boxes.push(b);
-      }
       if (boxes.length < 2) {
         // Labels changed: fall back to the visible "NN% match" texts (their y varies with the title's line count).
-        boxes = [];
+        boxes = await activeBoxes(page.getByText(/\d+%\s*match/), 30);
         tol = 80;
-        for (const t of (await page.getByText(/\d+%\s*match/).filter({ visible: true }).all()).slice(0, 30)) {
-          const b = await t.boundingBox();
-          if (b) boxes.push(b);
-        }
       }
       expect(boxes.length, 'trend cards found on the Trends tab').toBeGreaterThanOrEqual(2);
       const pair = sameRowPair(boxes, tol, 150);

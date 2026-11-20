@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { fmtCompact, truncate } from '@/src/format';
 import { colors, space, type as t } from '@/src/theme';
@@ -13,11 +13,11 @@ const MAX_POSTS = 5;
 const openPublished = () => router.push({ pathname: '/queue', params: { tab: 'published' } });
 
 /** Best performing published posts. Tapping a row opens the queue on its Published tab. */
-export function TopPostsCard({ posts }: { posts: Post[] }) {
+export function TopPostsCard({ posts, style }: { posts: Post[]; style?: StyleProp<ViewStyle> }) {
   const rows = posts.filter((p) => isPlatform(p.platform)).slice(0, MAX_POSTS);
 
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, style]}>
       <SectionHeader
         title="Top posts"
         subtitle="Your best performers"

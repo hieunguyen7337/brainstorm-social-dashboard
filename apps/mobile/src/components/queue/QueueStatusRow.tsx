@@ -27,6 +27,7 @@ export function QueueStatusRow({
   bulk,
   onPublishAll,
   compact = false,
+  tight = false,
 }: {
   tab: QueueTab;
   hasItems: boolean;
@@ -40,6 +41,8 @@ export function QueueStatusRow({
    * row and no sentence. `reconnecting` is the board's own line there.
    */
   compact?: boolean;
+  /** With `compact`, in a very narrow column: drop the button's icon. */
+  tight?: boolean;
 }) {
   const showLive = tab === 'published' && hasItems;
   const showBulk = tab === 'drafts' && (draftCount >= 2 || bulk !== null);
@@ -49,7 +52,7 @@ export function QueueStatusRow({
         <Button
           title={bulk ? `Publishing ${bulk.current}/${bulk.total}` : 'Publish all'}
           accessibilityLabel={bulk ? undefined : 'Publish all drafts'}
-          icon="rocket-outline"
+          icon={tight ? undefined : 'rocket-outline'}
           small
           loading={bulk !== null}
           onPress={onPublishAll}

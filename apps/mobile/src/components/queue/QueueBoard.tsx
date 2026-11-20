@@ -19,7 +19,7 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 /** Below this column width the cards switch to their compact layout (counters 2 x 2, link buttons on their own line). */
 const COMPACT_BELOW = 340;
 /** Room taken above the lanes (title, subtitle, page padding, lane header) when sizing a lane's own scroll area. */
-const CHROME_HEIGHT = 230;
+const CHROME_HEIGHT = 200;
 const MIN_LANE_HEIGHT = 360;
 
 /** The statuses and their order, as in the phone's segmented control. */
@@ -158,6 +158,7 @@ function Lane({
           {posts ? (
             <QueueStatusRow
               compact
+              tight={compact}
               tab={tab}
               hasItems={posts.length > 0}
               focused={focused}

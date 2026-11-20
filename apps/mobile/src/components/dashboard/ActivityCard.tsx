@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { colors, space, type as t, withAlpha } from '@/src/theme';
 import type { ActivityItem } from '@/src/types';
@@ -22,14 +22,19 @@ export function ActivityCard({
   loading,
   error,
   onRetry,
+  maxRows = MAX_ROWS,
+  style,
 }: {
   items: ActivityItem[] | undefined;
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
+  /** How many of the newest events to list (the wide board shows fewer). */
+  maxRows?: number;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, style]}>
       <SectionHeader title="Live activity" subtitle="Updates every few seconds" right={<LiveTag />} />
       {!items ? (
         error && !loading ? (
@@ -46,7 +51,7 @@ export function ActivityCard({
           No activity yet. Publish a post and its views, clicks and conversions will stream in here.
         </Text>
       ) : (
-        <ActivityList items={items} />
+        <ActivityList items={items} maxRows={maxRows} />
       )}
     </Card>
   );
@@ -64,8 +69,8 @@ function useFreshIds(rows: ActivityItem[]): Set<string> {
   return fresh;
 }
 
-function ActivityList({ items }: { items: ActivityItem[] }) {
-  const rows = newestFirst(items).slice(0, MAX_ROWS);
+function ActivityList({ items, maxRows }: { items: ActivityItem[]; maxRows: number }) {
+  const rows = newestFirst(items).slice(0, maxRows);
   const fresh = useFreshIds(rows);
   return (
     <View style={styles.list}>

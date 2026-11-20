@@ -1,10 +1,7 @@
-import { Children, type ReactNode } from 'react';
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Children, useState, type ReactNode } from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { space } from '@/src/theme';
-
-/** Style props React Native's types do not know but react-native-web passes to CSS. */
-const web = (style: Record<string, unknown>): ViewStyle => style as unknown as ViewStyle;
 
 export interface CardGridProps {
   children: ReactNode;
@@ -14,34 +11,43 @@ export interface CardGridProps {
   style?: StyleProp<ViewStyle>;
 }
 
+/** Columns that fit `width` px with `gap` between them, at least 1. */
+export function columnsFor(width: number, minCardWidth: number, gap: number): number {
+  if (width <= 0) return 2;
+  return Math.max(1, Math.floor((width + gap) / (minCardWidth + gap)));
+}
+
 /**
- * Equal-width card columns for the wide Create board. On web it is a CSS grid (`auto-fill` columns, rows stretch to the
- * tallest card); on native (tablet landscape) it is a wrapping flex row. The children are the cards themselves: give
- * each `flex: 1` when it should fill its cell.
+ * Equal-width card columns for the wide Create board (2 when there is room for two cards of `minCardWidth`, 1 when the
+ * pane is squeezed). Cards are dealt out to the columns in turn (1st left, 2nd right, 3rd left, ...) and each column
+ * stacks its cards at their own height, so a short X card never leaves a hole next to a tall TikTok card. The children
+ * are the cards themselves; they fill their column's width.
  */
 export function CardGrid({ children, minCardWidth = 280, gap = space.lg, style }: CardGridProps) {
-  if (Platform.OS === 'web') {
-    return (
-      <View
-        style={[
-          { width: '100%' },
-          web({ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${minCardWidth}px), 1fr))`, gap }),
-          style,
-        ]}
-      >
-        {children}
-      </View>
-    );
-  }
+  const [width, setWidth] = useState(0);
+  const cards = Children.toArray(children);
+  const count = columnsFor(width, minCardWidth, gap);
+  const columns: ReactNode[][] = Array.from({ length: count }, () => []);
+  cards.forEach((card, i) => columns[i % count].push(card));
+
   return (
-    <View style={[styles.row, { gap }, style]}>
-      {Children.map(children, (child) =>
-        child ? <View style={{ flexBasis: minCardWidth, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{child}</View> : null,
-      )}
+    <View
+      style={[styles.row, { gap }, style]}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        setWidth((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+      }}
+    >
+      {columns.map((column, i) => (
+        <View key={i} style={[styles.column, { gap }]}>
+          {column}
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { width: '100%', flexDirection: 'row', flexWrap: 'wrap' },
+  row: { width: '100%', flexDirection: 'row', alignItems: 'flex-start' },
+  column: { flex: 1, minWidth: 0 },
 });

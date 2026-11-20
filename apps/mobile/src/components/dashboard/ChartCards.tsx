@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import {
   AreaChart,
@@ -11,7 +11,7 @@ import {
 } from '@/src/charts';
 import { fmtCompact } from '@/src/format';
 import { platformMeta, space, type as t } from '@/src/theme';
-import type { DayStats, FunnelStage, PlatformStats, Totals } from '@/src/types';
+import type { DayStats, FunnelStage, FunnelStageName, PlatformStats, Totals } from '@/src/types';
 import { Card, Chip, ChipRow, SectionHeader } from '@/src/ui';
 import { LiveNumber, useStable } from './live';
 import { FUNNEL_LABELS, FUNNEL_ORDER, METRIC_BY_KEY, METRICS, isPlatform, type MetricKey } from './model';
@@ -20,8 +20,27 @@ function NoData({ text }: { text: string }) {
   return <Text style={[t.dim, styles.noData]}>{text}</Text>;
 }
 
+/**
+ * The card around a chart. `bare` drops the card itself (same gap, no border or padding) for the wide board, where
+ * several charts share one big card.
+ */
+function Frame({ bare, style, children }: { bare?: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  return bare ? <View style={[styles.card, style]}>{children}</View> : <Card style={[styles.card, style]}>{children}</Card>;
+}
+
 /** Share of views per platform as a donut with the total in the hole. */
-export function PlatformDonutCard({ byPlatform, totalViews }: { byPlatform: PlatformStats[]; totalViews: number }) {
+export function PlatformDonutCard({
+  byPlatform,
+  totalViews,
+  bare,
+  style,
+}: {
+  byPlatform: PlatformStats[];
+  totalViews: number;
+  /** Render without the surrounding card (wide board). */
+  bare?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
   const slices: DonutDatum[] = byPlatform
     .filter((p) => isPlatform(p.platform) && p.views > 0)
     .sort((a, b) => b.views - a.views)
@@ -34,35 +53,50 @@ export function PlatformDonutCard({ byPlatform, totalViews }: { byPlatform: Plat
   const data = useStable(slices, slices.map((s) => `${s.key}:${s.value}`).join('|'));
 
   return (
-    <Card style={styles.card}>
+    <Frame bare={bare} style={style}>
       <SectionHeader title="Views by platform" subtitle="Share of views, last 30 days" />
       {data.length === 0 ? (
         <NoData text="No views yet. Publish a post and they will show up here." />
       ) : (
         <Donut data={data} centerValue={fmtCompact(totalViews)} centerLabel="views" legend title="Views by platform" />
       )}
-    </Card>
+    </Frame>
   );
 }
 
 /** Views -> Engagement -> Clicks -> Conversions with the step rates. */
-export function FunnelCard({ stages }: { stages: FunnelStage[] }) {
+export function FunnelCard({
+  stages,
+  labels = FUNNEL_LABELS,
+  chartHeight,
+  bare,
+  style,
+}: {
+  stages: FunnelStage[];
+  /** Stage names (the wide board says Views, Engage, Click, Onboard). */
+  labels?: Record<FunnelStageName, string>;
+  /** Funnel height in px (chart default when omitted). */
+  chartHeight?: number;
+  /** Render without the surrounding card (wide board). */
+  bare?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
   const rows: FunnelDatum[] = FUNNEL_ORDER.flatMap((name) => {
     const s = stages.find((x) => x.stage === name);
-    return s ? [{ key: s.stage, label: FUNNEL_LABELS[s.stage], value: s.value, rate: s.rate }] : [];
+    return s ? [{ key: s.stage, label: labels[s.stage], value: s.value, rate: s.rate }] : [];
   });
   const data = useStable(rows, rows.map((r) => `${r.key}:${r.value}:${r.rate}`).join('|'));
   const empty = data.length === 0 || data.every((d) => d.value === 0);
 
   return (
-    <Card style={styles.card}>
+    <Frame bare={bare} style={style}>
       <SectionHeader title="Sales funnel" subtitle="From first view to conversion" />
       {empty ? (
         <NoData text="No traffic yet. The funnel fills as people view and click your posts." />
       ) : (
-        <Funnel data={data} title="Sales funnel from views to conversions" />
+        <Funnel data={data} height={chartHeight} title="Sales funnel from views to conversions" />
       )}
-    </Card>
+    </Frame>
   );
 }
 
@@ -71,11 +105,19 @@ export function TrendCard({
   timeseries,
   totals,
   context,
+  chartHeight = 200,
+  bare,
+  style,
 }: {
   timeseries: DayStats[];
   totals: Totals;
   /** Changes when the data switches to another filter, so the total does not flash for it. */
   context: string;
+  /** Plot height in px. */
+  chartHeight?: number;
+  /** Render without the surrounding card (wide board). */
+  bare?: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const [metric, setMetric] = useState<MetricKey>('views');
   const def = METRIC_BY_KEY[metric];
@@ -89,7 +131,7 @@ export function TrendCard({
   );
 
   return (
-    <Card style={styles.card}>
+    <Frame bare={bare} style={style}>
       <SectionHeader
         title="Last 30 days"
         subtitle="Daily totals"
@@ -125,12 +167,12 @@ export function TrendCard({
         <AreaChart
           labels={labels}
           series={series}
-          height={200}
+          height={chartHeight}
           formatValue={fmtCompact}
           title={`${def.chip}, last 30 days`}
         />
       )}
-    </Card>
+    </Frame>
   );
 }
 

@@ -17,8 +17,7 @@ export interface PostCardProps {
 
 /**
  * One generated post on the wide board: platform label, the platform-native preview (editable while it is a draft) and
- * its own Publish / Schedule / Save actions, in a single card. The actions sit at the card's foot so a row of cards
- * lines up even when the previews differ in height.
+ * its own Publish / Schedule / Save actions, in a single card.
  */
 export function PostCard({ page, actions }: PostCardProps) {
   const [width, setWidth] = useState(0);
@@ -33,7 +32,6 @@ export function PostCard({ page, actions }: PostCardProps) {
           </Text>
         </View>
         <PostPage {...page} />
-        <View style={styles.spacer} />
         <PostActions {...actions} wide={width >= ONE_ROW_ACTIONS} />
       </View>
     </Card>
@@ -41,9 +39,8 @@ export function PostCard({ page, actions }: PostCardProps) {
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, minWidth: 0 },
-  body: { flex: 1, gap: space.md },
+  card: { minWidth: 0 },
+  body: { gap: space.md },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   title: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '700', color: colors.textDim },
-  spacer: { flex: 1 },
 });

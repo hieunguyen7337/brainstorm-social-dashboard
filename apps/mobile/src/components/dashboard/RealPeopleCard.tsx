@@ -25,6 +25,7 @@ export function RealPeopleCard({
   filterLabel,
   linkPost,
   onFired,
+  compact,
 }: {
   clicks: number;
   conversions: number;
@@ -36,6 +37,8 @@ export function RealPeopleCard({
   linkPost: Post | undefined;
   /** Called after a click was sent, so the screen can refresh sooner than the next poll. */
   onFired: () => void;
+  /** One slim row (title, both counters and the button) for the wide board instead of the full card. */
+  compact?: boolean;
 }) {
   const toast = useToast();
   const settled = useSettled(context);
@@ -105,22 +108,46 @@ export function RealPeopleCard({
   return (
     <View style={styles.glow}>
       <LinearGradient colors={gradient.colors} start={gradient.start} end={gradient.end} style={styles.border}>
-        <View style={styles.inner}>
-          <View style={styles.header}>
-            <LiveDot size={9} />
-            <Text style={[t.h2, styles.title]}>Real people</Text>
-            {filterLabel ? <Badge label={`${filterLabel} only`} /> : null}
-          </View>
+        <View style={[styles.inner, compact && styles.innerCompact]}>
+          {compact ? (
+            <View style={styles.compactRow}>
+              <View style={styles.compactHead}>
+                <LiveDot size={9} />
+                <Text style={t.h3}>Real people</Text>
+                {filterLabel ? <Badge label={`${filterLabel} only`} /> : null}
+              </View>
+              <View style={styles.compactStats}>
+                <Stat compact label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
+                <Stat
+                  compact
+                  label="Conversions"
+                  icon="checkmark-circle"
+                  color={colors.success}
+                  value={conversions}
+                  context={context}
+                />
+              </View>
+              <Button title="Open a tracked link" icon="open-outline" small loading={busy} onPress={onOpen} />
+            </View>
+          ) : (
+            <>
+              <View style={styles.header}>
+                <LiveDot size={9} />
+                <Text style={[t.h2, styles.title]}>Real people</Text>
+                {filterLabel ? <Badge label={`${filterLabel} only`} /> : null}
+              </View>
 
-          <View style={styles.stats}>
-            <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
-            <Stat label="Conversions" icon="checkmark-circle" color={colors.success} value={conversions} context={context} />
-          </View>
+              <View style={styles.stats}>
+                <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
+                <Stat label="Conversions" icon="checkmark-circle" color={colors.success} value={conversions} context={context} />
+              </View>
 
-          <Text style={t.dim}>
-            Clicks and conversions from real visitors on your tracked links. Publish a post, open its link, and watch
-            your click land in the funnel.
-          </Text>
+              <Text style={t.dim}>
+                Clicks and conversions from real visitors on your tracked links. Publish a post, open its link, and watch
+                your click land in the funnel.
+              </Text>
+            </>
+          )}
 
           {hint === 'sent' ? (
             <View style={[styles.hint, styles.hintOk]} accessibilityLiveRegion="polite">
@@ -140,8 +167,12 @@ export function RealPeopleCard({
             </Pressable>
           ) : null}
 
-          <Button title="Open a tracked link" icon="open-outline" full loading={busy} onPress={onOpen} />
-          <Button title="Create a post" variant="ghost" small full onPress={() => router.push('/create')} />
+          {compact ? null : (
+            <>
+              <Button title="Open a tracked link" icon="open-outline" full loading={busy} onPress={onOpen} />
+              <Button title="Create a post" variant="ghost" small full onPress={() => router.push('/create')} />
+            </>
+          )}
 
           {/* Green wash that fades out when a real click or conversion lands. Painted last so it covers the stat tiles. */}
           <Animated.View style={[StyleSheet.absoluteFill, styles.flash, { opacity: glow, pointerEvents: 'none' }]} />
@@ -157,22 +188,28 @@ function Stat({
   color,
   value,
   context,
+  compact,
 }: {
   label: string;
   icon: IconName;
   color: string;
   value: number;
   context: string;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.stat} accessible accessibilityLabel={`${value} real ${label.toLowerCase()}`}>
+    <View
+      style={[styles.stat, compact && styles.statCompact]}
+      accessible
+      accessibilityLabel={`${value} real ${label.toLowerCase()}`}
+    >
       <View style={styles.statHead}>
         <Ionicons name={icon} size={14} color={color} />
         <Text style={t.label} numberOfLines={1}>
           {label}
         </Text>
       </View>
-      <LiveNumber value={value} fromZero context={context} style={styles.statNumber} />
+      <LiveNumber value={value} fromZero context={context} style={compact ? styles.statNumberCompact : styles.statNumber} />
     </View>
   );
 }
@@ -191,6 +228,12 @@ const styles = StyleSheet.create({
     gap: space.md,
     overflow: 'hidden',
   },
+  innerCompact: { padding: space.md, gap: space.sm },
+  compactRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.md, rowGap: space.sm },
+  compactHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginRight: 'auto' },
+  compactStats: { flexDirection: 'row', gap: space.sm },
+  statCompact: { flex: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, paddingHorizontal: 10 },
+  statNumberCompact: { color: colors.text, fontSize: 22, lineHeight: 26, fontWeight: '800', letterSpacing: -0.5 },
   flash: { backgroundColor: withAlpha(colors.success, 0.2) },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   title: { flexShrink: 1, marginRight: 'auto' },
