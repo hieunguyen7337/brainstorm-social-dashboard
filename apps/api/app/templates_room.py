@@ -93,11 +93,13 @@ _PHONE_CSS = """
 html{-webkit-text-size-adjust:100%;background:var(--bg)}
 body{background:var(--bg);color:var(--tx);min-height:100vh;font:16px/1.45 __FONT__;overflow-wrap:break-word}
 [hidden]{display:none!important}
-.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 16px;
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;min-height:52px;
+padding:8px 16px;
 background:rgba(11,15,26,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
 border-bottom:1px solid var(--line);font-size:15px;color:var(--dim)}
 .top b{color:var(--tx)}.top span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.logo{flex:none;width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--ac),var(--b))}
+.logo{flex:none;width:22px;height:22px;border-radius:7px;
+background:linear-gradient(135deg,var(--ac),var(--b))}
 main{max-width:560px;margin:0 auto;padding:18px 16px 44px}
 h1{font-size:26px;line-height:1.15;font-weight:800;letter-spacing:-.5px;margin:2px 0 6px}
 .sub{color:var(--dim);font-size:15px;margin-bottom:18px}
@@ -143,9 +145,10 @@ transition:border-color .2s,box-shadow .2s}
 font-size:15px;color:#fff;background:linear-gradient(135deg,var(--ac),var(--b))}
 .who{flex:1;min-width:0;line-height:1.3}
 .who b{display:block;font-size:15px}
-.who small{display:block;font-size:14px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tagpick{display:none;flex:none;padding:3px 10px;border-radius:999px;background:var(--acd);color:#fff;
-font-size:14px;font-weight:700}
+.who small{display:block;font-size:14px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;
+white-space:nowrap}
+.tagpick{display:none;position:absolute;top:-15px;left:14px;padding:2px 12px;border-radius:999px;
+background:var(--acd);color:#fff;font-size:14px;font-weight:700;box-shadow:0 0 0 3px var(--bg)}
 .badge{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;
 font-size:15px}
 .ba{background:var(--acd);color:#fff}.bb{background:var(--b);color:#0B0F1A}
@@ -160,11 +163,13 @@ color:var(--mute);cursor:pointer;border-radius:4px}
 border-radius:999px;background:var(--hi);border:1px solid var(--line);font-size:14px;color:var(--dim)}
 .chip i{flex:none;width:9px;height:9px;border-radius:50%}
 .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lf{display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);
+.lf{display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;
+border-top:1px solid var(--line);
 font-size:13px;color:var(--mute);user-select:none}
 .vote-form{margin-top:10px}
 .foot{margin-top:28px;text-align:center;font-size:14px;color:var(--mute)}
 #app:not([data-voted=""]) .result{display:block}
+#app:not([data-voted=""]) h1{margin-bottom:22px}
 #app:not([data-voted=""]) .sub,#app[data-closed="1"] .sub,
 #app:not([data-voted=""]) .vote-form,#app[data-closed="1"] .vote-form{display:none}
 #app[data-closed="1"] .banner{display:block}
@@ -181,25 +186,31 @@ box-shadow:0 0 0 1px var(--ac),0 10px 30px rgba(124,92,255,.28)}
 _PHONE_BODY = """</style></head><body>
 <header class="top"><i class="logo"></i><span><b>__BRAND__</b> &middot; Room __CODE__</span></header>
 <main id="app" data-voted="__VOTED__" data-closed="__CLOSED__" data-onb="__ONB__">
-<div class="banner" role="status" aria-live="polite"><h2>Voting is closed</h2><p id="winline">__WINLINE__</p></div>
+<div class="banner" role="status" aria-live="polite"><h2>Voting is closed</h2><p
+id="winline">__WINLINE__</p></div>
 <p class="msg" id="msg" role="status" aria-live="polite"></p>
 <section class="result" aria-labelledby="thx">
-<div class="thanks"><span class="check"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path
+<div class="thanks"><span class="check"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+<path
 d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"
 stroke-linejoin="round"/></svg></span>
-<div><h2 id="thx">Thanks for voting!</h2><p>Your pick: <b id="pick">__PICK__</b>. Watch the big screen.</p></div></div>
+<div><h2 id="thx">Thanks for voting!</h2><p>Your pick: <b id="pick">__PICK__</b>. Watch the big screen.</p>
+</div></div>
 <form class="onb-form" method="post" action="/v/__CODEURL__/onboard" data-act="onboard">
 <button class="btn btn-go" type="submit">Get started</button></form>
 <p class="onb-done" role="status">You're in. Watch the big screen!</p>
 <div class="mini" aria-live="polite"><h3>The room so far</h3>
-<div class="bar" aria-hidden="true"><span class="sa" id="sa" style="width:__WA__%"></span><span class="sb" id="sb"
+<div class="bar" aria-hidden="true"><span class="sa" id="sa" style="width:__WA__%"></span><span class="sb"
+id="sb"
 style="width:__WB__%"></span></div>
 <div class="lg"><span><i class="sa"></i>A <b id="pa">__PA__%</b> (<span id="ca">__VA__</span>)</span>
 <span><i class="sb"></i>B <b id="pb">__PB__%</b> (<span id="cb">__VB__</span>)</span></div></div>
 <form class="chg chg-a" method="post" action="/v/__CODEURL__/vote" data-act="vote">
-<input type="hidden" name="choice" value="a"><button class="link" type="submit">Change my vote to A</button></form>
+<input type="hidden" name="choice" value="a"><button class="link" type="submit">Change my vote to A</button>
+</form>
 <form class="chg chg-b" method="post" action="/v/__CODEURL__/vote" data-act="vote">
-<input type="hidden" name="choice" value="b"><button class="link" type="submit">Change my vote to B</button></form>
+<input type="hidden" name="choice" value="b"><button class="link" type="submit">Change my vote to B</button>
+</form>
 </section>
 <h1>__HEADING__</h1>
 <p class="sub">Read both posts, then tap the one you would click.</p>
@@ -271,7 +282,8 @@ if(onbing)return;
 onbing=true;btn.disabled=true;btn.textContent="Joining\\u2026";
 fetch(api("onboard"),{method:"POST",credentials:"same-origin"})
 .then(function(r){
-if(r.status===400){say("Pick A or B first, then tap Get started.");btn.disabled=false;btn.textContent="Get started";return}
+if(r.status===400){say("Pick A or B first, then tap Get started.");btn.disabled=false;
+btn.textContent="Get started";return}
 if(!r.ok)throw 0;
 app.setAttribute("data-onb","1")})
 .catch(function(){form.submit()})
@@ -284,7 +296,7 @@ function fit(){
 var bs=document.querySelectorAll(".body");
 for(var i=0;i<bs.length;i++){
 var b=bs[i],cb=b.parentNode.querySelector(".tg"),lb=b.parentNode.querySelector(".more");
-if(lb)lb.hidden=!(cb.checked||b.scrollHeight>b.clientHeight+1)}}
+if(cb&&lb){lb.hidden=!(cb.checked||b.scrollHeight>b.clientHeight+1);cb.disabled=lb.hidden}}}
 var rz=0;
 window.addEventListener("resize",function(){cancelAnimationFrame(rz);rz=requestAnimationFrame(fit)});
 fit();loop();
@@ -301,8 +313,9 @@ def _post_card(c: str, v: dict, code_url: str, initials: str) -> str:
             f'<div class="chip"><i style="background:{_color(v.get("theme_color"))}"></i>'
             f"<span>{_e(theme)}</span></div>"
         )
-    more = ""
+    toggle = more = ""
     if _long_text(text):
+        toggle = f'<input type="checkbox" class="tg" id="more-{c}">'
         more = (
             f'<label class="more" for="more-{c}"><span class="m1">&hellip;see more'
             f'<span class="sr"> of post {c.upper()}</span></span>'
@@ -313,10 +326,10 @@ def _post_card(c: str, v: dict, code_url: str, initials: str) -> str:
     return (
         f'<section class="opt" aria-label="Post {upper}">\n'
         f'<article class="post" id="card-{c}">'
-        f'<input type="checkbox" class="tg" id="more-{c}">'
-        f'<div class="ph"><span class="av" aria-hidden="true">{initials}</span>'
+        f'{toggle}<div class="ph"><span class="av" aria-hidden="true">{initials}</span>'
         f'<div class="who"><b>Pulse demo</b><small>Promoted &middot; now</small></div>'
-        f'<span class="tagpick">Your pick</span><span class="badge b{c}" aria-label="Post {upper}">{upper}</span></div>'
+        f'<span class="tagpick">Your pick</span>'
+        f'<span class="badge b{c}">{upper}</span></div>'
         f'<div class="body" id="body-{c}">{_e(text)}</div>{more}{chip}'
         f'<div class="lf" aria-hidden="true"><span>Like</span><span>Comment</span><span>Repost</span>'
         f"<span>Send</span></div></article>\n"
@@ -386,7 +399,8 @@ _SCREEN_CSS = """
 --mute:#8E97B8;--ac:#7C5CFF;--act:#B9A9FF;--b:#FF5C8A;--bt:#FF8FB0;--ok:#2FE0A3;--warn:#FFB648;--bad:#FF5D73;
 --info:#4CC3FF}
 html{font-size:clamp(8px,min(1.0417vw,1.852vh),40px);background:#0B0F1A}
-body{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;padding:1.2rem 2.4rem 1.4rem;
+body{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;
+padding:1.2rem 2.4rem 1.4rem;
 color:var(--tx);font:1rem/1.35 __FONT__;background-color:#0B0F1A;
 background-image:radial-gradient(60rem 40rem at 88% -8%,rgba(124,92,255,.2),transparent 62%),
 radial-gradient(50rem 36rem at 0% 108%,rgba(255,92,138,.1),transparent 62%)}
@@ -406,16 +420,19 @@ radial-gradient(50rem 36rem at 0% 108%,rgba(255,92,138,.1),transparent 62%)}
 .qr{width:100%;aspect-ratio:1;padding:1.1rem;border-radius:2rem;background:#fff;
 box-shadow:0 1rem 4rem rgba(124,92,255,.35)}
 .qr svg{display:block;width:100%;height:100%;shape-rendering:crispEdges}
-.url{max-width:100%;margin-top:.8rem;font-family:__MONO__;font-weight:800;white-space:nowrap;text-align:center;
+.url{max-width:100%;margin-top:.8rem;font-family:__MONO__;font-weight:800;white-space:nowrap;
+text-align:center;
 font-size:min(3.2rem,calc(30rem/(var(--n)*.66)))}
 .cap{font-size:1.7rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
-.right{min-width:0;min-height:0;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);gap:1rem}
+.right{min-width:0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);
+grid-template-rows:auto auto auto auto minmax(0,1fr);gap:1rem}
 .title{font-size:max(1.5rem,min(2.6rem,calc(56rem/(var(--tn)*.56))));line-height:1.15;font-weight:800;
 letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .counters{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
 .ctr{position:relative;padding:.9rem 1.6rem .8rem;border-radius:1.4rem;background:var(--card);
 border:1px solid var(--line)}
-.ctr::before{content:"";position:absolute;left:1.6rem;top:0;width:3.4rem;height:.3rem;border-radius:0 0 .3rem .3rem;
+.ctr::before{content:"";position:absolute;left:1.6rem;top:0;width:3.4rem;height:.3rem;
+border-radius:0 0 .3rem .3rem;
 background:var(--c)}
 .ctr b{display:block;font-size:4.2rem;line-height:1;font-weight:800;letter-spacing:-.03em;
 font-variant-numeric:tabular-nums}
@@ -423,10 +440,11 @@ font-variant-numeric:tabular-nums}
 text-transform:uppercase;color:var(--dim)}
 .panel{min-height:0;position:relative;display:flex;flex-direction:column;padding:1rem 1.6rem 1.1rem;
 border-radius:1.4rem;background:var(--card);border:1px solid var(--line)}
-.ph2{flex:none;margin-bottom:.7rem;font-size:1.15rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+.ph2{flex:none;margin-bottom:.7rem;font-size:1.15rem;font-weight:700;letter-spacing:.14em;
+text-transform:uppercase;
 color:var(--mute)}
-.race{display:grid;gap:.8rem;padding:1rem 1.6rem}
-.rw{display:grid;gap:.4rem}
+.race{display:grid;grid-template-columns:minmax(0,1fr);gap:.8rem;padding:1rem 1.6rem}
+.rw{display:grid;grid-template-columns:minmax(0,1fr);gap:.4rem}
 .rt{display:flex;justify-content:space-between;align-items:center;gap:1rem;font-size:1.8rem;line-height:1.2;
 font-weight:800}
 .rn{min-width:0;display:flex;align-items:center;gap:.8rem;white-space:nowrap}
@@ -440,8 +458,10 @@ font-weight:800}
 .fl{height:100%;width:0;border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .fa{background:linear-gradient(90deg,#5B3FE0,var(--ac) 60%,#A592FF)}
 .fb{background:linear-gradient(90deg,#E63E74,var(--b) 60%,#FF9DBA)}
-.rw.lead .fa{box-shadow:0 0 1.8rem rgba(124,92,255,.75)}.rw.lead .fb{box-shadow:0 0 1.8rem rgba(255,92,138,.7)}
-.win{display:flex;align-items:center;gap:1rem;padding:.8rem 1.8rem;border-radius:1.4rem;background:var(--card);
+.rw.lead .fa{box-shadow:0 0 1.8rem rgba(124,92,255,.75)}
+.rw.lead .fb{box-shadow:0 0 1.8rem rgba(255,92,138,.7)}
+.win{display:flex;align-items:center;gap:1rem;padding:.8rem 1.8rem;border-radius:1.4rem;
+background:var(--card);
 border:1px solid var(--line);color:var(--dim);font-size:1.9rem;font-weight:800;
 transition:background .4s,border-color .4s,box-shadow .4s,color .4s}
 .win svg{flex:none;display:none;width:2.2rem;height:2.2rem;fill:#FFD27A}
@@ -450,45 +470,56 @@ transition:background .4s,border-color .4s,box-shadow .4s,color .4s}
 rgba(255,92,138,.2)),var(--card);box-shadow:0 0 3rem rgba(124,92,255,.35)}
 .win.done svg{display:block}
 .low{min-height:0;display:grid;grid-template-columns:1.1fr .9fr;gap:1rem}
-.fun{flex:1;min-height:0;container-type:size;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:.6rem}
+.fun{flex:1;min-height:0;container-type:size;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));
+gap:.6rem}
 .fr{display:grid;grid-template-columns:6rem minmax(0,1fr) 4.8rem;align-items:center;gap:1rem;
 font-size:1.4rem;font-size:min(1.4rem,17cqh);
 font-weight:600;color:var(--dim)}
 .fr b{text-align:right;color:var(--tx);font-variant-numeric:tabular-nums}
 .ft{height:min(100%,2.2rem);border-radius:.6rem;background:var(--hi)}
 .ff{height:100%;width:4%;border-radius:.6rem;transition:width .6s ease;background:var(--c)}
-#feed{flex:1;min-height:0;container-type:size;list-style:none;padding:0;display:grid;grid-template-rows:repeat(8,minmax(0,1fr))}
+#feed{flex:1;min-height:0;container-type:size;list-style:none;padding:0;display:grid;
+grid-template-rows:repeat(8,minmax(0,1fr))}
 #feed li{min-height:0;display:flex;align-items:center;gap:.9rem;overflow:hidden;white-space:nowrap;
 font-size:1.3rem;font-size:min(1.3rem,10.4cqh);color:var(--dim);animation:slide .5s ease both}
 #feed li b{color:var(--tx)}
-.tag{flex:none;width:1rem;height:1rem;border-radius:.3rem}.tag.a{background:var(--ac)}.tag.b{background:var(--b)}
+.tag{flex:none;width:1rem;height:1rem;border-radius:.3rem}.tag.a{background:var(--ac)}
+.tag.b{background:var(--b)}
 .empty{position:absolute;left:1.6rem;top:3.6rem;font-size:1.4rem;color:var(--mute)}
 .closebox{position:fixed;right:2.4rem;bottom:.6rem;display:flex;align-items:center;gap:1rem;font-size:1.2rem}
 .closebox span{color:#FF9AA8}
-.closebox button{padding:.45rem 1.5rem;border-radius:999px;border:2px solid var(--bad);background:rgba(255,93,115,.08);
+.closebox button{padding:.45rem 1.5rem;border-radius:999px;border:2px solid var(--bad);
+background:rgba(255,93,115,.08);
 color:#FF9AA8;font:inherit;font-size:1.25rem;font-weight:700;cursor:pointer}
 .closebox button:hover{background:rgba(255,93,115,.2)}
 .closebox button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .closebox button[disabled]{opacity:.5;cursor:default}
 .has-close .low{margin-bottom:2.2rem}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,224,163,.6)}70%,100%{box-shadow:0 0 0 .8rem rgba(47,224,163,0)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,224,163,.6)}
+70%,100%{box-shadow:0 0 0 .8rem rgba(47,224,163,0)}}
 @keyframes slide{from{opacity:0;transform:translateY(-.9rem)}to{opacity:1;transform:none}}
 @media (max-width:899px),(max-height:480px){
-html{font-size:14px}body{height:auto;min-height:100vh;overflow:auto}
-.grid{grid-template-columns:1fr}.low{grid-template-columns:1fr}.left{order:2}
-.qr{max-width:30rem}.right{grid-template-rows:none}#feed{grid-template-rows:none;gap:.5rem}
+html{font-size:14px}body{height:auto;min-height:100vh;overflow:auto;padding:1rem}
+.hd{height:auto;flex-wrap:wrap;gap:.6rem}.hd-r{flex-wrap:wrap;gap:.8rem}
+.grid{grid-template-columns:minmax(0,1fr)}.low{grid-template-columns:minmax(0,1fr)}.left{order:2}
+.qr{max-width:24rem}.url{font-size:min(2.2rem,calc(24rem/(var(--n)*.66)))}.right{grid-template-rows:none}
+.fun,#feed{container-type:normal;grid-template-rows:none;gap:.7rem}
+.ctr{padding:.8rem 1rem}.ctr b{font-size:2.8rem}.ctr span{font-size:1rem;letter-spacing:.05em}
 .has-close .low{margin-bottom:0}.closebox{position:static;margin-top:1rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
 _SCREEN_BODY = """</style></head>
 <body class="__BODYCLASS__">
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown" viewBox="0 0 24 24"><path
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown"
+viewBox="0 0 24 24"><path
 d="M3 19h18l1.2-12.5-5.2 4.3L12 3.5 7 10.8 1.8 6.5z"/></symbol></svg>
-<header class="hd"><div class="brand"><i class="logo"></i><span><b>__BRAND__</b> &middot; Room __CODE__</span></div>
+<header class="hd"><div class="brand"><i class="logo"></i><span>
+<b>__BRAND__</b> &middot; Room __CODE__</span></div>
 <div class="hd-r"><span class="pill" id="pill">__PILL__</span>
 <noscript><span class="pill">Turn on JavaScript for live results</span></noscript>
-<span class="conn" id="conn" role="status" aria-live="polite"><i class="dot"></i><span id="conn-t">Live</span></span>
+<span class="conn" id="conn" role="status" aria-live="polite"><i class="dot"></i><span
+id="conn-t">Live</span></span>
 </div></header>
 <main class="grid">
 <aside class="left">
@@ -504,11 +535,13 @@ d="M3 19h18l1.2-12.5-5.2 4.3L12 3.5 7 10.8 1.8 6.5z"/></symbol></svg>
 <div class="ctr" style="--c:var(--ok)"><b id="n-onb">0</b><span>Onboarded</span></div>
 </div>
 <div class="panel race" aria-live="polite">
-<div class="rw" id="rw-a"><div class="rt"><div class="rn"><svg class="cr" aria-hidden="true"><use href="#crown"/></svg>
+<div class="rw" id="rw-a"><div class="rt"><div class="rn"><svg class="cr" aria-hidden="true"><use
+href="#crown"/></svg>
 <i class="td" style="background:__COLORA__"></i><span>A__NAMEA__</span></div>
 <div class="rv"><span id="v-a">0</span><small id="p-a">0%</small></div></div>
 <div class="trk"><div class="fl fa" id="f-a"></div></div></div>
-<div class="rw" id="rw-b"><div class="rt"><div class="rn"><svg class="cr" aria-hidden="true"><use href="#crown"/></svg>
+<div class="rw" id="rw-b"><div class="rt"><div class="rn"><svg class="cr" aria-hidden="true"><use
+href="#crown"/></svg>
 <i class="td" style="background:__COLORB__"></i><span>B__NAMEB__</span></div>
 <div class="rv"><span id="v-b">0</span><small id="p-b">0%</small></div></div>
 <div class="trk"><div class="fl fb" id="f-b"></div></div></div>
@@ -517,10 +550,14 @@ d="M3 19h18l1.2-12.5-5.2 4.3L12 3.5 7 10.8 1.8 6.5z"/></symbol></svg>
 <span id="win-t">__WINTEXT__</span></div>
 <div class="low">
 <div class="panel"><div class="ph2">Funnel</div><div class="fun">
-<div class="fr" style="--c:#4A3A9E"><span>Views</span><div class="ft"><div class="ff" id="fn-views"></div></div><b>0</b></div>
-<div class="fr" style="--c:#6048D6"><span>Engage</span><div class="ft"><div class="ff" id="fn-engage"></div></div><b>0</b></div>
-<div class="fr" style="--c:#7C5CFF"><span>Click</span><div class="ft"><div class="ff" id="fn-click"></div></div><b>0</b></div>
-<div class="fr" style="--c:#A592FF"><span>Onboard</span><div class="ft"><div class="ff" id="fn-onboard"></div></div><b>0</b></div>
+<div class="fr" style="--c:#4A3A9E"><span>Views</span><div class="ft"><div class="ff" id="fn-views"></div>
+</div><b>0</b></div>
+<div class="fr" style="--c:#6048D6"><span>Engage</span><div class="ft"><div class="ff" id="fn-engage"></div>
+</div><b>0</b></div>
+<div class="fr" style="--c:#7C5CFF"><span>Click</span><div class="ft"><div class="ff" id="fn-click"></div>
+</div><b>0</b></div>
+<div class="fr" style="--c:#A592FF"><span>Onboard</span><div class="ft"><div class="ff" id="fn-onboard">
+</div></div><b>0</b></div>
 </div></div>
 <div class="panel"><div class="ph2">Live votes</div><ul id="feed"></ul>
 <p class="empty" id="empty">Waiting for the first vote&hellip;</p></div>
@@ -579,7 +616,8 @@ el.style.width=Math.max(4,v/mx*100)+"%";el.parentNode.nextElementSibling.textCon
 function ago(n){
 var s=n.base+(performance.now()-n.t0)/1000;
 return s<2?"just now":s<60?Math.floor(s)+" s ago":Math.floor(s/60)+" min ago"}
-function tick(){for(var i=0;i<nodes.length;i++){var t=ago(nodes[i]);if(nodes[i].tx.textContent!==t)nodes[i].tx.textContent=t}}
+function tick(){for(var i=0;i<nodes.length;i++){var t=ago(nodes[i]);
+if(nodes[i].tx.textContent!==t)nodes[i].tx.textContent=t}}
 function mk(key,c,anim){
 var li=document.createElement("li"),tg=document.createElement("i"),sp=document.createElement("span"),
 b=document.createElement("b"),tm=document.createElement("span");
@@ -599,7 +637,8 @@ seen[k]=1;
 var n=old[k]||mk(k,c,seeded);
 n.base=num(r.ago);n.t0=now;next.push(n)}
 for(i=0;i<nodes.length;i++)if(!seen[nodes[i].key])feed.removeChild(nodes[i].el);
-for(i=0;i<next.length;i++)if(feed.children[i]!==next[i].el)feed.insertBefore(next[i].el,feed.children[i]||null);
+for(i=0;i<next.length;i++){
+if(feed.children[i]!==next[i].el)feed.insertBefore(next[i].el,feed.children[i]||null)}
 nodes=next;$("empty").hidden=nodes.length>0;tick()}
 function render(){
 var closed=S.status==="closed";
@@ -692,7 +731,8 @@ def render_screen_page(*, app_name: str, code: str, title: str, variants: list[d
 _NOT_FOUND = """</style></head><body>
 <main><div class="mark"><i class="logo"></i></div>
 <h1>We can&rsquo;t find room __CODE__</h1>
-<p>That room doesn&rsquo;t exist or has ended. Check the code on the big screen and scan the QR code again.</p>
+<p>That room doesn&rsquo;t exist or has ended. Check the code on the big screen and scan the QR code
+again.</p>
 <p class="brand">__BRAND__</p></main></body></html>"""
 
 _NOT_FOUND_CSS = """
