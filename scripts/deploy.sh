@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP=pulse-hackathon
+ORG=${FLY_ORG:-jaidyn-s}
 FLY=$(command -v flyctl || command -v fly || true)
 [ -n "$FLY" ] || { echo "flyctl not found" >&2; exit 1; }
 

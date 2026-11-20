@@ -35,9 +35,9 @@ for p in d:
     if m: print(m.group(1)); break
 ')
 [ -n "$code" ] || die "no tracked link code found in posts"
-posts_clicks() { curl -fsS "${AUTH[@]}" "$BASE_URL/api/posts?limit=100" | py '
+posts_clicks() { curl -fsS "${AUTH[@]}" "$BASE_URL/api/dashboard?days=30" | py '
 import sys,json
-print(sum(int(p.get("real_clicks",0) or 0) for p in json.load(sys.stdin)))'; }
+print(int(json.load(sys.stdin).get("real_clicks",0) or 0))'; }
 before=$(posts_clicks)
 curl -fsS -o /dev/null "$BASE_URL/r/$code" || die "click /r/$code"
 after=$(posts_clicks)
