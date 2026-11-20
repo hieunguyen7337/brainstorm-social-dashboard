@@ -19,6 +19,10 @@ TOOLS = {
     "get_ai_usage",
     "set_autopilot",
     "run_autopilot",
+    "set_profile_url",
+    "record_metrics",
+    "harvest_status",
+    "harvest_instructions",
 }
 
 
