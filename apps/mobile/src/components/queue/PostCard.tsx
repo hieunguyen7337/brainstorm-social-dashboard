@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { memo, useCallback, useMemo, useState, type ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { Post, PostStatus } from '@/src/api';
+import type { Post, PostStatus, Theme } from '@/src/api';
 import { fmtDateTime, hashtagsText, inHours, timeAgo, tomorrowMorning } from '@/src/format';
 import { colors, platformMeta, space, type as t } from '@/src/theme';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/src/ui';
 import { LinkRow } from './LinkRow';
 import { LiveStats } from './LiveStats';
+import { PostTags } from './PostBadges';
 import { PostEditor } from './PostEditor';
 import { PreviewBlock } from './PreviewBlock';
 import { collapseText, type Account, type BusyKind } from './queueModel';
@@ -81,6 +82,8 @@ export interface PostCardProps {
   locked: boolean;
   brandName: string;
   account?: Account;
+  /** The post's theme (matched by `post.theme_id`), shown as a colour chip; null/undefined shows no chip. */
+  theme?: Theme | null;
   onPublish: (post: Post) => void;
   onDelete: (post: Post) => void;
   onUnschedule: (post: Post) => void;
@@ -101,6 +104,7 @@ function PostCardImpl({
   locked,
   brandName,
   account,
+  theme,
   onPublish,
   onDelete,
   onUnschedule,
@@ -172,6 +176,8 @@ function PostCardImpl({
           {when.text}
         </Text>
       </View>
+
+      <PostTags theme={theme} realData={post.metrics_source === 'real'} />
 
       {mode === 'edit' ? (
         <PostEditor post={post} saving={busy === 'save'} onSave={handleSave} onCancel={() => setMode('view')} />

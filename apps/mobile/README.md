@@ -17,7 +17,7 @@ EXPO_PUBLIC_API_URL=http://localhost:8000 npx expo start --web   # against a loc
 |---|---|
 | `npx tsc --noEmit` | type check (strict) |
 | `npx expo export --platform web` | production web build into `dist/` (the API serves it: `WEB_DIST=../mobile/dist`) |
-| `EXPO_PUBLIC_MOCK=1 npx expo export --platform web` | same, but bakes in the fake API (screenshots, demos without a server) |
+| `EXPO_PUBLIC_MOCK=1 npx expo export --platform web --clear` | same, but bakes in the fake API (screenshots, demos without a server) |
 | `npm run gen:assets` | regenerates app icons and the PWA manifest from `scripts/gen-assets.mjs` |
 
 ## Configuration
@@ -30,8 +30,34 @@ EXPO_PUBLIC_API_URL=http://localhost:8000 npx expo start --web   # against a loc
 | `APP_NAME` / `EXPO_PUBLIC_APP_NAME` | build | display name (default "Pulse") |
 | `EAS_PROJECT_ID` | EAS | enables `expo-updates` (`updates.url`, `extra.eas.projectId`); omitted when unset |
 
+**Gotcha:** Metro's transform cache does not include `EXPO_PUBLIC_*` values, so after switching `EXPO_PUBLIC_MOCK` on or
+off (or changing `EXPO_PUBLIC_API_URL`) export with `--clear`, otherwise you may get the previous build's setting.
+
 The offline-demo fallback: if "Start my demo" cannot reach the server, onboarding offers **Use the offline demo**,
 which switches the client to the same in-memory fake at runtime.
+
+## Team workspace links (web)
+
+`https://<host>/?token=<workspace token>` opens that existing workspace instead of a fresh guest one: the token replaces
+any stored session token, is persisted, and is removed from the address bar. An unknown token lands on onboarding with an
+explanation. The workspace name is shown above every screen title.
+
+## Optional server features
+
+Insights ("What's working" on the dashboard), real-stats harvest (profile links in Settings > Connectors, "Real data"
+badges) and billing (Pulse Pro card in Settings) are optional: the client asks `/openapi.json` whether the server has the
+endpoint and hides the UI when it does not (no 404s in the console). `src/normalize.ts` adapts the insights and harvest
+JSON (shapes provisional until their models land in `apps/api/app/models.py`). The mock implements all of them.
+
+## Channels and labels
+
+Channel order everywhere: LinkedIn, Instagram, TikTok, X, Reddit, Facebook (`PLATFORMS`); LinkedIn and Instagram are
+preselected on Create. The last funnel stage ("conversions" in the API) is labelled **Onboard** (`STAGE_LABEL`).
+
+## Test ids
+
+`tab-<dashboard|trends|create|queue|settings>`, `platform-<id>` (Create chips), `filter-platform-<id>` (dashboard filter),
+`post-card`, `trend-item`, `kpi-real-clicks`, `workspace-name`.
 
 ## Layout
 
@@ -51,5 +77,8 @@ public/             PWA manifest + icons (copied into dist/)
 
 ## Builds
 
-`eas.json` profiles: `preview` (Android APK, internal), `ios-sim` (iOS simulator build), `production`.
-`EXPO_PUBLIC_API_URL` is set per profile to the placeholder `https://pulse-hackathon.fly.dev`.
+`eas build -p android --profile preview` produces an installable APK (`eas.json`: `preview` is `buildType: apk`,
+internal distribution). Other profiles: `ios-sim` (iOS simulator build), `production`. Android package and iOS bundle id are
+`com.pulsehackathon.app`. `EXPO_PUBLIC_API_URL` is set per profile to `https://pulse-hackathon.fly.dev` (native builds
+also default to it when unset). Only Expo SDK 57 modules are used, so the app runs in Expo Go.
+Note: SDK 57.0.33 recommends `react-native@0.86.3`; the repo pins `0.86.2` per docs/CONTRACT.md.

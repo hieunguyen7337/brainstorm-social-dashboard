@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   api,
   ApiError,
+  endpointAvailable,
   isMock,
   loadStorage,
   setMockMode,
@@ -87,6 +88,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setNetworkError(false);
     const stored = await loadStorage();
     setMock(stored.mock);
+    // Warm the cache that tells optional features (insights, harvest, billing) whether the server has them, so their
+    // cards do not flash a skeleton before hiding.
+    if (!stored.mock) void endpointAvailable('/api/health');
     if (!stored.token) {
       setStatus('anon');
       return;

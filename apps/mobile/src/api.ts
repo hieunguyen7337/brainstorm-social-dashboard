@@ -18,6 +18,7 @@ export {
   ApiError,
   androidDownloadUrl,
   apiBase,
+  endpointAvailable,
   getToken,
   isMock,
   loadStorage,

@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRef } from 'react';
 import { StyleSheet, Text, View, type TextInput } from 'react-native';
 
@@ -114,15 +113,11 @@ export function RedditPreview({
           aria-hidden={scored ? undefined : true}
           accessibilityLabel={stats ? statsSpeech(stats) : undefined}
         >
-          <MaterialCommunityIcons
-            name={scored ? 'arrow-up-bold' : 'arrow-up-bold-outline'}
-            size={24}
-            color={scored ? R.orange : R.mute}
-          />
+          <Ionicons name={scored ? 'arrow-up' : 'arrow-up-outline'} size={24} color={scored ? R.orange : R.mute} />
           <Text style={[styles.score, scored && styles.scoreOn]} numberOfLines={1}>
             {stats ? fmtCompact(stats.engagements) : 'Vote'}
           </Text>
-          <MaterialCommunityIcons name="arrow-down-bold-outline" size={24} color={R.mute} />
+          <Ionicons name="arrow-down-outline" size={24} color={R.mute} />
         </View>
 
         <View style={styles.main}>

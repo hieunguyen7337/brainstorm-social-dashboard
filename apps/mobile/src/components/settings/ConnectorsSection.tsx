@@ -19,8 +19,11 @@ import {
   confirm,
   useToast,
 } from '@/src/ui';
+import { isHarvestPlatform, withHarvestProfile, type HarvestPlatform } from './harvest-logic';
+import { HarvestProfile, HarvestProfileSkeleton } from './harvest-profile';
+import { HarvestHowToButton, HarvestSheet } from './harvest-sheet';
 
-/** What the parent screen can call (pull to refresh / the web refresh button). */
+/** What the parent screen can call (pull to refresh / the web refresh button). Reloads connections and harvest status. */
 export interface ConnectorsHandle {
   reload: () => Promise<void>;
 }
@@ -59,10 +62,23 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
   const { workspace } = useSession();
   const toast = useToast();
   const { data, error, loading, reload, setData } = useAsync(() => api.listConnections(), []);
-  useImperativeHandle(handleRef, () => ({ reload }), [reload]);
+  // Real stats for LinkedIn and Instagram (the harvest unit). `null` = this server does not have it: none of its UI
+  // renders. useAsync already re-fetches quietly when the tab regains focus or the app returns to the foreground.
+  const harvest = useAsync(() => api.getHarvestStatus(), []);
+  const { reload: reloadHarvest, setData: setHarvest } = harvest;
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      reload: async () => {
+        await Promise.all([reload(), reloadHarvest()]);
+      },
+    }),
+    [reload, reloadHarvest],
+  );
 
   const [busy, setBusy] = useState<Partial<Record<Platform, Pending>>>({});
   const [form, setForm] = useState<FormState | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // A platform missing from the response counts as disconnected.
   const byPlatform = useMemo(() => {
@@ -70,6 +86,15 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
     for (const c of data ?? []) map.set(c.platform, c);
     return map;
   }, [data]);
+
+  const harvestStatus = harvest.data ?? null;
+  const harvestOn = harvestStatus !== null;
+  /** The first answer is still on its way: hold the harvest UI's space so the rows do not jump when it lands. */
+  const harvestPending = harvest.loading && harvest.data === undefined;
+  const harvestRows = useMemo(
+    () => new Map((harvestStatus?.platforms ?? []).map((row) => [row.platform, row] as const)),
+    [harvestStatus],
+  );
 
   const setPending = useCallback((platform: Platform, action: Pending | null) => {
     setBusy((prev) => {
@@ -136,6 +161,44 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
     }
   };
 
+  /**
+   * Save a LinkedIn / Instagram profile link. Resolves null on success, or the message the row shows under its field.
+   * The caches take the saved link straight away; the status is then re-read quietly for the server's own numbers.
+   */
+  const saveProfile = async (platform: HarvestPlatform, url: string): Promise<string | null> => {
+    try {
+      const saved = await api.setConnectionProfile(platform, url);
+      setData((list) =>
+        isConnection(saved)
+          ? upsert(list, { ...saved, profile_url: saved.profile_url ?? url })
+          : (list ?? []).map((c) => (c.platform === platform ? { ...c, profile_url: url } : c)),
+      );
+      setHarvest((cur) => (cur ? withHarvestProfile(cur, platform, url) : cur));
+      toast.show('Profile link saved');
+      void reloadHarvest();
+      return null;
+    } catch (e) {
+      return messageOf(e);
+    }
+  };
+
+  /** The status line + profile link field under a LinkedIn / Instagram row (a same-sized skeleton while loading). */
+  const harvestFor = (platform: Platform, conn: Connection | null): ReactNode => {
+    if (!isHarvestPlatform(platform)) return null;
+    if (harvestPending) return <HarvestProfileSkeleton />;
+    if (!harvestOn) return null;
+    const row = harvestRows.get(platform) ?? null;
+    return (
+      <HarvestProfile
+        platform={platform}
+        connected={conn?.status === 'connected'}
+        savedUrl={row?.profile_url || conn?.profile_url || null}
+        status={row}
+        onSave={saveProfile}
+      />
+    );
+  };
+
   const openForm = (platform: Platform) =>
     setForm({ platform, handle: defaultHandle(workspace?.brand_name), error: null });
 
@@ -190,7 +253,12 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
 
   return (
     <View style={styles.section}>
-      {header}
+      <View style={styles.headBlock}>
+        {header}
+        {harvestOn || harvestPending ? (
+          <HarvestHowToButton loading={!harvestOn} onPress={() => setSheetOpen(true)} />
+        ) : null}
+      </View>
       <Card padded={false}>
         {PLATFORMS.map((platform, index) => {
           const conn = byPlatform.get(platform) ?? null;
@@ -205,6 +273,7 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
               first={index === 0}
               onConnect={() => openForm(platform)}
               onDisconnect={() => conn && void disconnect(conn)}
+              extra={harvestFor(platform, conn)}
             >
               {formOpen && form ? (
                 <ConnectForm
@@ -234,6 +303,7 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
           </View>
         ) : null}
       </Card>
+      {harvestOn ? <HarvestSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} /> : null}
     </View>
   );
 }
@@ -246,10 +316,22 @@ interface RowProps {
   first: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
+  /** Rendered under the connect form: the harvest block on LinkedIn / Instagram, nothing on the other rows. */
+  extra?: ReactNode;
   children?: ReactNode;
 }
 
-function ConnectorRow({ platform, conn, pending, formOpen, first, onConnect, onDisconnect, children }: RowProps) {
+function ConnectorRow({
+  platform,
+  conn,
+  pending,
+  formOpen,
+  first,
+  onConnect,
+  onDisconnect,
+  extra,
+  children,
+}: RowProps) {
   const label = platformMeta[platform].label;
   const active = conn && conn.status === 'connected' ? conn : null;
   const summary = active
@@ -308,6 +390,7 @@ function ConnectorRow({ platform, conn, pending, formOpen, first, onConnect, onD
         )}
       </View>
       {children}
+      {extra}
     </View>
   );
 }
@@ -377,6 +460,7 @@ function ConnectorsSkeleton() {
 
 const styles = StyleSheet.create({
   section: { gap: space.md },
+  headBlock: { gap: space.xs },
   rowWrap: { paddingHorizontal: space.lg, paddingVertical: space.md },
   divider: { borderTopWidth: 1, borderTopColor: colors.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56 },

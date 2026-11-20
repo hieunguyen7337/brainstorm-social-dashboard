@@ -2,7 +2,7 @@ import { router, useIsFocused, useLocalSearchParams, useNavigation } from 'expo-
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { api, ApiError, isMock, openTrackedLink, type Platform, type Post } from '@/src/api';
+import { api, ApiError, isMock, openTrackedLink, type Platform, type Post, type Theme } from '@/src/api';
 import { EmptyQueue } from '@/src/components/queue/EmptyQueue';
 import { FadeIn } from '@/src/components/queue/FadeIn';
 import { PostCard } from '@/src/components/queue/PostCard';
@@ -76,6 +76,19 @@ export default function QueueScreen() {
   );
   // Handles and follower counts for the optional platform-native preview (fetched once; failure is harmless).
   const connections = useAsync(() => api.listConnections(), []);
+  // Theme names and colours for the chip on each card (a failure is ignored: the chips just stay out). Themes that did
+  // not change keep their object, so a quiet re-fetch on focus does not re-render every memoised card.
+  const knownThemes = useRef<Map<string, Theme>>(new Map());
+  const themes = useAsync(async () => {
+    const fresh = await api.listThemes();
+    const shared = fresh.map((th) => {
+      const old = knownThemes.current.get(th.id);
+      return old && old.name === th.name && old.color === th.color ? old : th;
+    });
+    knownThemes.current = new Map(shared.map((th) => [th.id, th]));
+    return shared;
+  }, []);
+  const themeById = useMemo(() => new Map((themes.data ?? []).map((th) => [th.id, th])), [themes.data]);
 
   // ---- optimistic overlay (the ref is the source of truth so writes never race a render) ----------
   const overlayRef = useRef<Overlay>({});
@@ -430,6 +443,7 @@ export default function QueueScreen() {
               locked={locked}
               brandName={brandName}
               account={accounts[post.platform]}
+              theme={post.theme_id ? (themeById.get(post.theme_id) ?? null) : null}
               onPublish={onPublish}
               onDelete={onDelete}
               onUnschedule={onUnschedule}

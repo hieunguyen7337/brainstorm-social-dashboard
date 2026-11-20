@@ -22,6 +22,7 @@ export interface ButtonProps {
   full?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  testID?: string;
 }
 
 export function Button({
@@ -35,6 +36,7 @@ export function Button({
   full,
   style,
   accessibilityLabel,
+  testID,
 }: ButtonProps) {
   const inactive = disabled || loading;
   const fg = variant === 'primary' ? colors.white : variant === 'danger' ? colors.danger : variant === 'ghost' ? colors.accent : colors.text;
@@ -54,6 +56,7 @@ export function Button({
 
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
