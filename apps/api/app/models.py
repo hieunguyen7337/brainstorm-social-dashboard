@@ -6,10 +6,12 @@ from pydantic import BaseModel, Field
 
 Platform = Literal["linkedin", "instagram", "x", "tiktok", "reddit", "facebook"]
 PostStatus = Literal["draft", "scheduled", "published", "failed"]
+DataMode = Literal["sample", "real"]  # docs/REAL.md
 
 
 class WorkspaceCreate(BaseModel):
     brand_name: str | None = None  # default: a demo brand
+    real: bool = False  # True: no seeded numbers, they come from the person's own accounts (docs/REAL.md)
 
 
 class Workspace(BaseModel):
@@ -21,6 +23,7 @@ class Workspace(BaseModel):
     offer: str
     product_url: str
     created_at: str
+    data_mode: DataMode = "sample"
 
 
 class WorkspaceWithToken(Workspace):
@@ -99,6 +102,7 @@ class PlatformStats(BaseModel):
     clicks: int
     conversions: int
     share: float  # share of total views, 0..1
+    followers: int = 0  # the connection's follower count; 0 when the platform is not connected
 
 
 class FunnelStage(BaseModel):
@@ -132,6 +136,8 @@ class DashboardSummary(BaseModel):
     top_posts: list[Post]
     real_clicks: int  # clicks by real people on tracked links in the period
     real_conversions: int
+    data_mode: DataMode = "sample"  # the workspace's data_mode (docs/REAL.md)
+    followers_total: int = 0  # followers across the connected platforms listed in by_platform
 
 
 class ActivityItem(BaseModel):

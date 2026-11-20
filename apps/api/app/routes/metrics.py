@@ -1,14 +1,14 @@
-"""Harvest endpoints: profile URLs, real-stats ingest, snapshots and harvest status."""
+"""Harvest endpoints: profile URLs, real-stats ingest, snapshots, harvest status and the screenshot reader."""
 
 import sqlite3
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import get_workspace
-from app.db import get_db
+from app.db import PLATFORMS, get_db
 from app.models import Connection, Platform
-from app.services import harvest
+from app.services import harvest, vision
 
 router = APIRouter()
 
@@ -76,3 +76,31 @@ def snapshots(platform: Platform | None = None, limit: int = Query(50, ge=1, le=
 @router.get("/api/connections/harvest-status", response_model=list[HarvestStatus])
 def harvest_status(ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Connection = Depends(get_db)):
     return harvest.harvest_status(conn, ws["id"])
+
+
+class ScreenshotBody(BaseModel):
+    image_base64: str  # the image as base64 text, without a "data:" prefix
+    # image/png, image/jpeg or image/webp. A plain str on purpose: another type must answer 415, not 422.
+    media_type: str
+
+
+@router.post("/api/connections/{platform}/screenshot", response_model=vision.ScreenshotRead)
+def read_screenshot(platform: str, body: ScreenshotBody, ws: sqlite3.Row = Depends(get_workspace),
+                    conn: sqlite3.Connection = Depends(get_db)):
+    """Claude reads a screenshot of the person's profile or insights page into numbers (docs/REAL.md).
+
+    Nothing is saved: the app lets the person check the numbers, then saves them with
+    POST /api/metrics/ingest. The first four checks need no AI key; the last one answers 503 when AI is
+    off, capped or failing.
+    """
+    if platform not in PLATFORMS:
+        raise HTTPException(status_code=404, detail=f"unknown platform '{platform}'")
+    if body.media_type not in vision.MEDIA_TYPES:
+        raise HTTPException(
+            status_code=415, detail="unsupported media type: use image/png, image/jpeg or image/webp"
+        )
+    image_b64 = vision.clean_image_base64(body.image_base64)  # 413 above 5 MB, 422 for bad base64 or no image
+    try:
+        return vision.read_screenshot(conn, ws["id"], platform, image_b64, body.media_type)
+    except vision.VisionUnavailable:
+        raise HTTPException(status_code=503, detail=vision.UNAVAILABLE_DETAIL) from None

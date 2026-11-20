@@ -66,6 +66,34 @@ def _fmt_time(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
 
 
+def seed_real_workspace(conn: sqlite3.Connection, workspace_id: str) -> None:
+    """Set up a real workspace (docs/REAL.md): every number on screen must come from the person, so none is seeded.
+
+    It gets the default content pillars (themes carry no numbers), the default autopilot config (off) and the six
+    platforms as never-connected 'live' connections (no followers, no handle). No posts, no daily_metrics, no
+    snapshots and no events: the first ingest of a platform connects it.
+    """
+    now = _fmt_time(datetime.now(UTC).replace(microsecond=0))
+    for p in PLATFORMS:
+        conn.execute(
+            "INSERT INTO connections (id, workspace_id, platform, handle, status, mode, followers, connected_at)"
+            " VALUES (?,?,?,'','disconnected','live',0,?)",
+            (new_id("c_"), workspace_id, p, now),
+        )
+    for name, desc, color in THEMES:
+        conn.execute(
+            "INSERT INTO themes (id, workspace_id, name, description, color, active, created_at)"
+            " VALUES (?,?,?,?,?,1,?)",
+            (new_id("t_"), workspace_id, name, desc, color, now),
+        )
+    conn.execute(
+        "INSERT INTO autopilot (workspace_id, enabled, interval_min, platforms, require_approval)"
+        " VALUES (?,0,30,?,1)",
+        (workspace_id, json.dumps(list(PLATFORMS))),
+    )
+    conn.commit()
+
+
 def seed_workspace(conn: sqlite3.Connection, workspace_id: str, brand_name: str, *, demo: bool) -> None:
     """Insert connections, themes, metrics, posts, autopilot and events for a fresh workspace."""
     rng = random.Random(workspace_id)

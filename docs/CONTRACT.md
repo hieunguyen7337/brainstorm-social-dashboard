@@ -80,6 +80,7 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | PUT | /api/connections/{platform}/profile | set the profile URL to harvest | W2 |
 | POST | /api/metrics/ingest | real stats from the harvest script or Claude in Chrome | W2 |
 | GET | /api/metrics/snapshots, /api/connections/harvest-status | harvest history and status | W2 |
+| POST | /api/connections/{platform}/screenshot | `{image_base64, media_type}` -> `ScreenshotRead` (Claude reads a profile or insights screenshot into numbers; saves nothing; 404/413/415/503, see `docs/REAL.md`) | R1 |
 
 Room details, share links and a curl walkthrough: `docs/ROOM.md`. Harvesting: `docs/HARVEST.md`.
 

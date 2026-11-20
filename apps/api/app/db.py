@@ -187,6 +187,10 @@ COLUMNS_V2 = (
     ("posts", "harvested_at", "TEXT"),
     ("workspaces", "plan", "TEXT NOT NULL DEFAULT 'free'"),
     ("workspaces", "stripe_customer_id", "TEXT"),
+    # docs/REAL.md: 'sample' (seeded demo numbers) | 'real' (numbers only from the person's own accounts)
+    ("workspaces", "data_mode", "TEXT NOT NULL DEFAULT 'sample'"),
+    # the window (days) an account-level snapshot's views and engagements cover, when the person gave one
+    ("metric_snapshots", "period_days", "INTEGER"),
 )
 
 

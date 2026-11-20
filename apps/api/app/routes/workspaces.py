@@ -16,7 +16,8 @@ from app.models import (
     WorkspacePatch,
     WorkspaceWithToken,
 )
-from app.services.seed import DEMO, DEMO_BRAND, seed_workspace
+from app.services import harvest
+from app.services.seed import DEMO, DEMO_BRAND, seed_real_workspace, seed_workspace
 
 router = APIRouter()
 
@@ -38,6 +39,7 @@ def create_workspace(body: WorkspaceCreate | None = None, conn: sqlite3.Connecti
 
     brand = (body.brand_name.strip() if body and body.brand_name else "") or DEMO_BRAND
     demo = brand == DEMO_BRAND
+    real = bool(body and body.real)  # docs/REAL.md: no seeded numbers, they come from the person's accounts
     wid = new_id("w_")
     token = secrets.token_urlsafe(24)
     if demo:
@@ -48,10 +50,14 @@ def create_workspace(body: WorkspaceCreate | None = None, conn: sqlite3.Connecti
         offer = "10% off your first order"
     conn.execute(
         "INSERT INTO workspaces (id, token, name, brand_name, brand_voice, audience, offer, product_url,"
-        " created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-        (wid, token, brand, brand, voice, audience, offer, settings.public_base_url, now_iso()),
+        " created_at, data_mode) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (wid, token, brand, brand, voice, audience, offer, settings.public_base_url, now_iso(),
+         "real" if real else "sample"),
     )
-    seed_workspace(conn, wid, brand, demo=demo)
+    if real:
+        seed_real_workspace(conn, wid)
+    else:
+        seed_workspace(conn, wid, brand, demo=demo)
     row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
     return {**_ws(row), "token": token}
 
@@ -89,6 +95,13 @@ def connect_platform(platform: str, body: ConnectionCreate, ws: sqlite3.Row = De
                      conn: sqlite3.Connection = Depends(get_db)):
     _check_platform(platform)
     now = now_iso()
+    if ws["data_mode"] == "real":
+        # A real workspace never gets an invented follower count or a simulated audience (docs/REAL.md): connect
+        # it live and leave the numbers to what the person saves with POST /api/metrics/ingest.
+        harvest.connect_live(conn, ws["id"], platform, handle=harvest.clean_handle(body.handle), now=now)
+        conn.commit()
+        return _conn(conn.execute(
+            "SELECT * FROM connections WHERE workspace_id = ? AND platform = ?", (ws["id"], platform)).fetchone())
     existing = conn.execute(
         "SELECT * FROM connections WHERE workspace_id = ? AND platform = ?", (ws["id"], platform)
     ).fetchone()

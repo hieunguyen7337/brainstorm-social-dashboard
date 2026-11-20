@@ -13,10 +13,59 @@ from app.services.posts import row_to_post
 
 router = APIRouter()
 KEYS = ("views", "engagements", "clicks", "conversions")
+WINDOWED = ("views", "engagements")  # what an account-level snapshot reports for a window (docs/REAL.md)
 
 
 def _pct(cur: int, prev: int) -> int:
     return round((cur - prev) / prev * 100) if prev > 0 else 0
+
+
+def _snapshot_history(conn: sqlite3.Connection, workspace_id: str, days: int,
+                      platform: str | None) -> dict[tuple[str, str], list[tuple[int, int]]]:
+    """The account-level numbers the person saved: {(platform, metric): [(value, period_days), ...]}, newest first.
+
+    Only snapshots whose stated window fits inside the dashboard's (period_days <= days) are listed, and only for
+    the metrics that were captured (a missing number is never read as 0).
+    """
+    sql = ("SELECT platform, views, engagements, period_days FROM metric_snapshots WHERE workspace_id = ?"
+           " AND post_id IS NULL AND period_days IS NOT NULL AND period_days <= ?")
+    args: list = [workspace_id, days]
+    if platform:
+        sql, args = sql + " AND platform = ?", [*args, platform]
+    hist: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for r in conn.execute(sql + " ORDER BY captured_at DESC, rowid DESC", args):
+        for k in WINDOWED:
+            if r[k] is not None:
+                hist.setdefault((r["platform"], k), []).append((r[k], r["period_days"]))
+    return hist
+
+
+def _fold_snapshots(per_plat: dict[str, dict], cur_tot: dict[str, int],
+                    hist: dict[tuple[str, str], list[tuple[int, int]]], connected: list[str]) -> None:
+    """Per connected platform, views and engagements become the larger of the daily sum and the latest snapshot."""
+    for p in connected:
+        for k in WINDOWED:
+            entries = hist.get((p, k))
+            if entries and entries[0][0] > per_plat[p][k]:
+                cur_tot[k] += entries[0][0] - per_plat[p][k]
+                per_plat[p][k] = entries[0][0]
+
+
+def _snapshot_change(hist: dict[tuple[str, str], list[tuple[int, int]]], connected: list[str]) -> dict[str, int]:
+    """% change of the latest snapshot against the one before it that covers the same window, summed over the
+    platforms that have two. Real history only: a platform with fewer than two comparable snapshots counts as 0."""
+    out = {}
+    for k in WINDOWED:
+        cur = prev = 0
+        for p in connected:
+            entries = hist.get((p, k), [])
+            if entries:
+                value, period = entries[0]
+                before = next((v for v, per in entries[1:] if per == period), None)
+                if before is not None:
+                    cur, prev = cur + value, prev + before
+        out[k] = _pct(cur, prev)
+    return out
 
 
 @router.get("/api/dashboard", response_model=DashboardSummary)
@@ -53,18 +102,27 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
             for k in KEYS:
                 prev_tot[k] += r[k]
 
-    connected = [c["platform"] for c in conn.execute(
-        "SELECT platform FROM connections WHERE workspace_id = ? AND status = 'connected'", (ws["id"],))]
+    followers = {c["platform"]: c["followers"] for c in conn.execute(
+        "SELECT platform, followers FROM connections WHERE workspace_id = ? AND status = 'connected'", (ws["id"],))}
+    connected = [p for p in followers if platform is None or p == platform]
     for p in connected:
-        if platform is None or p == platform:
-            per_plat.setdefault(p, dict.fromkeys(KEYS, 0))
+        per_plat.setdefault(p, dict.fromkeys(KEYS, 0))
+    change = None
+    if ws["data_mode"] == "real":
+        # Real workspace (docs/REAL.md): the account numbers the person saved are windowed totals with no daily
+        # breakdown, so per connected platform views/engagements are the larger of the daily sum and the latest
+        # snapshot that fits the window. The change is real history only: the last two comparable snapshots.
+        hist = _snapshot_history(conn, ws["id"], days, platform)
+        _fold_snapshots(per_plat, cur_tot, hist, connected)
+        change = {**{k: _pct(cur_tot[k], prev_tot[k]) for k in KEYS}, **_snapshot_change(hist, connected)}
     total_views = cur_tot["views"]
     by_platform = sorted(
         (
-            {"platform": p, **v, "share": (v["views"] / total_views) if total_views else 0.0}
+            {"platform": p, **v, "share": (v["views"] / total_views) if total_views else 0.0,
+             "followers": followers.get(p, 0)}  # connected platforms only
             for p, v in per_plat.items()
         ),
-        key=lambda x: -x["views"],
+        key=lambda x: (-x["views"], PLATFORMS.index(x["platform"])),
     )
 
     stages = []
@@ -95,13 +153,15 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
     return {
         "days": days,
         "totals": cur_tot,
-        "change_pct": {k: _pct(cur_tot[k], prev_tot[k]) for k in KEYS},
+        "change_pct": change or {k: _pct(cur_tot[k], prev_tot[k]) for k in KEYS},
         "by_platform": by_platform,
         "funnel": stages,
         "timeseries": series,
         "top_posts": [row_to_post(conn, r) for r in top],
         "real_clicks": real("click"),
         "real_conversions": real("conversion"),
+        "data_mode": ws["data_mode"],
+        "followers_total": sum(x["followers"] for x in by_platform),
     }
 
 
