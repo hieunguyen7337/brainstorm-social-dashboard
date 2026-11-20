@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_NAME } from '@/src/config';
+import { ROOM_GUEST_BRAND, useRoomJoin } from '@/src/components/room/roomStore';
 import { useSession } from '@/src/session';
 import { colors, radius, space, type as t, withAlpha } from '@/src/theme';
 import { Badge, Button, Logo, TextField } from '@/src/ui';
@@ -21,12 +22,15 @@ const FEATURES: { icon: IconName; color: string; title: string; text: string }[]
 export default function OnboardingScreen() {
   const { status, start, startOfflineDemo, starting, error, networkError, mock } = useSession();
   const [brand, setBrand] = useState('');
+  // Someone who scanned a room code but could not get a workspace (offline) lands here: keep their room in view.
+  const room = useRoomJoin();
+  const inRoom = room.pending && !!room.code;
   const insets = useSafeAreaInsets();
 
   if (status === 'ready') return <Redirect href="/dashboard" />;
 
   const go = () => {
-    if (!starting) void start(brand);
+    if (!starting) void start(brand || (inRoom ? ROOM_GUEST_BRAND : ''));
   };
 
   return (
@@ -47,6 +51,7 @@ export default function OnboardingScreen() {
             <Logo size={44} />
             <Text style={t.h2}>{APP_NAME}</Text>
             {mock ? <Badge label="Offline demo" tone="warn" icon="cloud-offline" /> : null}
+            {inRoom ? <Badge label={`Room ${room.code}`} tone="accent" icon="people" /> : null}
           </View>
 
           <View style={styles.hero}>
@@ -142,7 +147,7 @@ const styles = StyleSheet.create({
   },
   scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg },
   column: { width: '100%', maxWidth: 480, gap: space.xl },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  brandRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.md },
   hero: { gap: space.md },
   heroAccent: { color: colors.accent2 },
   sub: { ...t.dim, fontSize: 16, lineHeight: 24 },

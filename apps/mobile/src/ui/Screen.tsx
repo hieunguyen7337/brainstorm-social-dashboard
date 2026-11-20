@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MAX_CONTENT_WIDTH } from '@/src/config';
+import { BOARD_MAX_WIDTH, useWide } from '@/src/layout';
 import { colors, space, type as t } from '@/src/theme';
 
 export interface ScreenProps {
@@ -33,11 +34,18 @@ export interface ScreenProps {
   contentStyle?: StyleProp<ViewStyle>;
   /** Sticky area under the scroll content (e.g. an action bar). */
   footer?: ReactNode;
+  /**
+   * Wide layout only (>= 1024 px, default false): draw no title header at all. The screen renders its own header strip
+   * (so `title`, `subtitle` and `right` are ignored); only the web refresh button stays, as a small floating button
+   * at the top right. Has no effect below 1024 px, where the normal header is always shown.
+   */
+  bare?: boolean;
 }
 
 /**
  * Standard screen frame: safe-area top, big title, scrolling content centred in a 720px column, pull-to-refresh.
- * Every tab screen renders inside this.
+ * Every tab screen renders inside this. On wide windows (>= 1024 px, see `useWide`) the column grows to the 1440px
+ * board width with 24px side gutters.
  */
 export function Screen({
   title,
@@ -49,12 +57,31 @@ export function Screen({
   fixed = false,
   contentStyle,
   footer,
+  bare = false,
 }: ScreenProps) {
+  const wide = useWide();
   const insets = useSafeAreaInsets();
   const webRefresh = Platform.OS === 'web' && onRefresh;
+  const bareWide = bare && wide;
+
+  const refreshButton = webRefresh ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Refresh"
+      onPress={onRefresh}
+      hitSlop={8}
+      style={({ pressed }) => [styles.refreshBtn, bareWide && styles.refreshFloat, pressed && { opacity: 0.8 }]}
+    >
+      {refreshing ? (
+        <ActivityIndicator size="small" color={colors.textDim} />
+      ) : (
+        <Ionicons name="refresh" size={bareWide ? 16 : 18} color={colors.textDim} />
+      )}
+    </Pressable>
+  ) : null;
 
   const header =
-    title || right || webRefresh ? (
+    !bareWide && (title || right || webRefresh) ? (
       <View style={styles.header}>
         <View style={styles.headerText}>
           {title ? (
@@ -65,32 +92,20 @@ export function Screen({
           {subtitle ? <Text style={[t.dim, styles.subtitle]}>{subtitle}</Text> : null}
         </View>
         <View style={styles.headerRight}>
-          {webRefresh ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Refresh"
-              onPress={onRefresh}
-              hitSlop={8}
-              style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.8 }]}
-            >
-              {refreshing ? (
-                <ActivityIndicator size="small" color={colors.textDim} />
-              ) : (
-                <Ionicons name="refresh" size={18} color={colors.textDim} />
-              )}
-            </Pressable>
-          ) : null}
+          {refreshButton}
           {right}
         </View>
       </View>
     ) : null;
 
   const body = (
-    <View style={[styles.column, contentStyle]}>
+    <View style={[styles.column, wide && styles.columnWide, contentStyle]}>
       {header}
       {children}
     </View>
   );
+  // Bare + wide: the refresh button floats over the top right corner of the page gutter (it scrolls away with the page).
+  const floatingRefresh = bareWide && refreshButton ? <View style={styles.floatSlot}>{refreshButton}</View> : null;
 
   return (
     <KeyboardAvoidingView
@@ -98,11 +113,14 @@ export function Screen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {fixed ? (
-        <View style={styles.fixed}>{body}</View>
+        <View style={[styles.fixed, wide && styles.fixedWide]}>
+          {body}
+          {floatingRefresh}
+        </View>
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, wide && styles.scrollContentWide]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -118,6 +136,7 @@ export function Screen({
           }
         >
           {body}
+          {floatingRefresh}
         </ScrollView>
       )}
       {footer}
@@ -131,6 +150,10 @@ const styles = StyleSheet.create({
   scrollContent: { alignItems: 'center', paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: 40 },
   fixed: { flex: 1, alignItems: 'center', paddingHorizontal: space.lg, paddingTop: space.lg },
   column: { width: '100%', maxWidth: MAX_CONTENT_WIDTH, gap: space.lg },
+  // Wide (>= 1024 px): the board width; `minWidth: 0` so wide children can never push the page into horizontal scroll.
+  scrollContentWide: { paddingHorizontal: space.xl, paddingTop: space.xl, paddingBottom: 40 },
+  fixedWide: { paddingHorizontal: space.xl, paddingTop: space.xl },
+  columnWide: { maxWidth: BOARD_MAX_WIDTH, minWidth: 0 },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md },
   headerText: { flex: 1, minWidth: 0 },
   subtitle: { marginTop: 2 },
@@ -145,4 +168,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  floatSlot: { position: 'absolute', top: space.sm, right: space.sm },
+  refreshFloat: { width: 30, height: 30, borderRadius: 15 },
 });

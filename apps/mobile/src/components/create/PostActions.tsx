@@ -4,6 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { fmtDateTime, inHours, tomorrowMorning } from '@/src/format';
 import { colors, platformMeta, space, type as t, withAlpha } from '@/src/theme';
+import { ShareButtons } from '@/src/components/share/ShareButtons';
+import type { ShareWiring } from '@/src/components/share/useShare';
 import type { Post } from '@/src/types';
 import { Button, Card, Chip, ChipRow, IconButton } from '@/src/ui';
 
@@ -21,6 +23,10 @@ export interface PostActionsProps {
   error?: string;
   /** Enough room for a single row of buttons. */
   wide: boolean;
+  /** Very little room (a card in the wide board's 2-column grid): the buttons stack instead of sharing a row. */
+  compact?: boolean;
+  /** "Post it for real": the unsaved text on screen and how the share buttons mark this post published. */
+  share?: ShareWiring;
   onPublish: () => void;
   onSchedule: (iso: string) => void;
   onSaveEdits: () => void;
@@ -49,6 +55,8 @@ function DraftActions({
   locked,
   error,
   wide,
+  compact = false,
+  share,
   onPublish,
   onSchedule,
   onSaveEdits,
@@ -63,8 +71,8 @@ function DraftActions({
     <Button
       title="Publish"
       icon="paper-plane"
-      full={!wide}
-      style={wide ? styles.growMore : undefined}
+      full={!wide && !compact}
+      style={compact ? styles.grow : wide ? styles.growMore : undefined}
       loading={busy === 'publishing'}
       disabled={blocked && busy !== 'publishing'}
       onPress={onPublish}
@@ -116,7 +124,18 @@ function DraftActions({
           />
         </View>
       ) : null}
-      {wide ? (
+      {compact ? (
+        <>
+          <View style={styles.row}>
+            {publish}
+            {discard}
+          </View>
+          <View style={styles.row}>
+            {schedule}
+            {copy}
+          </View>
+        </>
+      ) : wide ? (
         <View style={styles.row}>
           {publish}
           {schedule}
@@ -133,6 +152,7 @@ function DraftActions({
           </View>
         </>
       )}
+      <ShareButtons post={post} compact={compact || !wide} disabled={blocked} {...share} />
       {scheduleOpen ? (
         <View style={styles.choices}>
           <Text style={t.label}>Schedule for</Text>
@@ -148,7 +168,17 @@ function DraftActions({
 }
 
 /** After publishing: the tracked link, "Open link" (lands a real click in the funnel) and a way to the queue. */
-function PublishedCard({ post, onOpenLink, onCopyLink, onViewQueue }: PostActionsProps) {
+function PublishedCard({
+  post,
+  busy,
+  locked,
+  wide,
+  compact = false,
+  share,
+  onOpenLink,
+  onCopyLink,
+  onViewQueue,
+}: PostActionsProps) {
   const label = platformMeta[post.platform].label;
   return (
     <Card tone="raised" style={[styles.stateCard, { borderColor: withAlpha(colors.success, 0.4) }]}>
@@ -168,13 +198,17 @@ function PublishedCard({ post, onOpenLink, onCopyLink, onViewQueue }: PostAction
           <IconButton icon="copy-outline" label="Copy tracked link" size={18} onPress={onCopyLink} />
         </View>
       ) : null}
-      <View style={styles.row}>
-        {post.link_url ? <Button title="Open link" icon="open-outline" style={styles.grow} onPress={onOpenLink} /> : null}
+      <ShareButtons post={post} compact={compact || !wide} disabled={locked || busy !== undefined} {...share} />
+      <View style={compact ? styles.stack : styles.row}>
+        {post.link_url ? (
+          <Button title="Open link" icon="open-outline" full={compact} style={compact ? undefined : styles.grow} onPress={onOpenLink} />
+        ) : null}
         <Button
           title="View in Queue"
           icon="albums-outline"
           variant="secondary"
-          style={styles.grow}
+          full={compact}
+          style={compact ? undefined : styles.grow}
           onPress={() => onViewQueue('published')}
         />
       </View>
@@ -184,7 +218,7 @@ function PublishedCard({ post, onOpenLink, onCopyLink, onViewQueue }: PostAction
 }
 
 /** After scheduling: when it goes out, and a way to the queue. */
-function ScheduledCard({ post, onCopyLink, onViewQueue }: PostActionsProps) {
+function ScheduledCard({ post, busy, locked, wide, compact = false, share, onCopyLink, onViewQueue }: PostActionsProps) {
   const label = platformMeta[post.platform].label;
   return (
     <Card tone="raised" style={[styles.stateCard, { borderColor: withAlpha(colors.info, 0.4) }]}>
@@ -197,16 +231,25 @@ function ScheduledCard({ post, onCopyLink, onViewQueue }: PostActionsProps) {
           <Text style={t.small}>{`Your ${label} post waits in the queue until then.`}</Text>
         </View>
       </View>
-      <View style={styles.row}>
+      <ShareButtons post={post} compact={compact || !wide} disabled={locked || busy !== undefined} {...share} />
+      <View style={compact ? styles.stack : styles.row}>
         <Button
           title="View in Queue"
           icon="albums-outline"
           variant="secondary"
-          style={styles.grow}
+          full={compact}
+          style={compact ? undefined : styles.grow}
           onPress={() => onViewQueue('scheduled')}
         />
         {post.link_url ? (
-          <Button title="Copy link" icon="link-outline" variant="ghost" style={styles.grow} onPress={onCopyLink} />
+          <Button
+            title="Copy link"
+            icon="link-outline"
+            variant="ghost"
+            full={compact}
+            style={compact ? undefined : styles.grow}
+            onPress={onCopyLink}
+          />
         ) : null}
       </View>
     </Card>
@@ -223,6 +266,7 @@ export function PostActions(props: PostActionsProps) {
 const styles = StyleSheet.create({
   wrap: { gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  stack: { gap: space.sm },
   grow: { flex: 1 },
   growMore: { flex: 1.6 },
   discard: { width: 48, height: 48, borderRadius: 16 },

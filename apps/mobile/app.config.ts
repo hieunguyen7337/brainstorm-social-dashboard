@@ -38,7 +38,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     bundler: 'metro',
-    output: 'single',
+    // 'single' = one index.html shell (the API's SPA fallback); app/+html.tsx is not used, public/index.html is.
+    // PULSE_WEB_OUTPUT=static pre-renders every route to its own HTML (first paint without JS) and uses app/+html.tsx;
+    // see docs/PERF.md before switching (the e2e static server needs a one-line change).
+    output: process.env.PULSE_WEB_OUTPUT === 'static' ? 'static' : 'single',
     favicon: './assets/favicon.png',
     name: APP_NAME,
     shortName: APP_NAME,
@@ -47,7 +50,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     backgroundColor: BG,
   },
   plugins: [
-    'expo-router',
+    // Web: every route is its own lazy chunk, so a cold start downloads the shell plus the route it lands on instead of
+    // all five tabs. 'production' leaves `expo start` and native builds on the normal synchronous route table.
+    ['expo-router', { asyncRoutes: { web: 'production', default: false } }],
     'expo-font',
     'expo-asset',
     [

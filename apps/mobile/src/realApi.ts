@@ -1,5 +1,40 @@
-import { request } from './http';
-import type { PulseApi } from './types';
+import { ApiError, publicBaseUrl, request } from './http';
+import type { Platform, PulseApi, RoomInfo, ShareInfo } from './types';
+
+type Raw = Record<string, unknown>;
+
+const isRaw = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !Array.isArray(v);
+const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+const first = (o: Raw, keys: string[]): string | null => {
+  for (const k of keys) {
+    const v = text(o[k]);
+    if (v) return v;
+  }
+  return null;
+};
+
+/** The share/room APIs are still landing: accept a few spellings of each field, fail clearly on anything else. */
+export function normalizeShare(raw: unknown, platform: Platform): ShareInfo {
+  if (!isRaw(raw)) throw new ApiError(502, 'The server sent an unexpected share response.');
+  const urls = isRaw(raw.urls) ? raw.urls : {};
+  return {
+    platform: (text(raw.platform) as Platform | null) ?? platform,
+    url: first(raw, ['url', 'share_url', 'intent_url', 'composer_url', 'href']),
+    threads_url: first(raw, ['threads_url']) ?? text(urls.threads),
+    caption: first(raw, ['caption', 'text', 'content']) ?? '',
+    instagram_note: first(raw, ['instagram_note', 'note']),
+  };
+}
+
+export function normalizeRoom(raw: unknown): RoomInfo {
+  if (!isRaw(raw)) throw new ApiError(502, 'The server sent an unexpected room response.');
+  const code = first(raw, ['code', 'room_code', 'id']);
+  const screen = first(raw, ['screen_url', 'screen', 'display_url']);
+  const join = first(raw, ['join_url', 'join']);
+  if (!code || !screen || !join) throw new ApiError(502, 'The server sent an unexpected room response.');
+  const abs = (u: string) => (/^https?:/i.test(u) ? u : `${publicBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`);
+  return { code, screen_url: abs(screen), join_url: abs(join), title: first(raw, ['title', 'name']) ?? '' };
+}
 
 /** The real HTTP client: one function per row of the REST table in docs/CONTRACT.md. */
 export const realApi: PulseApi = {
@@ -20,6 +55,7 @@ export const realApi: PulseApi = {
   getDashboard: (q) =>
     request('GET', '/api/dashboard', { query: { days: q?.days ?? 30, platform: q?.platform ?? undefined } }),
   getActivity: (limit = 30) => request('GET', '/api/activity', { query: { limit } }),
+  getInsights: (q) => request('GET', '/api/insights', { query: { days: q?.days ?? 30 } }),
 
   listPosts: (q) =>
     request('GET', '/api/posts', {
@@ -47,4 +83,8 @@ export const realApi: PulseApi = {
 
   listTrends: (q) =>
     request('GET', '/api/trends', { query: { refresh: q?.refresh ? 'true' : undefined, limit: q?.limit ?? 20 } }),
+
+  getShare: async (postId) =>
+    normalizeShare(await request<unknown>('GET', `/api/posts/${encodeURIComponent(postId)}/share`), 'linkedin'),
+  createRoom: async () => normalizeRoom(await request<unknown>('POST', '/api/rooms', { body: {} })),
 };

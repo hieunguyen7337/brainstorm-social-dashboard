@@ -5,7 +5,7 @@
  * Placeholders inside copy: {brand} {slug} {offer} {who} {theme} {trend} {trendShort} {brief} {briefShort}
  * {fact} {fact2}. Hashtags are stored without the leading '#'.
  */
-import type { Platform, TrendSource } from './types';
+import type { ClassifierName, Platform, TrendSource } from './types';
 
 export const DEFAULT_BRAND = 'Brew & Bloom';
 
@@ -48,6 +48,29 @@ export const SEED_THEMES = [
   { name: 'Product spotlight', description: 'New beans, blends and gear: what is on the shelf and why we love it.', color: '#ff5c8a' },
   { name: 'Customer love', description: 'Reviews, shout-outs and photos from the people who drink our coffee.', color: '#2fe0a3' },
   { name: 'Tips & how-to', description: 'Brew guides, grind tips and quick wins for better coffee at home.', color: '#ffb648' },
+];
+
+/**
+ * How much better or worse each seed theme's posts convert than the platform norm, as multipliers on the funnel
+ * ratios [engagements per view, clicks per engagement, conversions per click]. Same order as SEED_THEMES. They are
+ * applied to the seeded posts, so the insights endpoint finds real differences between themes in the data.
+ */
+export const THEME_EDGE: readonly (readonly [number, number, number])[] = [
+  [1.1, 1.15, 1.2], // Behind the scenes
+  [0.9, 0.9, 0.9], // Product spotlight
+  [1.2, 1.3, 1.35], // Customer love
+  [1.05, 1.05, 1.0], // Tips & how-to
+];
+
+/**
+ * Who "classified" each seed theme's posts, oldest published post first (the pattern repeats). Tips & how-to is the
+ * theme Jev AI sorts; the others are a mix of Claude, the keyword fallback and the person's own choice.
+ */
+export const THEME_CLASSIFIERS: readonly (readonly ClassifierName[])[] = [
+  ['claude', 'keyword', 'claude', 'claude', 'manual'], // Behind the scenes
+  ['keyword', 'manual', 'claude', 'keyword', 'keyword'], // Product spotlight
+  ['manual', 'claude', 'manual', 'keyword', 'claude'], // Customer love
+  ['manual', 'jev', 'jev', 'jev', 'jev', 'jev'], // Tips & how-to
 ];
 
 // ---- seed posts ---------------------------------------------------------------------------------

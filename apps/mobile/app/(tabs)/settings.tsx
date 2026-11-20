@@ -11,6 +11,7 @@ import { ConnectorsSection, type ConnectorsHandle } from '@/src/components/setti
 import { GetTheAppCard } from '@/src/components/settings/GetTheAppCard';
 import { ThemesSection } from '@/src/components/settings/ThemesSection';
 import { APP_NAME } from '@/src/config';
+import { BOARD_MAX_WIDTH, Col, Grid, useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
 import { Button, Card, Screen, confirm } from '@/src/ui';
@@ -22,6 +23,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
  * Every section component renders its own SectionHeader (ThemesSection and AutopilotSection included).
  */
 export default function SettingsScreen() {
+  const wide = useWide();
   const { workspace } = useSession();
   const connectors = useRef<ConnectorsHandle>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,6 +38,35 @@ export default function SettingsScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  // >= 1024 px: two independent stacked columns of the same sections (heights balanced by hand), footer underneath.
+  // The narrow branch below is the original phone tree, untouched.
+  if (wide) {
+    return (
+      <Screen
+        title="Settings"
+        subtitle={workspace ? `${workspace.brand_name} · guest workspace` : undefined}
+        onRefresh={() => void refresh()}
+        refreshing={refreshing}
+        contentStyle={styles.wideColumn}
+      >
+        <Grid gap={space.xl} testID="settings-board">
+          <Col span={6} style={styles.wideStack} testID="settings-col-left">
+            <BrandSection />
+            <ThemesSection />
+            <AutopilotSection />
+            <ResetCard />
+          </Col>
+          <Col span={6} style={styles.wideStack} testID="settings-col-right">
+            <ConnectorsSection handleRef={connectors} />
+            <ClaudeMcpCard />
+            <GetTheAppCard />
+          </Col>
+        </Grid>
+        <Footer />
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -114,6 +145,8 @@ function Footer() {
 
 const styles = StyleSheet.create({
   column: { gap: space.xl },
+  wideColumn: { gap: space.xl, maxWidth: BOARD_MAX_WIDTH },
+  wideStack: { gap: space.xl },
   danger: {
     gap: space.lg,
     borderColor: withAlpha(colors.danger, 0.4),

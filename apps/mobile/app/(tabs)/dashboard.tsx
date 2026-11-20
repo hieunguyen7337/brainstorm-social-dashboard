@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, PLATFORMS, type Platform } from '@/src/api';
 import {
   ActivityCard,
+  DashboardBoard,
   DashboardSkeleton,
   FunnelCard,
   KpiGrid,
@@ -15,8 +16,11 @@ import {
   pickLinkPost,
   sortedDays,
 } from '@/src/components/dashboard';
+import { TopBanners } from '@/src/components/dashboard/TopBanners';
+import { StartRoom } from '@/src/components/room/StartRoom';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
+import { useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { platformMeta } from '@/src/theme';
 import { Card, Chip, ChipStrip, ErrorState, Screen } from '@/src/ui';
@@ -25,10 +29,14 @@ import { Card, Chip, ChipStrip, ErrorState, Screen } from '@/src/ui';
 const QUICK_REFRESH_MS = [900, 2600];
 
 export default function DashboardScreen() {
+  // Wide windows (>= 1024 px) get the board; below that the phone column below renders exactly as it always did.
+  const wide = useWide();
   const { workspace } = useSession();
   const [platform, setPlatform] = useState<Platform | null>(null);
   // Bumping this re-runs the loaders quietly (no skeleton, no pull-to-refresh spinner).
   const [nonce, setNonce] = useState(0);
+  // Bumped by a manual refresh so the board's own loaders (trends, posts, connectors, insights) re-run too.
+  const [boardNonce, setBoardNonce] = useState(0);
 
   // The result carries the filter it was fetched for, so numbers can tell "new filter" from "live increment".
   const dash = useAsync(
@@ -52,6 +60,7 @@ export default function DashboardScreen() {
   const { reload: reloadActivity } = activity;
   const { reload: reloadLatest } = latest;
   const reloadAll = useCallback(() => {
+    setBoardNonce((n) => n + 1);
     void Promise.all([reloadDash(), reloadActivity(), reloadLatest()]);
   }, [reloadDash, reloadActivity, reloadLatest]);
 
@@ -70,6 +79,26 @@ export default function DashboardScreen() {
   const brand = workspace?.brand_name?.trim() || workspace?.name?.trim() || APP_NAME;
   const reconnecting = (!!dash.error && !!dash.data) || (!!activity.error && !!activity.data);
 
+  if (wide) {
+    return (
+      <Screen bare title="Dashboard" onRefresh={reloadAll} refreshing={dash.refreshing || activity.refreshing}>
+        <TopBanners />
+        <DashboardBoard
+          brand={brand}
+          dash={dash}
+          activity={activity}
+          days={days}
+          platform={platform}
+          onPlatform={setPlatform}
+          linkPost={linkPost}
+          onFired={refreshSoon}
+          reconnecting={reconnecting}
+          reloadSignal={boardNonce}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen
       title="Dashboard"
@@ -78,6 +107,7 @@ export default function DashboardScreen() {
       onRefresh={reloadAll}
       refreshing={dash.refreshing || activity.refreshing}
     >
+      <TopBanners />
       {!summary ? (
         // First load: skeleton. If it failed, a retry (the skeleton shows again while the retry is in flight).
         dash.error && !dash.refreshing ? (
@@ -110,6 +140,10 @@ export default function DashboardScreen() {
 
           <Reveal index={1}>
             <KpiGrid totals={summary.totals} change={summary.change_pct} timeseries={days} context={dataContext} />
+          </Reveal>
+
+          <Reveal index={2}>
+            <StartRoom />
           </Reveal>
 
           <Reveal index={2}>

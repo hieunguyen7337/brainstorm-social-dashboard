@@ -50,13 +50,15 @@ export interface TrendsIntroProps {
   /** The latest background load failed while an older list is still showing. */
   offline: boolean;
   onRefresh: () => void;
+  /** Wide layout: the copy on the left, freshness and Refresh on the right, in one row. */
+  inline?: boolean;
 }
 
 /** Short intro, freshness and a Refresh button that forces the server to re-pull the feeds. */
-export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh }: TrendsIntroProps) {
+export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh, inline = false }: TrendsIntroProps) {
   return (
-    <Card style={styles.card}>
-      <View style={styles.top}>
+    <Card style={[styles.card, inline && styles.cardInline]}>
+      <View style={[styles.top, inline && styles.topInline]}>
         <LinearGradient colors={gradient.colors} start={gradient.start} end={gradient.end} style={styles.icon}>
           <Ionicons name="trending-up" size={20} color={colors.white} />
         </LinearGradient>
@@ -67,7 +69,7 @@ export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh }
       </View>
 
       {ready ? (
-        <View style={styles.bottom}>
+        <View style={[styles.bottom, inline && styles.bottomInline]}>
           <UpdatedLine updatedAt={updatedAt} refreshing={refreshing} />
           <Button
             title={refreshing ? 'Refreshing' : 'Refresh'}
@@ -93,6 +95,9 @@ export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh }
 
 const styles = StyleSheet.create({
   card: { gap: space.md },
+  cardInline: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
+  topInline: { flexGrow: 1, flexBasis: 320, flexShrink: 1 },
+  bottomInline: { flexGrow: 0, flexShrink: 0, paddingTop: 0, borderTopWidth: 0, gap: space.lg },
   top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   icon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, minWidth: 0 },

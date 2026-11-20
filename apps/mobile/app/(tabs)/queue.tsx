@@ -7,6 +7,7 @@ import { EmptyQueue } from '@/src/components/queue/EmptyQueue';
 import { FadeIn } from '@/src/components/queue/FadeIn';
 import { PostCard } from '@/src/components/queue/PostCard';
 import { PostCardSkeleton } from '@/src/components/queue/PostCardSkeleton';
+import { QueueBoard } from '@/src/components/queue/QueueBoard';
 import {
   applyOverlay,
   parseQueueTab,
@@ -22,9 +23,11 @@ import {
   type Snapshot,
 } from '@/src/components/queue/queueModel';
 import { QueueStatusRow, type BulkProgress } from '@/src/components/queue/QueueStatusRow';
+import type { ShareWiring } from '@/src/components/share/useShare';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { fmtDateTime } from '@/src/format';
 import { useAsync } from '@/src/hooks';
+import { useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
 import { Screen, Segmented, ErrorState, confirm, haptic, useToast, type SegmentedOption } from '@/src/ui';
@@ -46,6 +49,7 @@ interface TabNavigation {
  * card back for a moment.
  */
 export default function QueueScreen() {
+  const wide = useWide();
   const toast = useToast();
   const { workspace } = useSession();
   const focused = useIsFocused();
@@ -341,6 +345,26 @@ export default function QueueScreen() {
     [toast, reloadSoon],
   );
 
+  /**
+   * "Post it for real" (the share buttons on every card): once the composer is open (or the caption copied) the post is
+   * published through the same flow as "Publish now" (busy flag, overlay), quietly, because the buttons give their own
+   * feedback; then the screen follows it to Published.
+   */
+  const share = useMemo<ShareWiring>(
+    () => ({
+      publish: async (post) => {
+        const saved = await run(post.id, 'publish', () => publishRequest(post), true);
+        if (!saved) throw new Error('The post could not be published.');
+        return saved;
+      },
+      onPublished: () => {
+        goTab('published');
+        void reload();
+      },
+    }),
+    [run, publishRequest, goTab, reload],
+  );
+
   /** Publish every draft, one after the other, with "Publishing 3/6" progress. */
   const publishAll = useCallback(async () => {
     if (bulkRef.current) return;
@@ -404,6 +428,36 @@ export default function QueueScreen() {
   const items = lists ? lists[tab] : [];
   const locked = bulk !== null;
 
+  // Desktop web (>= 1024 px): the three statuses side by side. Same data, overlay, polling and handlers as below.
+  if (wide) {
+    return (
+      <Screen
+        title="Queue"
+        subtitle="Review, schedule and publish. Numbers update live."
+        onRefresh={onRefresh}
+        refreshing={pulling}
+      >
+        <QueueBoard
+          lists={lists}
+          loadError={error && !retrying ? messageOf(error) : null}
+          onRetry={onRetry}
+          reconnecting={!!lists && !!error}
+          focused={focused}
+          bulk={bulk}
+          onPublishAll={publishAll}
+          busy={busy}
+          accounts={accounts}
+          intro={intro}
+          card={{ now, locked, brandName, onPublish, onDelete, onUnschedule, onSchedule, onSave, onOpenLink, share }}
+          activeTab={tab}
+          scrollEpoch={scrollEpoch}
+          onCreate={onCreate}
+          onGoDrafts={() => goTab('drafts')}
+        />
+      </Screen>
+    );
+  }
+
   let body: ReactNode;
   if (!lists) {
     body =
@@ -436,6 +490,7 @@ export default function QueueScreen() {
               onSchedule={onSchedule}
               onSave={onSave}
               onOpenLink={onOpenLink}
+              share={share}
             />
           </FadeIn>
         ))}
