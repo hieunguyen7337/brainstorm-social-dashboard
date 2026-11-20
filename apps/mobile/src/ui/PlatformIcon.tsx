@@ -1,4 +1,4 @@
-import { FontAwesome6 } from '@expo/vector-icons';
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { onPlatformColor, platformMeta, radius, withAlpha } from '@/src/theme';

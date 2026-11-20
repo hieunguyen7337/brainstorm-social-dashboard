@@ -2,7 +2,7 @@
  * Shared building blocks of the six platform preview cards: shell, avatar, link affordances, icon counters and a
  * handful of pure helpers. Presentational only (props in, nothing fetched). Editable text lives in `./fields`.
  */
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';

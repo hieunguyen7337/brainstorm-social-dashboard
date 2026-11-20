@@ -1,5 +1,5 @@
 /** View-model helpers for the dashboard: metric definitions, activity icon map and small pure functions. */
-import type { Ionicons } from '@expo/vector-icons';
+import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 
 import { parseTs, timeAgo } from '@/src/format';

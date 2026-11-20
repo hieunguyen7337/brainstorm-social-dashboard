@@ -1,5 +1,5 @@
 /** Presentational pieces of the autopilot section: pulsing status dot, "Saved" badge, skeleton, run-result card. */
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 

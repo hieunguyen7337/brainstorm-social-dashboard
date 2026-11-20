@@ -3,7 +3,7 @@
  * "live" dot, counters that flash only for genuine live increments, and a helper that keeps chart props
  * referentially stable across the 5 s polls.
  */
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import {

@@ -3,7 +3,7 @@
  * them. Every change saves by itself (optimistic, coalesced, reverted with a toast on failure): no save button.
  * Logic lives in `autopilot-logic.tsx`, the data hook in `autopilot-state.tsx`, small views in `autopilot-parts.tsx`.
  */
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';

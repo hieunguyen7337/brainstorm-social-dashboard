@@ -2,7 +2,7 @@
  * Editable text for the preview cards. Every card renders its copy through `PreviewText`: read-only it is a selectable
  * `Text`, editable it becomes an in-place multiline `TextInput` with the very same typography.
  */
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import {
   Platform,

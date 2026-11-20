@@ -1,4 +1,4 @@
-import { FontAwesome6 } from '@expo/vector-icons';
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { TrendSource } from '@/src/api';

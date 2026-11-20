@@ -12,7 +12,7 @@ import { ResultView } from '@/src/components/create/ResultView';
 import { ThemePicker } from '@/src/components/create/ThemePicker';
 import { TrendPicker } from '@/src/components/create/TrendPicker';
 import { UsageLine } from '@/src/components/create/UsageLine';
-import { APP_NAME } from '@/src/config';
+import { APP_NAME, MAX_CONTENT_WIDTH } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useSession } from '@/src/session';
 import { colors, space } from '@/src/theme';
@@ -156,6 +156,22 @@ export default function CreateScreen() {
   const count = platforms.length;
   const refreshing = connections.refreshing || themes.refreshing || usage.refreshing;
 
+  // The Generate button stays pinned above the tab bar, so it is one tap away however long the form gets.
+  const generateBar = (
+    <View style={styles.bar}>
+      <View style={styles.barInner}>
+        <Button
+          title={generating ? 'Generating...' : count > 0 ? `Generate ${count} ${count === 1 ? 'post' : 'posts'}` : 'Generate posts'}
+          icon="sparkles"
+          full
+          loading={generating}
+          disabled={!canGenerate}
+          onPress={() => void generate()}
+        />
+      </View>
+    </View>
+  );
+
   return (
     // The form and the result are separate screens: a fresh scroll view puts the result (or the form) at the top.
     <Screen
@@ -164,6 +180,7 @@ export default function CreateScreen() {
       subtitle="One idea, six platform-native posts"
       onRefresh={refreshAll}
       refreshing={refreshing}
+      footer={showResult ? undefined : generateBar}
     >
       {showResult && batch ? (
         <ResultView
@@ -206,14 +223,6 @@ export default function CreateScreen() {
 
           <View style={styles.generate}>
             <UsageLine usage={usage.data} loading={usage.loading} />
-            <Button
-              title={generating ? 'Generating...' : count > 0 ? `Generate ${count} ${count === 1 ? 'post' : 'posts'}` : 'Generate posts'}
-              icon="sparkles"
-              full
-              loading={generating}
-              disabled={!canGenerate}
-              onPress={() => void generate()}
-            />
             {count === 0 ? <Text style={styles.hint}>Select at least one platform to generate.</Text> : null}
             {genError && !generating ? (
               <Card padded={false}>
@@ -234,5 +243,15 @@ const styles = StyleSheet.create({
   locked: { opacity: 0.55, pointerEvents: 'none' },
   sections: { gap: space.xl },
   generate: { gap: space.md },
+  bar: {
+    alignItems: 'center',
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.md,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  barInner: { width: '100%', maxWidth: MAX_CONTENT_WIDTH },
   hint: { fontSize: 12.5, textAlign: 'center', color: colors.textMute },
 });

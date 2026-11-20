@@ -2,7 +2,7 @@
  * Building blocks of the Themes section: colour swatches, the shared name/description/colour form, the expandable
  * theme row with its inline editor, the "new theme" card and the loading skeleton.
  */
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 

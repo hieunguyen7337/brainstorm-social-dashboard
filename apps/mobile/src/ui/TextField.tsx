@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Platform, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 
 import { colors, radius, type as t } from '@/src/theme';
 import { webNoOutline } from './utils';
@@ -33,7 +33,18 @@ export function TextField({
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
   // Multiline fields grow with their text (up to a cap, then they scroll).
+  // Native: the reported content height. Web: measure the textarea's scrollHeight (it includes the element's own
+  // height, so it must be reset first, otherwise the field would only ever grow).
   const [contentH, setContentH] = useState(0);
+  const inputRef = useRef<TextInput>(null);
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || !multiline) return;
+    const el = inputRef.current as unknown as { style?: CSSStyleDeclaration; scrollHeight?: number } | null;
+    if (!el?.style || typeof el.scrollHeight !== 'number') return;
+    el.style.height = 'auto';
+    const h = Math.min(MAX_MULTILINE, Math.max(MIN_MULTILINE, el.scrollHeight));
+    el.style.height = `${h}px`;
+  }, [rest.value, multiline]);
   return (
     <View style={style}>
       {label ? <Text style={[t.label, styles.label]}>{label}</Text> : null}
@@ -47,6 +58,7 @@ export function TextField({
       >
         <TextInput
           {...rest}
+          ref={inputRef}
           multiline={multiline}
           placeholderTextColor={colors.textMute}
           selectionColor={colors.accent}
@@ -60,7 +72,7 @@ export function TextField({
             onBlur?.(e);
           }}
           onContentSizeChange={(e) => {
-            if (multiline) setContentH(Math.ceil(e.nativeEvent.contentSize.height));
+            if (multiline && Platform.OS !== 'web') setContentH(Math.ceil(e.nativeEvent.contentSize.height));
             onContentSizeChange?.(e);
           }}
           style={[

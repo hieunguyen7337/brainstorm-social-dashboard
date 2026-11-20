@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect } from 'expo-router';
 import { useState, type ComponentProps } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -108,14 +108,12 @@ export default function OnboardingScreen() {
                 <Text style={t.dim}>{error}</Text>
                 <View style={styles.errorActions}>
                   <Button title="Try again" variant="secondary" small icon="refresh" onPress={go} />
-                  {networkError ? (
-                    <Button
-                      title="Use the offline demo"
-                      variant="ghost"
-                      small
-                      onPress={() => void startOfflineDemo(brand)}
-                    />
-                  ) : null}
+                  <Button
+                    title="Use the offline demo"
+                    variant="ghost"
+                    small
+                    onPress={() => void startOfflineDemo(brand)}
+                  />
                 </View>
               </View>
             ) : null}
