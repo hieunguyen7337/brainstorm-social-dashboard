@@ -35,7 +35,7 @@ MAX_B64_CHARS = 4 * math.ceil(MAX_IMAGE_BYTES / 3)  # base64 text longer than th
 MAX_TOKENS = 4000  # room for ~20 posts plus thinking; a cut-off answer is a 503
 MAX_POSTS, MAX_POST_TEXT, MAX_NOTES, MAX_COUNT = 20, 200, 300, 10**12
 TOO_LARGE_DETAIL = "image too large: 5 MB at most"
-UNAVAILABLE_DETAIL = "Couldn't read the screenshot right now. Type the numbers instead."
+UNAVAILABLE_DETAIL = "Couldn't read the screenshot right now. Try again in a moment."
 
 PeriodDays = Literal[7, 30, 90]
 COUNTS = ("followers", "following", "posts_count", "views", "engagements", "profile_views")

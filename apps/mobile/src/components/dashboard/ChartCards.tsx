@@ -62,7 +62,7 @@ export function PlatformDonutCard({
           text={
             // Real numbers do not stream in from publishing: they come from what the person adds.
             real
-              ? 'No views yet. Add your views from a screenshot, or type them in.'
+              ? 'No views yet. Add your views from a screenshot.'
               : 'No views yet. Publish a post and they will show up here.'
           }
         />

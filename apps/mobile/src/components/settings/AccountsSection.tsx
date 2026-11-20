@@ -6,7 +6,7 @@ import { space } from '@/src/theme';
 import { SectionHeader } from '@/src/ui';
 
 /**
- * Settings > Accounts (real workspaces): the same "Upload a screenshot / Type numbers" cards as onboarding and the connect
+ * Settings > Accounts (real workspaces): the same "Upload a screenshot" cards as onboarding and the connect
  * sheet. `ConnectAccounts` renders no header and no scroll view of its own, so the title lives here and the screen scrolls.
  * Old sample workspaces keep `ConnectorsSection` instead.
  */

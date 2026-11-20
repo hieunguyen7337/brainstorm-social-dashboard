@@ -1,11 +1,11 @@
 /**
- * "Connect your real accounts" (docs/REAL.md): the 6 platforms, each with "Upload a screenshot" and "Type numbers".
+ * "Connect your real accounts" (docs/REAL.md): the 6 platforms, each with "Upload a screenshot" (no typed numbers).
  * One component used in onboarding, in the connect sheet and in Settings > Accounts. It renders a plain `View` (no scroll
  * view, no section header): the parent scrolls and titles it.
  *
  *   screenshot -> Claude reads it (POST /api/connections/{platform}/screenshot, nothing saved) -> the person checks and
  *   edits the numbers -> Save = POST /api/metrics/ingest with source "screenshot".
- *   Type numbers -> Save = the same call with source "manual". A failed read (503: AI off or capped) falls back to typing.
+ *   A failed read (503: AI off or capped, too large, offline) shows why on the card; nothing is typed by hand.
  *
  * Feedback is inline, never a toast: inside the sheet a native modal would hide it.
  */
@@ -15,7 +15,6 @@ import { ActivityIndicator, Image, Linking, StyleSheet, Text, View } from 'react
 import { api, getToken, publicBaseUrl } from '@/src/api';
 import {
   checkForm,
-  formFromConnection,
   formFromRead,
   isConnected,
   latestIso,
@@ -167,12 +166,12 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
   const openUploadPage = (platform: Platform) => {
     const token = getToken();
     if (!token) {
-      setNote(platform, { tone: 'error', text: "Couldn't open the upload page. Type the numbers instead." });
+      setNote(platform, { tone: 'error', text: "Couldn't open the upload page. Reload Pulse and try again." });
       return;
     }
     setNote(platform, { tone: 'info', text: 'Opening the upload page in your browser' });
     Linking.openURL(`${publicBaseUrl()}/#ws=${token}&connect=${platform}`).catch(() => {
-      setNote(platform, { tone: 'error', text: "Couldn't open your browser. Type the numbers instead." });
+      setNote(platform, { tone: 'error', text: `Couldn't open your browser. Open ${publicBaseUrl()} there to upload.` });
     });
   };
 
@@ -215,39 +214,11 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
         });
       } catch (e) {
         if (!alive.current || id !== seq.current) return;
-        // 503 (AI off or capped) and every other failure: say why, and let the person type the numbers.
-        setFlow({
-          platform,
-          step: 'form',
-          read: null,
-          form: formFromConnection(prev),
-          posts: [],
-          thumb: res.image.uri,
-          notice: readFailure(e),
-          errors: {},
-          saving: false,
-          saveError: null,
-        });
+        // 503 (AI off or capped) and every other failure: say why on the card; the person tries another screenshot.
+        setFlow(null);
+        setNote(platform, { tone: 'error', text: readFailure(e) });
       }
     })();
-  };
-
-  const type = (platform: Platform) => {
-    if (busy) return;
-    seq.current += 1;
-    setNote(platform, null);
-    setFlow({
-      platform,
-      step: 'form',
-      read: null,
-      form: formFromConnection(byPlatform.get(platform)),
-      posts: [],
-      thumb: null,
-      notice: null,
-      errors: {},
-      saving: false,
-      saveError: null,
-    });
   };
 
   const cancel = () => {
@@ -315,7 +286,6 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
             note={notes[platform] ?? null}
             onUpdate={() => setExpanded((cur) => (cur === platform ? null : platform))}
             onUpload={() => upload(platform)}
-            onType={() => type(platform)}
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}
             {mine?.step === 'form' ? (

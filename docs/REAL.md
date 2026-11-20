@@ -45,7 +45,7 @@ Response `ScreenshotRead`:
 - Claude reads the image with structured output (model `settings.ai_model`, the same SDK pattern as
   `services/ai.py`). Only numbers visible in the image; null when not shown; never estimate. "1.2K" -> 1200.
 - It counts against the same AI caps (`purpose 'vision'`). Cap reached, no key or API error -> 503
-  `{"detail": "Couldn't read the screenshot right now. Type the numbers instead."}`.
+  `{"detail": "Couldn't read the screenshot right now. Try again in a moment."}`.
 - Nothing is saved by this call. The image is not stored or logged.
 
 ## Saving

@@ -82,7 +82,7 @@ function ConnectDialog({ initialPlatform, onClose }: { initialPlatform: Platform
               <Text style={t.h2} accessibilityRole="header">
                 Connect your real accounts
               </Text>
-              <Text style={t.small}>Upload a screenshot and Claude reads the numbers, or type them. You check before saving.</Text>
+              <Text style={t.small}>Upload a screenshot and Claude reads the numbers. You check before saving.</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} onPress={onClose} style={styles.close}>
               <Ionicons name="close" size={20} color={colors.textDim} />

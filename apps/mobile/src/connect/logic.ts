@@ -71,7 +71,7 @@ export const emptyForm = (): NumbersForm => ({
 
 export const isConnected = (conn: Connection | null | undefined): conn is Connection => conn?.status === 'connected';
 
-/** "Type numbers" / "Update" on a connected account starts from what is saved (handle, followers). */
+/** "Update" on a connected account starts from what is saved (handle, followers). */
 export function formFromConnection(conn: Connection | null | undefined): NumbersForm {
   const form = emptyForm();
   if (!isConnected(conn)) return form;
@@ -220,15 +220,15 @@ export function confidenceNote(read: ScreenshotRead): string | null {
   return null;
 }
 
-/** What to tell the person when reading a screenshot failed. 503 is the contract's "type the numbers instead" text. */
+/** What to tell the person when reading a screenshot failed (503 is the server's "try again" text). */
 export function readFailure(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.status === 413) return 'That image is too large. Crop the screenshot and try again, or type the numbers.';
-    if (e.status === 415) return "That image type isn't supported. Use a PNG, JPEG or WebP screenshot, or type the numbers.";
-    if (e.status === 0) return `${e.message} You can still type the numbers.`;
+    if (e.status === 413) return 'That image is too large. Crop the screenshot and try again.';
+    if (e.status === 415) return "That image type isn't supported. Use a PNG, JPEG or WebP screenshot.";
+    if (e.status === 0) return `${e.message} Try again when you're back online.`;
     return e.message;
   }
-  return "Couldn't read the screenshot right now. Type the numbers instead.";
+  return "Couldn't read the screenshot right now. Try again in a moment.";
 }
 
 /** What to tell the person when saving failed. */

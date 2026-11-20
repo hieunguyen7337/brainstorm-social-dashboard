@@ -18,7 +18,7 @@ const FEATURES: { icon: IconName; color: string; title: string; text: string }[]
     icon: 'pie-chart',
     color: colors.accent,
     title: 'Your real numbers',
-    text: 'Upload a screenshot of your profile or insights, or type your numbers. Views, engagement and followers: only yours.',
+    text: 'Upload a screenshot of your profile or insights and Claude reads it. Views, engagement and followers: only yours.',
   },
   { icon: 'trending-up', color: colors.info, title: 'Real trends', text: 'Hacker News, Reddit and Google Trends, ranked for your brand.' },
   {
@@ -93,7 +93,7 @@ export default function OnboardingScreen() {
                   Connect your real accounts
                 </Text>
                 <Text style={styles.sub}>
-                  Upload a screenshot of your profile or insights page and Claude reads the numbers, or type them. You can
+                  Upload a screenshot of your profile or insights page and Claude reads the numbers. You can
                   also do this later in Settings.
                 </Text>
               </View>

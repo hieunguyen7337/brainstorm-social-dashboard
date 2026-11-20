@@ -34,7 +34,6 @@ export interface PlatformCardProps {
   note: CardNote | null;
   onUpdate: () => void;
   onUpload: () => void;
-  onType: () => void;
   children?: ReactNode;
 }
 
@@ -49,7 +48,6 @@ export function PlatformCard({
   note,
   onUpdate,
   onUpload,
-  onType,
   children,
 }: PlatformCardProps) {
   const meta = platformMeta[platform];
@@ -113,15 +111,6 @@ export function PlatformCard({
                 accessibilityLabel={`Upload ${meta.label} screenshot`}
                 disabled={busy}
                 onPress={onUpload}
-              />
-              <Button
-                small
-                variant="secondary"
-                title="Type numbers"
-                icon="create-outline"
-                accessibilityLabel={`Type ${meta.label} numbers`}
-                disabled={busy}
-                onPress={onType}
               />
             </View>
           </>

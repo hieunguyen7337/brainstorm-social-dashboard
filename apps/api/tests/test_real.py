@@ -911,7 +911,7 @@ def test_dashboard_sample_gets_followers_and_ignores_account_snapshots(auth, mon
 
 MIB = 1024 * 1024
 TINY = base64.b64encode(b"not a real png: the bytes are never sniffed").decode()
-UNAVAILABLE = {"detail": "Couldn't read the screenshot right now. Type the numbers instead."}
+UNAVAILABLE = {"detail": "Couldn't read the screenshot right now. Try again in a moment."}
 READ_KEYS = {
     "platform", "detected_platform", "handle", "followers", "following", "posts_count", "views",
     "engagements", "profile_views", "period_days", "posts", "confidence", "notes", "ai_used",
@@ -1175,7 +1175,7 @@ def test_vision_without_a_key_is_503_with_the_exact_text(auth, monkeypatch):
 
     assert r.status_code == 503
     assert r.json() == UNAVAILABLE
-    detail = "Couldn't read the screenshot right now. Type the numbers instead."  # a straight apostrophe
+    detail = "Couldn't read the screenshot right now. Try again in a moment."  # a straight apostrophe
     assert r.json()["detail"] == detail == vision.UNAVAILABLE_DETAIL
     assert calls == [] and _usage(ws["id"]) == []
 

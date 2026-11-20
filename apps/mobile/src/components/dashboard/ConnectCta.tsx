@@ -37,7 +37,7 @@ export function ConnectCta({ style }: { style?: StyleProp<ViewStyle> }) {
           {CONNECT_CTA_TITLE}
         </Text>
         <Text style={[t.dim, styles.body]}>
-          Upload a screenshot of your profile or insights page, or type your numbers. Everything on this dashboard comes
+          Upload a screenshot of your profile or insights page and Claude reads the numbers. Everything on this dashboard comes
           from you.
         </Text>
       </View>

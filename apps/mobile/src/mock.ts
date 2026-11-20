@@ -1328,7 +1328,7 @@ export const mockApi: PulseApi = {
         if (decodedBytes(b.image_base64) > SCREENSHOT_MAX_BYTES) throw new ApiError(413, 'The image is larger than 5 MB.');
         // Same wording and caps as the real server: no key (the mock's AI switch is off) or a cap reached is a 503.
         if (!aiAvailable || s.aiUsed >= AI_LIMIT || s.aiSpent >= AI_CAP_USD) {
-          throw new ApiError(503, "Couldn't read the screenshot right now. Type the numbers instead.");
+          throw new ApiError(503, "Couldn't read the screenshot right now. Try again in a moment.");
         }
         s.aiUsed = Math.min(AI_LIMIT, s.aiUsed + 1);
         s.aiSpent = Math.round((s.aiSpent + 0.02 + s.rng() * 0.02) * 10000) / 10000;
