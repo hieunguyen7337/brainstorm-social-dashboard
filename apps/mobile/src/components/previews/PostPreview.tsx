@@ -1,6 +1,27 @@
+import { FacebookPreview } from './FacebookPreview';
+import { InstagramPreview } from './InstagramPreview';
+import { LinkedInPreview } from './LinkedInPreview';
+import { RedditPreview } from './RedditPreview';
+import { TikTokPreview } from './TikTokPreview';
+import { XPreview } from './XPreview';
 import type { PreviewProps } from './types';
 
-/** PLACEHOLDER: the previews unit replaces this file (dispatches on `platform` to the six cards). */
-export function PostPreview(_props: PreviewProps) {
-  return null;
+/** Platform-native post card for `props.platform`; every prop is passed straight through. */
+export function PostPreview(props: PreviewProps) {
+  switch (props.platform) {
+    case 'x':
+      return <XPreview {...props} />;
+    case 'linkedin':
+      return <LinkedInPreview {...props} />;
+    case 'instagram':
+      return <InstagramPreview {...props} />;
+    case 'tiktok':
+      return <TikTokPreview {...props} />;
+    case 'reddit':
+      return <RedditPreview {...props} />;
+    case 'facebook':
+      return <FacebookPreview {...props} />;
+    default:
+      return null; // a platform this build does not know yet: render nothing rather than crash
+  }
 }

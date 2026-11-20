@@ -4,6 +4,9 @@ import { StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps,
 import { colors, radius, type as t } from '@/src/theme';
 import { webNoOutline } from './utils';
 
+const MIN_MULTILINE = 96;
+const MAX_MULTILINE = 260;
+
 export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   label?: string;
   hint?: string;
@@ -15,8 +18,22 @@ export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
 }
 
 /** Labelled dark text input with a violet focus ring. */
-export function TextField({ label, hint, error, right, style, inputStyle, multiline, onFocus, onBlur, ...rest }: TextFieldProps) {
+export function TextField({
+  label,
+  hint,
+  error,
+  right,
+  style,
+  inputStyle,
+  multiline,
+  onFocus,
+  onBlur,
+  onContentSizeChange,
+  ...rest
+}: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  // Multiline fields grow with their text (up to a cap, then they scroll).
+  const [contentH, setContentH] = useState(0);
   return (
     <View style={style}>
       {label ? <Text style={[t.label, styles.label]}>{label}</Text> : null}
@@ -42,7 +59,17 @@ export function TextField({ label, hint, error, right, style, inputStyle, multil
             setFocused(false);
             onBlur?.(e);
           }}
-          style={[styles.input, multiline && styles.multiline, webNoOutline, inputStyle]}
+          onContentSizeChange={(e) => {
+            if (multiline) setContentH(Math.ceil(e.nativeEvent.contentSize.height));
+            onContentSizeChange?.(e);
+          }}
+          style={[
+            styles.input,
+            multiline && styles.multiline,
+            multiline && contentH > 0 ? { height: Math.min(MAX_MULTILINE, Math.max(MIN_MULTILINE, contentH + 24)) } : null,
+            webNoOutline,
+            inputStyle,
+          ]}
         />
         {right}
       </View>
@@ -66,8 +93,9 @@ const styles = StyleSheet.create({
   multilineBox: { alignItems: 'flex-start', paddingVertical: 2 },
   focused: { borderColor: colors.accent },
   errorBox: { borderColor: colors.danger },
-  input: { flex: 1, color: colors.text, fontSize: 15.5, paddingVertical: 12, minWidth: 0 },
-  multiline: { minHeight: 96, textAlignVertical: 'top' },
+  // 16px: smaller inputs make iOS Safari zoom the page on focus.
+  input: { flex: 1, color: colors.text, fontSize: 16, paddingVertical: 12, minWidth: 0 },
+  multiline: { minHeight: MIN_MULTILINE, textAlignVertical: 'top' },
   hint: { marginTop: 6 },
   error: { marginTop: 6, fontSize: 12.5, color: colors.danger },
 });

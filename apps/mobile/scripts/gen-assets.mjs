@@ -27,24 +27,26 @@ const PINK = [0xff, 0x5c, 0x8a]; // #ff5c8a, bottom-right
 const CORNER = 0.225; // badge corner radius, as a fraction of the badge side
 const STROKE = 0.07; // pulse line width, as a fraction of the badge side
 const STROKE_SMALL = 0.088; // a little bolder for the tiny favicons so the line survives 16px
-const SAFE_RADIUS = 0.4; // maskable icons: all content inside a circle of 80% of the canvas
+const MASKABLE_RADIUS = 0.4; // maskable PWA icons: all content inside a circle of 80% of the canvas
+const ADAPTIVE_RADIUS = 1 / 3; // Android adaptive icons: the circular launcher mask is 72dp of the 108dp layer
 
 /**
  * The pulse line in badge units (0..1, y down): flat, small bump, tall spike up, spike down, flat.
- * The bump is a raised cosine so it leaves and rejoins the flat line smoothly; the spikes stay sharp.
+ * The bump is a raised cosine, so it leaves and rejoins the flat line smoothly; the spikes stay sharp. The baseline sits
+ * a touch below centre so the tall spike up and the shorter spike down balance around the badge centre.
  */
 const PULSE = (() => {
   const base = 0.52;
+  const bump = { from: 0.235, to: 0.365, height: 0.11, steps: 48 };
   const pts = [
-    [0.17, base],
-    [0.26, base],
+    [0.155, base],
+    [bump.from, base],
   ];
-  const bump = { from: 0.26, to: 0.4, height: 0.095, steps: 12 };
   for (let i = 1; i < bump.steps; i++) {
     const t = i / bump.steps;
     pts.push([bump.from + (bump.to - bump.from) * t, base - (bump.height * (1 - Math.cos(2 * Math.PI * t))) / 2]);
   }
-  pts.push([bump.to, base], [0.455, base], [0.55, 0.22], [0.64, 0.79], [0.705, base], [0.83, base]);
+  pts.push([bump.to, base], [0.46, base], [0.54, 0.22], [0.665, 0.775], [0.725, base], [0.845, base]);
   return pts;
 })();
 
@@ -53,6 +55,11 @@ function glyphReach(stroke) {
   let far = 0;
   for (const [u, v] of PULSE) far = Math.max(far, Math.hypot(u - 0.5, v - 0.5));
   return far + stroke / 2;
+}
+
+/** Farthest reach of a rounded badge `scale` wide from the canvas centre (its corner arcs), in canvas units. */
+function badgeReach(scale) {
+  return scale * ((0.5 - CORNER) * Math.SQRT2 + CORNER);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -297,18 +304,20 @@ function encodePng(width, height, rgba) {
 // ---------------------------------------------------------------------------------------------------------------------
 /**
  * bleed: full-bleed gradient (opaque). Otherwise a rounded badge `scale` wide on transparent.
- * safe: maskable icon, so the line must stay inside a centred circle of this radius (as a fraction of the canvas).
+ * glyphWithin / badgeWithin: the pulse line / the whole badge must stay inside a centred circle of this radius (as a
+ * fraction of the canvas), which is what a maskable or circular launcher mask leaves visible. Checked below.
  */
 const OUTPUTS = [
-  // Expo config: icon (iOS applies its own corner mask), android.adaptiveIcon.foregroundImage (the Android safe zone
-  // is the middle ~61% of the 108dp layer, the background colour is navy), splash plugin image, web.favicon.
+  // Expo config: icon (iOS applies its own corner mask), android.adaptiveIcon.foregroundImage (the background colour is
+  // navy; 0.52 keeps the badge corners inside a circular launcher mask, at 0.6+ they get clipped to flat chords),
+  // splash plugin image (shown 200dp wide, so the badge is ~120dp), web.favicon.
   { file: 'assets/icon.png', size: 1024, bleed: true },
-  { file: 'assets/adaptive-icon.png', size: 1024, scale: 0.62 },
+  { file: 'assets/adaptive-icon.png', size: 1024, scale: 0.52, badgeWithin: ADAPTIVE_RADIUS },
   { file: 'assets/splash-icon.png', size: 1024, scale: 0.6 },
   { file: 'assets/favicon.png', size: 96, scale: 0.96, stroke: STROKE_SMALL },
   // Web (PWA): linked from public/manifest.json and app/+html.tsx.
-  { file: 'public/icon-192.png', size: 192, bleed: true, safe: SAFE_RADIUS },
-  { file: 'public/icon-512.png', size: 512, bleed: true, safe: SAFE_RADIUS },
+  { file: 'public/icon-192.png', size: 192, bleed: true, glyphWithin: MASKABLE_RADIUS },
+  { file: 'public/icon-512.png', size: 512, bleed: true, glyphWithin: MASKABLE_RADIUS },
   { file: 'public/apple-touch-icon.png', size: 180, bleed: true },
   { file: 'public/favicon.png', size: 64, scale: 0.96, stroke: STROKE_SMALL },
 ];
@@ -320,9 +329,15 @@ function writeFile(rel, data) {
   return path;
 }
 
-for (const { file, size, safe, ...style } of OUTPUTS) {
-  if (safe !== undefined && glyphReach(style.stroke ?? STROKE) > safe) {
-    throw new Error(`${file}: the pulse line leaves the maskable safe zone (reach ${glyphReach(style.stroke ?? STROKE).toFixed(3)} > ${safe})`);
+for (const { file, size, glyphWithin, badgeWithin, ...style } of OUTPUTS) {
+  // Guard the mask geometry, so editing the glyph or a scale cannot silently break a launcher or maskable icon.
+  const glyph = glyphReach(style.stroke ?? STROKE) * (style.bleed ? 1 : (style.scale ?? 1));
+  if (glyphWithin !== undefined && glyph > glyphWithin) {
+    throw new Error(`${file}: the pulse line reaches ${glyph.toFixed(3)} from the centre, more than ${glyphWithin}`);
+  }
+  const badge = badgeReach(style.scale ?? 1);
+  if (badgeWithin !== undefined && badge > badgeWithin) {
+    throw new Error(`${file}: the badge reaches ${badge.toFixed(3)} from the centre, more than ${badgeWithin.toFixed(3)}`);
   }
   const started = Date.now();
   const { data, opaque } = encodePng(size, size, renderMark(size, style));

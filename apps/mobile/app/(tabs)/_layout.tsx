@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, Tabs } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OfflineView, SplashView } from '@/src/components/BootStates';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
@@ -23,6 +24,7 @@ function CreateIcon({ focused }: { focused: boolean }) {
 
 export default function TabsLayout() {
   const { status } = useSession();
+  const insets = useSafeAreaInsets();
   if (status === 'loading') return <SplashView />;
   if (status === 'anon') return <Redirect href="/onboarding" />;
   if (status === 'offline') return <OfflineView />;
@@ -38,8 +40,16 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          // Web: roomier bar (icon + label), the home-indicator inset added explicitly, capped width on desktop.
           ...(Platform.OS === 'web'
-            ? { height: 64, paddingTop: 6, paddingBottom: 8, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const }
+            ? {
+                height: 62 + insets.bottom,
+                paddingTop: 6,
+                paddingBottom: 6 + insets.bottom,
+                width: '100%' as const,
+                maxWidth: MAX_CONTENT_WIDTH,
+                alignSelf: 'center' as const,
+              }
             : null),
         },
       }}

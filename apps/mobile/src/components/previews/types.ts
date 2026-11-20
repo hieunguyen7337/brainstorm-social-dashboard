@@ -26,4 +26,14 @@ export interface PreviewProps {
   onChangeMediaPrompt?: (text: string) => void;
   /** Live counters to show in the card's engagement row (published posts). */
   stats?: { views: number; engagements: number; clicks: number; conversions: number } | null;
+
+  // ---- optional additions (the previews unit) ----------------------------------------------------
+
+  /** Shorter card for lists such as the Queue: clamps long text and trims media. Ignored while `editable`. */
+  compact?: boolean;
+  /** Called when the link card / "link in bio" pill is tapped (e.g. `() => openTrackedLink(post)`).
+   *  Without it the link affordance is display-only and never swallows taps meant for the parent. */
+  onPressLink?: () => void;
+  /** Reddit only: community name without "r/". Default "smallbusiness". */
+  subreddit?: string;
 }

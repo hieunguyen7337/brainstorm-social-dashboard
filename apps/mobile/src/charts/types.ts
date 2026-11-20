@@ -21,6 +21,8 @@ export interface DonutProps {
   legend?: boolean;
   /** Format a slice value for the legend. Default compact ("12.4k"). */
   formatValue?: (value: number) => string;
+  /** Spoken name of the chart for screen readers, e.g. "Views by platform". Default derives from `centerLabel`. */
+  title?: string;
 }
 
 export interface FunnelDatum {
@@ -36,6 +38,8 @@ export interface FunnelProps {
   data: FunnelDatum[];
   /** Total height in px. Default 260. */
   height?: number;
+  /** Spoken name of the chart for screen readers. Default "Sales funnel". */
+  title?: string;
 }
 
 export interface ChartSeries {
@@ -56,6 +60,8 @@ export interface AreaChartProps {
   formatValue?: (value: number) => string;
   /** Axis / tooltip label format. Default `fmtDay`. */
   formatLabel?: (label: string) => string;
+  /** Spoken name of the chart for screen readers, e.g. "Views, last 30 days". Default "Trend chart". */
+  title?: string;
 }
 
 export interface SparklineProps {
@@ -65,4 +71,6 @@ export interface SparklineProps {
   height?: number;
   /** Fill under the line with a fading gradient. Default true. */
   fill?: boolean;
+  /** Spoken name of the trend for screen readers, e.g. "Views trend". Default "Trend". */
+  title?: string;
 }

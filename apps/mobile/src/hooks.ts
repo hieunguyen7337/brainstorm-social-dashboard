@@ -90,6 +90,7 @@ export function useAsync<T>(
   // Load on mount and whenever deps change (stale data stays visible meanwhile).
   useEffect(() => {
     if (!enabled) return;
+    if (!hasData.current) setLoading(true);
     void run('initial');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps]);
