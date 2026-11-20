@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     ai_global_cap_usd: float = 60.0
 
     android_apk_url: str = ""
+    jev_api_url: str = ""
+    jev_api_key: str = ""
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""
+    harvest_token: str = ""
     autopilot_loop_seconds: int = 60
     trends_ttl_seconds: int = 900
 
