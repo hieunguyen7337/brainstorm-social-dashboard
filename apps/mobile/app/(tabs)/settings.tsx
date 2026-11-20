@@ -41,7 +41,7 @@ export default function SettingsScreen() {
   return (
     <Screen
       title="Settings"
-      subtitle={workspace ? `${workspace.brand_name} · guest workspace` : undefined}
+      subtitle={workspace ? `${workspace.brand_name} · brand, channels and plan` : undefined}
       right={<PlanBadge />}
       onRefresh={() => void refresh()}
       refreshing={refreshing}

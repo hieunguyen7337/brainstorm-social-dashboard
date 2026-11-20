@@ -118,8 +118,9 @@ export function Collapsible({ lines, lineHeight, interactive, background, color,
             onPress={() => setOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="See more"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-            style={styles.more}
+            // The tail is one text line tall: the slop brings the tap target to 40px.
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
+            style={({ pressed }) => [styles.more, pressed && styles.pressed]}
           >
             {tail}
           </Pressable>
@@ -140,8 +141,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 11,
+    // Top edge only: the strip's own background separates it from what follows, and a bottom border would sit
+    // right against the card's inset divider as a double line.
     borderTopWidth: 1,
-    borderBottomWidth: 1,
   },
   pressed: { opacity: 0.85 },
   stripText: { flex: 1, minWidth: 0, gap: 1 },

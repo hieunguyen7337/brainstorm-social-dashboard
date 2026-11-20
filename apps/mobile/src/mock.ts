@@ -792,7 +792,7 @@ function insights(s: State, days: number): Insights {
     ? `${best.name} posts earn ${Math.round(best.lift * 100)}% more engagement than your average` +
       (bestPlatform ? `, and ${LABEL[bestPlatform.platform]} engages best (${(bestPlatform.engagement_rate * 100).toFixed(1)}%).` : '.') +
       ` Lean into ${best.name.toLowerCase()} on LinkedIn and Instagram this week.`
-    : 'Publish a few posts and Pulse will learn which themes and platforms work best for you.';
+    : `Publish a few posts and ${APP_NAME} will learn which themes and platforms work best for you.`;
   return {
     days, summary, top_themes, by_platform,
     sources: { real, simulated: Math.max(0, published.length - real) },

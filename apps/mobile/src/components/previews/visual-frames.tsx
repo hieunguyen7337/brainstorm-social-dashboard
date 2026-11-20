@@ -23,9 +23,12 @@ export interface VisualProps {
   onChangePlan?: (text: string) => void;
 }
 
-const SHADE = 'rgba(26, 11, 58, 0)';
+// A deep-violet shade over the gradient: faint at the top, stronger at the bottom, so white text keeps >= 3:1 contrast.
+const SHADE = 'rgba(26, 11, 58, 0.06)';
 const SHADE_DEEP = 'rgba(26, 11, 58, 0.34)';
 const SHADE_SOFT = 'rgba(26, 11, 58, 0.22)';
+/** Full height, the shade starting a fifth of the way down (web ignores start / end offsets, so `locations` carries it). */
+const SHADE_AXIS = { start: { x: 0.5, y: 0 }, end: { x: 0.5, y: 1 }, locations: [0.2, 1] } as const;
 const IG_COMPACT_MAX_HEIGHT = 220;
 
 /** Instagram: square image whose content is the visual plan. */
@@ -53,12 +56,7 @@ export function InstagramVisual({ plan, accentColor, editable, compact, onChange
         {...DIAG}
         style={StyleSheet.absoluteFill}
       />
-      <LinearGradient
-        colors={[SHADE, SHADE_DEEP]}
-        start={{ x: 0.5, y: 0.2 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+      <LinearGradient colors={[SHADE, SHADE_DEEP]} {...SHADE_AXIS} style={StyleSheet.absoluteFill} />
       <View style={[styles.circle, styles.igBig]} />
       <View style={[styles.circle, styles.igLow]} />
       <View style={[styles.circle, styles.igRing]} />
@@ -114,12 +112,7 @@ export function LinkedInVisual({ plan, accentColor, editable, compact, onChangeP
         {...DIAG}
         style={StyleSheet.absoluteFill}
       />
-      <LinearGradient
-        colors={[SHADE, SHADE_SOFT]}
-        start={{ x: 0.5, y: 0.2 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+      <LinearGradient colors={[SHADE, SHADE_SOFT]} {...SHADE_AXIS} style={StyleSheet.absoluteFill} />
       <View style={[styles.circle, styles.liBig]} />
       <View style={[styles.circle, styles.liLow]} />
 
