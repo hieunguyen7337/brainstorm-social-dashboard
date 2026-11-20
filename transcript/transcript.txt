@@ -1,0 +1,93 @@
+Okay, alright, so the way that it's going to be working is that this dashboard is just going to pull from your social media account, so it's just going to use existing browser extensions just to go to your analytics page and click through them. I've done this with Codex before, I know it can interface with the browser and just click through all your statistics and harvest them. So it's going to harvest them into an analytics tab here, and this is going to, it's going to learn over time, so it's going to be running its own agent that learns over time what does well in your post and what doesn't.
+
+So the way this is going to work is this is where you generate your plan for the post. So this will break it down into, say, a LinkedIn post, an Instagram post, or an Instagram post that's kind of sketched, because Instagram, like, it's images or video, you kind of need to think of it, but it's going to help you understand how to build that from what you have. And for LinkedIn, it's just going to do the text based on what you generate.
+
+And then it's going to categorize, it's going to attempt to categorize the post into themes. Or, like, it's going to try and semantically break it down into something that the AI can understand, so then it can then
+
+feed back into the analytics, and it can look at posts with this theme did better, posts without this theme did worse, and it's going to be trying to, basically based on what you generate, it's going to be trying to find trends so you can improve your social media. It can also, like, try to catch trends that is going on too.
+
+Maybe? Yeah. Description, then straight up photo. Photo, straight up. And then there is, like, to try to figure out what the user, what your followers
+
+Yes, because this is what I'm doing on my own now, but it's really annoying. And I don't have, I don't have anything set up to persistently train the agents on what is and isn't going wrong. And it's just, like, a mess within the existing frameworks. I can't set it up. I have issues with it. And, um,
+
+the other thing is, like I said, yeah, I'd like it so I can just do, like, one prompt here. And then it goes into an AI pipeline, which we've at least designed with Sleep Sage, and we know how to design it. And it's not just generating once of your prompt. It's got, it's got a channel, like an AI pipeline for LinkedIn.
+
+It's got one for Instagram. Oh, would you like to? Because I like that. Me too. Just kidding.
+
+It's got one for X if you want it. It's important for startups for some reason. So many devs are on X. I don't know why. It's only US that use X.
+
+What else do people like? TikTok for the Chinese. I suppose. He doesn't like it. No, no, no.
+
+Based. You're the first, second, third person I've met who's used TikTok. Really? Yeah, at uni. Almost not, even that or they don't admit to using it.
+
+Oh, okay. With Discord works. I mean, Discord is a bit. You know what? This is Instagram and TikTok are the same thing.
+
+You can trust us. Thread? Yeah. Yeah, okay. Thread?
+
+Thread can be part of the Instagram channel. I guess. Oh, sorry. So Threads and X are the same thing. And then, I don't know, Facebook maybe?
+
+Yeah. I mean, we can have the Facebook toggle. I don't use it. Maybe not. What else is there?
+
+Some people use Facebook. Reddit. No, no. Reddit. Reddit.
+
+Reddit. Reddit. Reddit. Reddit. Reddit.
+
+Reddit. Reddit. Reddit. Reddit. I know someone who scaled their business quite well using Reddit.
+
+Reddit is good for developers. So don't underestimate it. Okay. We can tie Reddit with LinkedIn. It could be a number one, but yeah.
+
+I also use Reddit a lot. The thing is that I never post it. I do not want to post it. because they kind of yeah it's like nerd central they post there and you figure out what they're doing um i learned most of as up in reddit and then yeah there'd be like a sales funnel here
+
+which is showing where each of your platforms are and how they're contributing to growth as well like that's an this is something that we went over with slipsage like it's a startup thing but basically like how many people are like let's say views i'm i'm not left-handed i'm impressed with how well i'm running please engage what else click through click through and then and then
+
+actual i just go right on because yes so just to relate to slipsage this is the analytics i've got to do is how many people are viewing the posts how many people then engage and say they like the idea this is actually quite high how many people click through it's actually not bad how many people on board well it's you and one other person yeah it's not good but they've got to go through like security yeah
+
+did you actually go for say yes to all the security stuff or did you already have the settings kind of enabled because yeah i think that's the biggest barrier because most people don't want to go through all the security warnings and it's like don't enable this unless you know what you're doing i'm like okay i'm definitely not getting any biomed students to do it because they don't understand
+
+computers yeah so they just see the warnings and they're like okay i'm not like some some problem has like it doesn't show the install button like the ultimate the default is to uninstall it you have to click on the on the extension in order to let it show the proceeds so like i'll just like for the ai you can take this image like i don't know this is like view percent this is like camping
+
+oh yeah thank you
+
+can we run the notebook can we run the data analytics on what an embedding model how would we do this would we need our model don't do it because everything doesn't help that much how would we do this or do we just demo this part we just get the a.i to do everything it reads everything is analyzed everything okay so yeah this is like a view percent breakdown so like we've got li like say i mean my linkedin's a bigger portion of this is whatever yeah like instagram
+
+not i think about can we make money on this besides it's really hard strong reception to see how when we are plugging it directly to the cloud but okay um also why can't we make money for this people would pay for this that's for mcps i mean i'd pay for it subscription on the mcp i
+
+suppose it's a hackathon we don't care about payment although he said if we build in stripe payment then it's added points for technical implementation i think we should like i don't want to steal people money but we have the free denica we've got tiktok x yeah sure why not my x is like that growing x is really hard okay can you like can you write the details of the description of every single box uh denica can you help yeah uh just just like denica write it
+
+jayden just be different graphs for like the engage man to the click to jayden just let the sales funnel just let denica write it claude has to understand this no just just let denica do it i'm being discriminated against claude has to understand this can do well it's used to this is you can read it right
+
+yeah but claude you have to do not trust claude vision capability just to say what it is so it's like for in engage there could be also graphs so this is sales funnel
+
+can you write sales funnel about that
+
+sales funnel yeah now you're running into the issue where have you fit in sales funnel okay it's your funnel yes this is a funnel this is called a sale can you swell okay
+
+your role can you write it in chinese yeah wait write it in chinese it's more compact claude will understand it chinese lci is just insane
+
+i'm trying to remember what was what what was this okay
+
+this is your post so this isograph because so this is emantic breakdown like in the fire no no just like and actually É Yes, embedding model can do it, but the thing is that it's too much work. You just plug in the AI and let it do everything, it's faster.
+
+Okay. Or... GEV. GEV? GEV model.
+
+We just got GEV model. Oh, we could get an API. Yes. Well, they gave us a gem API. Yes.
+
+Yes. So we can use it for that. I feel like GEV on its own was fun. I just don't want to see it. I forgot.
+
+Fuck. Okay, so this is outside trend, I suppose. Yeah, outside trend. That's the themes. Oh, this is social media.
+
+That was just showing... So this is... It goes to your social media pages. Social media. So social media connectors.
+
+Yeah. And I think this is... It's just going to open your page in the browser. Yeah. Like it'll just...
+
+You'll give the link to your page, and you'll need to be logged in, and it'll just open Chrome and take you in that way. That's just the title. The title. The social media dashboard is what I call it.
+
+Dashboard. Dashboard. Dashboard. Dashboard. Dashboard.
+
+Dashboard. Dashboard. Dashboard. Let's just... I'll get home.
+
+I love it. I love it. We need to capture this. Yes. Otherwise we'll miss some more.
+
+Is that everything? That should be everything? Definitely. Definitely. Okay.
+
+Stop that.

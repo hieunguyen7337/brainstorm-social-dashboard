@@ -1,0 +1,1037 @@
+[
+ {
+  "start": 0.0,
+  "end": 18.58,
+  "text": "Okay, alright, so the way that it's going to be working is that this dashboard is just going to pull from your social media account, so it's just going to use existing browser extensions just to go to your analytics page and click through them."
+ },
+ {
+  "start": 18.58,
+  "end": 25.08,
+  "text": "I've done this with Codex before, I know it can interface with the browser and just click through all your statistics and harvest them."
+ },
+ {
+  "start": 25.08,
+  "end": 42.06,
+  "text": "So it's going to harvest them into an analytics tab here, and this is going to, it's going to learn over time, so it's going to be running its own agent that learns over time what does well in your post and what doesn't."
+ },
+ {
+  "start": 47.2,
+  "end": 51.98,
+  "text": "So the way this is going to work is this is where you generate your plan for the post."
+ },
+ {
+  "start": 53.0,
+  "end": 55.06,
+  "text": "So this will break it down into, say,"
+ },
+ {
+  "start": 55.08,
+  "end": 60.5,
+  "text": "a LinkedIn post, an Instagram post, or an Instagram post"
+ },
+ {
+  "start": 60.5,
+  "end": 70.18,
+  "text": "that's kind of sketched, because Instagram, like, it's images or video, you kind of need to think of it, but it's going to help you understand how to build that from what you have."
+ },
+ {
+  "start": 70.72,
+  "end": 74.1,
+  "text": "And for LinkedIn, it's just going to do the text based on what you generate."
+ },
+ {
+  "start": 75.4,
+  "end": 77.0,
+  "text": "And then it's going to categorize,"
+ },
+ {
+  "start": 78.04,
+  "end": 81.44,
+  "text": "it's going to attempt to categorize"
+ },
+ {
+  "start": 81.44,
+  "end": 83.84,
+  "text": "the post into themes."
+ },
+ {
+  "start": 85.08,
+  "end": 88.38,
+  "text": "Or, like, it's going to try and semantically break it down into"
+ },
+ {
+  "start": 88.38,
+  "end": 93.62,
+  "text": "something that the AI can understand, so then it can then"
+ },
+ {
+  "start": 93.62,
+  "end": 97.84,
+  "text": "feed back into the analytics, and it can look at posts with this theme did better,"
+ },
+ {
+  "start": 98.3,
+  "end": 101.36,
+  "text": "posts without this theme did worse, and it's going to be trying to,"
+ },
+ {
+  "start": 101.58,
+  "end": 105.22,
+  "text": "basically based on what you generate, it's going to be trying to find trends"
+ },
+ {
+  "start": 105.22,
+  "end": 107.28,
+  "text": "so you can improve your social media."
+ },
+ {
+  "start": 108.32,
+  "end": 113.2,
+  "text": "It can also, like, try to catch trends that is going on too."
+ },
+ {
+  "start": 113.84,
+  "end": 114.24,
+  "text": "Maybe?"
+ },
+ {
+  "start": 114.24,
+  "end": 115.24,
+  "text": "Yeah."
+ },
+ {
+  "start": 115.24,
+  "end": 117.24,
+  "text": "Description, then straight up photo."
+ },
+ {
+  "start": 117.24,
+  "end": 119.24,
+  "text": "Photo, straight up."
+ },
+ {
+  "start": 119.24,
+  "end": 123.24,
+  "text": "And then there is, like, to try to figure out what the user, what your followers"
+ },
+ {
+  "start": 123.24,
+  "end": 129.24,
+  "text": "Yes, because this is what I'm doing on my own now, but it's really annoying."
+ },
+ {
+  "start": 129.24,
+  "end": 136.24,
+  "text": "And I don't have, I don't have anything set up to persistently train the agents on what is and isn't going wrong."
+ },
+ {
+  "start": 136.24,
+  "end": 139.24,
+  "text": "And it's just, like, a mess within the existing frameworks."
+ },
+ {
+  "start": 139.24,
+  "end": 142.24,
+  "text": "I can't set it up. I have issues with it."
+ },
+ {
+  "start": 142.24,
+  "end": 143.24,
+  "text": "And, um,"
+ },
+ {
+  "start": 144.24,
+  "end": 149.24,
+  "text": "the other thing is, like I said, yeah, I'd like it so I can just do, like, one prompt here."
+ },
+ {
+  "start": 151.24,
+  "end": 156.24,
+  "text": "And then it goes into an AI pipeline, which we've at least designed with Sleep Sage, and we know how to design it."
+ },
+ {
+  "start": 156.24,
+  "end": 159.24,
+  "text": "And it's not just generating once of your prompt."
+ },
+ {
+  "start": 159.24,
+  "end": 164.24,
+  "text": "It's got, it's got a channel, like an AI pipeline for LinkedIn."
+ },
+ {
+  "start": 167.24,
+  "end": 169.24,
+  "text": "It's got one for Instagram."
+ },
+ {
+  "start": 169.24,
+  "end": 170.24,
+  "text": "Oh, would you like to?"
+ },
+ {
+  "start": 170.24,
+  "end": 171.24,
+  "text": "Because I like that."
+ },
+ {
+  "start": 171.24,
+  "end": 172.24,
+  "text": "Me too."
+ },
+ {
+  "start": 172.24,
+  "end": 173.24,
+  "text": "Just kidding."
+ },
+ {
+  "start": 174.24,
+  "end": 176.24,
+  "text": "It's got one for X if you want it."
+ },
+ {
+  "start": 176.24,
+  "end": 178.24,
+  "text": "It's important for startups for some reason."
+ },
+ {
+  "start": 178.24,
+  "end": 179.24,
+  "text": "So many devs are on X."
+ },
+ {
+  "start": 179.24,
+  "end": 180.24,
+  "text": "I don't know why."
+ },
+ {
+  "start": 180.24,
+  "end": 184.24,
+  "text": "It's only US that use X."
+ },
+ {
+  "start": 184.24,
+  "end": 185.24,
+  "text": "What else do people like?"
+ },
+ {
+  "start": 185.24,
+  "end": 187.24,
+  "text": "TikTok for the Chinese."
+ },
+ {
+  "start": 187.24,
+  "end": 189.24,
+  "text": "I suppose."
+ },
+ {
+  "start": 189.24,
+  "end": 190.24,
+  "text": "He doesn't like it."
+ },
+ {
+  "start": 190.24,
+  "end": 191.24,
+  "text": "No, no, no."
+ },
+ {
+  "start": 191.24,
+  "end": 192.24,
+  "text": "Based."
+ },
+ {
+  "start": 192.24,
+  "end": 196.24,
+  "text": "You're the first, second, third person I've met who's used TikTok."
+ },
+ {
+  "start": 196.24,
+  "end": 197.24,
+  "text": "Really?"
+ },
+ {
+  "start": 197.24,
+  "end": 198.24,
+  "text": "Yeah, at uni."
+ },
+ {
+  "start": 198.24,
+  "end": 201.24,
+  "text": "Almost not, even that or they don't admit to using it."
+ },
+ {
+  "start": 201.24,
+  "end": 202.24,
+  "text": "Oh, okay."
+ },
+ {
+  "start": 202.24,
+  "end": 203.24,
+  "text": "With Discord works."
+ },
+ {
+  "start": 203.24,
+  "end": 204.24,
+  "text": "I mean, Discord is a bit."
+ },
+ {
+  "start": 204.24,
+  "end": 205.24,
+  "text": "You know what?"
+ },
+ {
+  "start": 205.24,
+  "end": 206.24,
+  "text": "This is Instagram and TikTok are the same thing."
+ },
+ {
+  "start": 206.24,
+  "end": 207.24,
+  "text": "You can trust us."
+ },
+ {
+  "start": 207.24,
+  "end": 208.24,
+  "text": "Thread?"
+ },
+ {
+  "start": 208.24,
+  "end": 209.24,
+  "text": "Yeah."
+ },
+ {
+  "start": 209.24,
+  "end": 210.24,
+  "text": "Yeah, okay."
+ },
+ {
+  "start": 210.24,
+  "end": 211.24,
+  "text": "Thread?"
+ },
+ {
+  "start": 211.24,
+  "end": 212.24,
+  "text": "Thread can be part of the Instagram channel."
+ },
+ {
+  "start": 212.24,
+  "end": 213.24,
+  "text": "I guess."
+ },
+ {
+  "start": 213.24,
+  "end": 214.24,
+  "text": "Oh, sorry."
+ },
+ {
+  "start": 214.24,
+  "end": 215.24,
+  "text": "So Threads and X are the same thing."
+ },
+ {
+  "start": 215.24,
+  "end": 216.24,
+  "text": "And then, I don't know, Facebook maybe?"
+ },
+ {
+  "start": 216.24,
+  "end": 217.24,
+  "text": "Yeah."
+ },
+ {
+  "start": 217.24,
+  "end": 218.24,
+  "text": "I mean, we can have the Facebook toggle."
+ },
+ {
+  "start": 218.24,
+  "end": 219.24,
+  "text": "I don't use it."
+ },
+ {
+  "start": 219.24,
+  "end": 220.24,
+  "text": "Maybe not."
+ },
+ {
+  "start": 220.24,
+  "end": 221.24,
+  "text": "What else is there?"
+ },
+ {
+  "start": 221.24,
+  "end": 222.24,
+  "text": "Some people use Facebook."
+ },
+ {
+  "start": 222.24,
+  "end": 223.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 223.24,
+  "end": 224.24,
+  "text": "No, no."
+ },
+ {
+  "start": 224.24,
+  "end": 225.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 225.24,
+  "end": 226.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 226.24,
+  "end": 227.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 227.24,
+  "end": 228.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 228.24,
+  "end": 229.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 229.24,
+  "end": 230.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 230.24,
+  "end": 231.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 231.24,
+  "end": 232.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 232.24,
+  "end": 233.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 233.24,
+  "end": 234.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 234.24,
+  "end": 235.24,
+  "text": "Reddit."
+ },
+ {
+  "start": 235.24,
+  "end": 238.24,
+  "text": "I know someone who scaled their business quite well using Reddit."
+ },
+ {
+  "start": 238.24,
+  "end": 240.24,
+  "text": "Reddit is good for developers."
+ },
+ {
+  "start": 240.24,
+  "end": 242.24,
+  "text": "So don't underestimate it."
+ },
+ {
+  "start": 242.24,
+  "end": 243.24,
+  "text": "Okay."
+ },
+ {
+  "start": 243.24,
+  "end": 244.24,
+  "text": "We can tie Reddit with LinkedIn."
+ },
+ {
+  "start": 244.24,
+  "end": 251.24,
+  "text": "It could be a number one, but yeah."
+ },
+ {
+  "start": 251.24,
+  "end": 254.24,
+  "text": "I also use Reddit a lot."
+ },
+ {
+  "start": 254.24,
+  "end": 260.24,
+  "text": "The thing is that I never post it."
+ },
+ {
+  "start": 260.24,
+  "end": 262.24,
+  "text": "I do not want to post it."
+ },
+ {
+  "start": 262.24,
+  "end": 267.84,
+  "text": "because they kind of yeah it's like nerd central they post there and you figure out what they're"
+ },
+ {
+  "start": 267.84,
+  "end": 273.9,
+  "text": "doing um i learned most of as up in reddit and then yeah there'd be like a sales funnel here"
+ },
+ {
+  "start": 273.9,
+  "end": 277.66,
+  "text": "which is showing where each of your platforms are and how they're contributing to growth as well"
+ },
+ {
+  "start": 277.66,
+  "end": 282.58,
+  "text": "like that's an this is something that we went over with slipsage like it's a startup thing"
+ },
+ {
+  "start": 282.58,
+  "end": 287.88,
+  "text": "but basically like how many people are like let's say views"
+ },
+ {
+  "start": 287.88,
+  "end": 309.56,
+  "text": "i'm i'm not left-handed i'm impressed with how well i'm running"
+ },
+ {
+  "start": 309.56,
+  "end": 323.48,
+  "text": "please engage what else click through click through and then and then"
+ },
+ {
+  "start": 323.48,
+  "end": 327.56,
+  "text": "actual i just go right on because yes"
+ },
+ {
+  "start": 327.7,
+  "end": 333.2,
+  "text": "so just to relate to slipsage this is the analytics i've got to do is how many people"
+ },
+ {
+  "start": 333.2,
+  "end": 338.48,
+  "text": "are viewing the posts how many people then engage and say they like the idea this is actually quite"
+ },
+ {
+  "start": 338.48,
+  "end": 344.96,
+  "text": "high how many people click through it's actually not bad how many people on board well it's you"
+ },
+ {
+  "start": 344.96,
+  "end": 350.44,
+  "text": "and one other person yeah it's not good but they've got to go through like security yeah"
+ },
+ {
+  "start": 350.44,
+  "end": 356.82,
+  "text": "did you actually go for say yes to all the security stuff or did you already have the"
+ },
+ {
+  "start": 356.82,
+  "end": 357.68,
+  "text": "settings kind of enabled"
+ },
+ {
+  "start": 357.68,
+  "end": 364.92,
+  "text": "because yeah i think that's the biggest barrier because most people don't want to go through all"
+ },
+ {
+  "start": 364.92,
+  "end": 369.08,
+  "text": "the security warnings and it's like don't enable this unless you know what you're doing i'm like"
+ },
+ {
+  "start": 369.08,
+  "end": 373.26,
+  "text": "okay i'm definitely not getting any biomed students to do it because they don't understand"
+ },
+ {
+  "start": 373.26,
+  "end": 377.64,
+  "text": "computers yeah so they just see the warnings and they're like okay i'm not like some some"
+ },
+ {
+  "start": 377.64,
+  "end": 382.88,
+  "text": "problem has like it doesn't show the install button like the ultimate the default is to"
+ },
+ {
+  "start": 382.88,
+  "end": 387.52,
+  "text": "uninstall it you have to click on the on the"
+ },
+ {
+  "start": 387.68,
+  "end": 393.68,
+  "text": "extension in order to let it show the proceeds so like i'll just like for the ai you can take"
+ },
+ {
+  "start": 393.68,
+  "end": 400.87,
+  "text": "this image like i don't know this is like view percent this is like camping"
+ },
+ {
+  "start": 404.07,
+  "end": 405.35,
+  "text": "oh yeah thank you"
+ },
+ {
+  "start": 407.91,
+  "end": 412.55,
+  "text": "can we run the notebook can we run the data analytics on what an embedding model"
+ },
+ {
+  "start": 413.27,
+  "end": 419.03,
+  "text": "how would we do this would we need our model don't do it because everything doesn't help that much"
+ },
+ {
+  "start": 419.19,
+  "end": 424.23,
+  "text": "how would we do this or do we just demo this part we just get the a.i to do everything it reads"
+ },
+ {
+  "start": 424.23,
+  "end": 429.19,
+  "text": "everything is analyzed everything okay so yeah this is like a view percent breakdown so like we've"
+ },
+ {
+  "start": 429.19,
+  "end": 439.99,
+  "text": "got li like say i mean my linkedin's a bigger portion of this is whatever yeah like instagram"
+ },
+ {
+  "start": 443.67,
+  "end": 445.59,
+  "text": "not i think about can we make money on this"
+ },
+ {
+  "start": 446.47,
+  "end": 448.23,
+  "text": "besides it's really hard"
+ },
+ {
+  "start": 448.23,
+  "end": 448.95,
+  "text": "strong reception"
+ },
+ {
+  "start": 448.95,
+  "end": 454.75,
+  "text": "to see how when we are plugging it directly to the cloud but okay um also why can't we make money"
+ },
+ {
+  "start": 454.75,
+  "end": 462.63,
+  "text": "for this people would pay for this that's for mcps i mean i'd pay for it subscription on the mcp i"
+ },
+ {
+  "start": 462.63,
+  "end": 467.37,
+  "text": "suppose it's a hackathon we don't care about payment although he said if we build in stripe"
+ },
+ {
+  "start": 467.37,
+  "end": 473.71,
+  "text": "payment then it's added points for technical implementation i think we should like i don't"
+ },
+ {
+  "start": 473.71,
+  "end": 482.95,
+  "text": "want to steal people money but we have the free denica we've got tiktok x yeah sure why not my x"
+ },
+ {
+  "start": 482.95,
+  "end": 491.21,
+  "text": "is like that growing x is really hard okay can you like can you write the details of the description"
+ },
+ {
+  "start": 491.21,
+  "end": 498.67,
+  "text": "of every single box uh denica can you help yeah uh just just like denica write it"
+ },
+ {
+  "start": 498.67,
+  "end": 503.69,
+  "text": "jayden just be different graphs for like the engage"
+ },
+ {
+  "start": 503.69,
+  "end": 509.43,
+  "text": "man to the click to jayden just let the sales funnel just let denica write it"
+ },
+ {
+  "start": 509.43,
+  "end": 511.11,
+  "text": "claude has to understand this"
+ },
+ {
+  "start": 511.11,
+  "end": 518.91,
+  "text": "no just just let denica do it i'm being discriminated against"
+ },
+ {
+  "start": 518.91,
+  "end": 526.37,
+  "text": "claude has to understand this can do well it's used to this is you can read it right"
+ },
+ {
+  "start": 526.37,
+  "end": 533.53,
+  "text": "yeah but claude you have to do not trust claude vision capability"
+ },
+ {
+  "start": 533.69,
+  "end": 539.77,
+  "text": "just to say what it is so it's like for in engage there could be also graphs so this is sales funnel"
+ },
+ {
+  "start": 542.01,
+  "end": 543.45,
+  "text": "can you write sales funnel about that"
+ },
+ {
+  "start": 548.57,
+  "end": 552.89,
+  "text": "sales funnel yeah now you're running into the issue where have you fit in sales funnel"
+ },
+ {
+  "start": 553.61,
+  "end": 559.69,
+  "text": "okay it's your funnel yes this is a funnel this is called a sale can you swell okay"
+ },
+ {
+  "start": 563.69,
+  "end": 568.85,
+  "text": "your role can you write it in chinese yeah wait write it in chinese it's more compact"
+ },
+ {
+  "start": 568.85,
+  "end": 574.5,
+  "text": "claude will understand it chinese lci is just insane"
+ },
+ {
+  "start": 579.22,
+  "end": 581.54,
+  "text": "i'm trying to remember what was what what was this okay"
+ },
+ {
+  "start": 586.19,
+  "end": 592.89,
+  "text": "this is your post so this isograph because so this is emantic breakdown"
+ },
+ {
+  "start": 592.89,
+  "end": 596.65,
+  "text": "like in the fire no no just like and actually"
+ },
+ {
+  "start": 596.65,
+  "end": 597.85,
+  "text": "É"
+ },
+ {
+  "start": 598.33,
+  "end": 604.77,
+  "text": "Yes, embedding model can do it, but the thing is that it's too much work."
+ },
+ {
+  "start": 604.77,
+  "end": 607.83,
+  "text": "You just plug in the AI and let it do everything, it's faster."
+ },
+ {
+  "start": 607.83,
+  "end": 608.83,
+  "text": "Okay."
+ },
+ {
+  "start": 608.83,
+  "end": 609.83,
+  "text": "Or..."
+ },
+ {
+  "start": 609.83,
+  "end": 610.83,
+  "text": "GEV."
+ },
+ {
+  "start": 610.83,
+  "end": 611.83,
+  "text": "GEV?"
+ },
+ {
+  "start": 611.83,
+  "end": 612.83,
+  "text": "GEV model."
+ },
+ {
+  "start": 612.83,
+  "end": 613.83,
+  "text": "We just got GEV model."
+ },
+ {
+  "start": 613.83,
+  "end": 616.83,
+  "text": "Oh, we could get an API."
+ },
+ {
+  "start": 616.83,
+  "end": 617.83,
+  "text": "Yes."
+ },
+ {
+  "start": 617.83,
+  "end": 618.83,
+  "text": "Well, they gave us a gem API."
+ },
+ {
+  "start": 618.83,
+  "end": 619.83,
+  "text": "Yes."
+ },
+ {
+  "start": 619.83,
+  "end": 620.83,
+  "text": "Yes."
+ },
+ {
+  "start": 620.83,
+  "end": 624.04,
+  "text": "So we can use it for that."
+ },
+ {
+  "start": 624.04,
+  "end": 640.54,
+  "text": "I feel like GEV on its own was fun."
+ },
+ {
+  "start": 640.54,
+  "end": 644.54,
+  "text": "I just don't want to see it."
+ },
+ {
+  "start": 644.54,
+  "end": 645.54,
+  "text": "I forgot."
+ },
+ {
+  "start": 645.54,
+  "end": 646.54,
+  "text": "Fuck."
+ },
+ {
+  "start": 646.54,
+  "end": 650.54,
+  "text": "Okay, so this is outside trend, I suppose."
+ },
+ {
+  "start": 650.54,
+  "end": 653.04,
+  "text": "Yeah, outside trend."
+ },
+ {
+  "start": 653.04,
+  "end": 654.04,
+  "text": "That's the themes."
+ },
+ {
+  "start": 654.04,
+  "end": 657.04,
+  "text": "Oh, this is social media."
+ },
+ {
+  "start": 657.04,
+  "end": 659.04,
+  "text": "That was just showing..."
+ },
+ {
+  "start": 659.04,
+  "end": 660.04,
+  "text": "So this is..."
+ },
+ {
+  "start": 660.04,
+  "end": 661.04,
+  "text": "It goes to your social media pages."
+ },
+ {
+  "start": 661.04,
+  "end": 662.04,
+  "text": "Social media."
+ },
+ {
+  "start": 662.04,
+  "end": 664.04,
+  "text": "So social media connectors."
+ },
+ {
+  "start": 664.04,
+  "end": 671.5,
+  "text": "Yeah."
+ },
+ {
+  "start": 671.5,
+  "end": 672.5,
+  "text": "And I think this is..."
+ },
+ {
+  "start": 672.5,
+  "end": 674.5,
+  "text": "It's just going to open your page in the browser."
+ },
+ {
+  "start": 674.5,
+  "end": 675.5,
+  "text": "Yeah."
+ },
+ {
+  "start": 675.5,
+  "end": 676.5,
+  "text": "Like it'll just..."
+ },
+ {
+  "start": 676.5,
+  "end": 679.5,
+  "text": "You'll give the link to your page, and you'll need to be logged in, and it'll just open"
+ },
+ {
+  "start": 679.5,
+  "end": 680.5,
+  "text": "Chrome and take you in that way."
+ },
+ {
+  "start": 680.5,
+  "end": 681.5,
+  "text": "That's just the title."
+ },
+ {
+  "start": 681.5,
+  "end": 682.5,
+  "text": "The title."
+ },
+ {
+  "start": 682.5,
+  "end": 683.5,
+  "text": "The social media dashboard is what I call it."
+ },
+ {
+  "start": 683.5,
+  "end": 684.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 684.5,
+  "end": 685.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 685.5,
+  "end": 686.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 686.5,
+  "end": 687.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 687.5,
+  "end": 688.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 688.5,
+  "end": 689.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 689.5,
+  "end": 690.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 690.5,
+  "end": 691.5,
+  "text": "Dashboard."
+ },
+ {
+  "start": 691.5,
+  "end": 692.5,
+  "text": "Let's just..."
+ },
+ {
+  "start": 692.5,
+  "end": 693.5,
+  "text": "I'll get home."
+ },
+ {
+  "start": 693.5,
+  "end": 694.5,
+  "text": "I love it."
+ },
+ {
+  "start": 694.5,
+  "end": 695.5,
+  "text": "I love it."
+ },
+ {
+  "start": 695.5,
+  "end": 698.5,
+  "text": "We need to capture this."
+ },
+ {
+  "start": 698.5,
+  "end": 699.5,
+  "text": "Yes."
+ },
+ {
+  "start": 699.5,
+  "end": 700.5,
+  "text": "Otherwise we'll miss some more."
+ },
+ {
+  "start": 700.5,
+  "end": 701.5,
+  "text": "Is that everything?"
+ },
+ {
+  "start": 701.5,
+  "end": 702.5,
+  "text": "That should be everything?"
+ },
+ {
+  "start": 702.5,
+  "end": 703.5,
+  "text": "Definitely."
+ },
+ {
+  "start": 703.5,
+  "end": 704.5,
+  "text": "Definitely."
+ },
+ {
+  "start": 704.5,
+  "end": 705.5,
+  "text": "Okay."
+ },
+ {
+  "start": 705.5,
+  "end": 706.5,
+  "text": "Stop that."
+ }
+]
