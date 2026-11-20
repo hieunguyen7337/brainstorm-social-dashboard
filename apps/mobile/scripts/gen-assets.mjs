@@ -31,29 +31,39 @@ const MASKABLE_RADIUS = 0.4; // maskable PWA icons: all content inside a circle 
 const ADAPTIVE_RADIUS = 1 / 3; // Android adaptive icons: the circular launcher mask is 72dp of the 108dp layer
 
 /**
- * The pulse line in badge units (0..1, y down): flat, small bump, tall spike up, spike down, flat.
- * The bump is a raised cosine, so it leaves and rejoins the flat line smoothly; the spikes stay sharp. The baseline sits
- * a touch below centre so the tall spike up and the shorter spike down balance around the badge centre.
+ * The mark in badge units (0..1, y down): a speech bubble (social) holding three rising bars (growth), as polylines
+ * stroked with round caps. The heartbeat line it replaced read as a health-care app. Keep src/ui/Logo.tsx in step
+ * (same shapes, in 24-unit SVG coordinates: badge units x 24).
  */
-const PULSE = (() => {
-  const base = 0.52;
-  const bump = { from: 0.235, to: 0.365, height: 0.11, steps: 48 };
-  const pts = [
-    [0.155, base],
-    [bump.from, base],
+const BUBBLE = { x0: 0.22, x1: 0.78, y0: 0.23, y1: 0.66, r: 0.11, tail: [0.42, [0.3, 0.775]] };
+const GLYPH = (() => {
+  const { x0, x1, y0, y1, r } = BUBBLE;
+  const arc = (cx, cy, from, to, steps = 16) =>
+    Array.from({ length: steps + 1 }, (_, i) => {
+      const a = ((from + ((to - from) * i) / steps) * Math.PI) / 180;
+      return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    });
+  const [tailFrom, tailTip] = BUBBLE.tail;
+  const bubble = [
+    [x0 + r, y0],
+    ...arc(x1 - r, y0 + r, -90, 0),
+    ...arc(x1 - r, y1 - r, 0, 90),
+    [tailFrom, y1],
+    tailTip,
+    ...arc(x0 + r, y1 - r, 90, 180),
+    ...arc(x0 + r, y0 + r, 180, 270),
   ];
-  for (let i = 1; i < bump.steps; i++) {
-    const t = i / bump.steps;
-    pts.push([bump.from + (bump.to - bump.from) * t, base - (bump.height * (1 - Math.cos(2 * Math.PI * t))) / 2]);
-  }
-  pts.push([bump.to, base], [0.46, base], [0.54, 0.22], [0.665, 0.775], [0.725, base], [0.845, base]);
-  return pts;
+  const bar = (x, top) => [
+    [x, 0.55],
+    [x, top],
+  ];
+  return [bubble, bar(0.38, 0.48), bar(0.5, 0.41), bar(0.62, 0.33)];
 })();
 
-/** Farthest reach of the stroked line from the badge centre, in badge units. */
+/** Farthest reach of the stroked mark from the badge centre, in badge units. */
 function glyphReach(stroke) {
   let far = 0;
-  for (const [u, v] of PULSE) far = Math.max(far, Math.hypot(u - 0.5, v - 0.5));
+  for (const line of GLYPH) for (const [u, v] of line) far = Math.max(far, Math.hypot(u - 0.5, v - 0.5));
   return far + stroke / 2;
 }
 
@@ -132,8 +142,21 @@ function renderMark(size, { bleed = false, scale = 1, stroke = STROKE } = {}) {
   const halfSide = side / 2;
   const cornerRadius = side * CORNER;
 
-  const points = PULSE.map(([u, v]) => [origin + u * side, origin + v * side]);
-  const glyph = makeStroke(points, (side * stroke) / 2);
+  const strokes = GLYPH.map((line) =>
+    makeStroke(
+      line.map(([u, v]) => [origin + u * side, origin + v * side]),
+      (side * stroke) / 2,
+    ),
+  );
+  const glyph = {
+    box: {
+      x0: Math.min(...strokes.map((s) => s.box.x0)),
+      y0: Math.min(...strokes.map((s) => s.box.y0)),
+      x1: Math.max(...strokes.map((s) => s.box.x1)),
+      y1: Math.max(...strokes.map((s) => s.box.y1)),
+    },
+    distance: (x, y) => Math.min(...strokes.map((s) => s.distance(x, y))),
+  };
   const inGlyphBox = (x, y) => x > glyph.box.x0 && x < glyph.box.x1 && y > glyph.box.y0 && y < glyph.box.y1;
   const badge = bleed ? () => -1e9 : (x, y) => sdRoundBox(x, y, centre, centre, halfSide, cornerRadius);
 
