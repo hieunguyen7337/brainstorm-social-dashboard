@@ -136,8 +136,49 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     return conn
 
 
+SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS post_themes (
+    post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    theme_id TEXT NOT NULL REFERENCES themes(id) ON DELETE CASCADE,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    classifier TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (post_id, theme_id)
+);
+CREATE TABLE IF NOT EXISTS insights (
+    workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS metric_snapshots (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    post_id TEXT REFERENCES posts(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL,
+    views INTEGER, engagements INTEGER, clicks INTEGER, conversions INTEGER, followers INTEGER,
+    source TEXT NOT NULL,
+    captured_at TEXT NOT NULL
+);
+"""
+
+# Columns added after the first deploy: (table, column, declaration). Applied idempotently.
+COLUMNS_V2 = (
+    ("connections", "profile_url", "TEXT"),
+    ("posts", "metrics_source", "TEXT NOT NULL DEFAULT 'sim'"),
+    ("posts", "external_id", "TEXT"),
+    ("posts", "harvested_at", "TEXT"),
+    ("workspaces", "plan", "TEXT NOT NULL DEFAULT 'free'"),
+    ("workspaces", "stripe_customer_id", "TEXT"),
+)
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    conn.executescript(SCHEMA_V2)
+    for table, column, decl in COLUMNS_V2:
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
     conn.commit()
 
 
