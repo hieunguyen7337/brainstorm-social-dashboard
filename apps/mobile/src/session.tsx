@@ -135,6 +135,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const ws = await api.getWorkspace();
       if (!alive.current) return;
+      // Real numbers for everyone: a sample workspace saved by an older version (made-up numbers) is forgotten, so its
+      // visitor lands on onboarding and starts a real one. Mock builds keep theirs.
+      if (ws.data_mode === 'sample' && !stored.mock) {
+        await setToken(null);
+        if (!alive.current) return;
+        setTokenState(null);
+        setStatus('anon');
+        return;
+      }
       setWorkspaceState(ws);
       // Only a valid workspace opens the connect sheet (an unknown token lands on onboarding instead).
       setConnectRequest(link.connect);
