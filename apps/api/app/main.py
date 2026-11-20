@@ -27,6 +27,8 @@ ROUTERS = [
     ("app.routes.insights", "router"),
     ("app.routes.metrics", "router"),
     ("app.routes.billing", "router"),
+    ("app.routes.rooms", "router"),
+    ("app.routes.share", "router"),
 ]
 
 

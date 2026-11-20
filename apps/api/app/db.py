@@ -159,6 +159,24 @@ CREATE TABLE IF NOT EXISTS metric_snapshots (
     source TEXT NOT NULL,
     captured_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rooms (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT '',
+    post_a TEXT REFERENCES posts(id) ON DELETE SET NULL,
+    post_b TEXT REFERENCES posts(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS room_votes (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    voter TEXT NOT NULL,
+    choice TEXT NOT NULL,
+    onboarded INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (room_id, voter)
+);
 """
 
 # Columns added after the first deploy: (table, column, declaration). Applied idempotently.
