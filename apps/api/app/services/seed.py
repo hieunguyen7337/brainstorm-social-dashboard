@@ -120,6 +120,19 @@ def seed_workspace(conn: sqlite3.Connection, workspace_id: str, brand_name: str,
             conv = int(clicks * conv_r * rng.uniform(0.9, 1.1) + rng.random())
             rows.append((workspace_id, p, d.isoformat(), views, eng, clicks, conv))
             tv += views
+        # The 30 days before that, so the dashboard's default 30-day "change %" has a previous period to compare
+        # with (it showed 0% everywhere). A separate generator keeps every number above unchanged.
+        hist = random.Random(f"{workspace_id}:{p}:hist")
+        for i in range(59, 29, -1):
+            d = (now - timedelta(days=i)).date()
+            v = base * weekly[d.weekday()] * (1 + 0.006 * (29 - i)) * hist.lognormvariate(0, 0.12) * 0.9
+            if p == "reddit":
+                v *= hist.uniform(3, 6) if hist.random() < 0.12 else hist.uniform(0.4, 0.9)
+            views = max(int(v), 0)
+            eng = int(views * eng_r * hist.uniform(0.85, 1.05) + hist.random())
+            clicks = int(eng * click_r * hist.uniform(0.85, 1.05) + hist.random())
+            conv = int(clicks * conv_r * hist.uniform(0.85, 1.05) + hist.random())
+            rows.append((workspace_id, p, d.isoformat(), views, eng, clicks, conv))
         platform_totals[p] = tv
     conn.executemany("INSERT INTO daily_metrics VALUES (?,?,?,?,?,?,?)", rows)
 
