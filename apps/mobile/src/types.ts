@@ -343,6 +343,29 @@ export interface TrendsQuery {
   limit?: number;
 }
 
+/** GET /api/posts/{id}/share: where to open the real composer for one post. */
+export interface ShareInfo {
+  platform: Platform;
+  /** Composer / intent URL; null for Instagram and TikTok (copy the caption instead). */
+  url: string | null;
+  /** Threads composer URL, only for X posts. */
+  threads_url: string | null;
+  /** Text to copy (content plus hashtags). */
+  caption: string;
+  /** Instagram/TikTok: why there is no composer link and what to do instead. */
+  instagram_note: string | null;
+}
+
+/** POST /api/rooms: a crowd room (Room mode). */
+export interface RoomInfo {
+  code: string;
+  /** Big-screen page; open it with `?token=<session token>`. */
+  screen_url: string;
+  /** What phones in the room open (QR target). */
+  join_url: string;
+  title: string;
+}
+
 export interface PulseApi {
   health(): Promise<Health>;
 
@@ -381,4 +404,9 @@ export interface PulseApi {
   runAutopilot(): Promise<AutopilotRun>;
 
   listTrends(query?: TrendsQuery): Promise<Trend[]>;
+
+  /** GET /api/posts/{id}/share (may 404 until the room/share API is deployed: callers fall back to `buildShareInfo`). */
+  getShare(postId: string): Promise<ShareInfo>;
+  /** POST /api/rooms {} (may 404 until deployed). */
+  createRoom(): Promise<RoomInfo>;
 }

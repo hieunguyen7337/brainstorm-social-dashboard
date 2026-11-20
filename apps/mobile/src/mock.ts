@@ -16,6 +16,7 @@ import {
   SEED_THEMES, SHOTS, TAGS, THEME_CLASSIFIERS, THEME_EDGE, TREND_SEEDS,
 } from './mockData';
 import type { Mode } from './mockData';
+import { buildShareInfo } from './shareLinks';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
@@ -1088,6 +1089,14 @@ export const mockApi: PulseApi = {
         }
       }
       return [...s.trends].sort(byRelevance).slice(0, int(q?.limit, 20, 1, 100));
+    }),
+
+  getShare: (id) => authed((s) => buildShareInfo(findPost(s, id).post)),
+  createRoom: () =>
+    authed(() => {
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      const base = publicBaseUrl();
+      return { code, screen_url: `${base}/room/${code}/screen`, join_url: `${base}/?room=${code}`, title: 'Demo room' };
     }),
 };
 
