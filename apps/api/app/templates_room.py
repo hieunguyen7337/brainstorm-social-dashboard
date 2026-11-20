@@ -180,7 +180,7 @@ font-size:13px;color:var(--mute);user-select:none}
 box-shadow:0 0 0 1px var(--ac),0 10px 30px rgba(124,92,255,.28)}
 #app[data-voted="a"] #card-a .tagpick,#app[data-voted="b"] #card-b .tagpick{display:inline-block}
 #app[data-onb="1"] .onb-form{display:none}#app[data-onb="1"] .onb-done{display:flex}
-.onb-done{flex-direction:column;align-items:stretch}.onb-done a.btn{text-decoration:none}.onb-done .sub{margin:4px 0 0;text-align:center}.onb-done .sub a{color:inherit}
+.onb-done{flex-direction:column;align-items:stretch}.onb-done a.btn{text-decoration:none}.onb-sub{color:var(--dim);font-size:14px;margin:4px 0 0;text-align:center}.onb-sub a{color:inherit}
 @media (max-width:359px){h1{font-size:23px}.btn{font-size:18px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
@@ -202,7 +202,7 @@ stroke-linejoin="round"/></svg></span>
 <button class="btn btn-go" type="submit">Get started</button></form>
 <div class="onb-done" role="status"><p>You're in. Watch the big screen!</p>
 <a class="btn btn-go" href="/?room=__CODEURL__">Open your own Pulse</a>
-<p class="sub">Your own workspace, no sign-up: dashboard, AI posts, real share links.
+<p class="onb-sub">Your own workspace, no sign-up: dashboard, AI posts, real share links.
 <a href="/download/android">Android app</a> &middot; iPhone: Share &rarr; Add to Home Screen</p></div>
 <div class="mini" aria-live="polite"><h3>The room so far</h3>
 <div class="bar" aria-hidden="true"><span class="sa" id="sa" style="width:__WA__%"></span><span class="sb"

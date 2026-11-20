@@ -763,6 +763,43 @@ def test_harvest_happy_path_merges_activity_and_analytics_and_closes_the_page(no
     json.dumps(payload)
 
 
+def test_parse_dashboard_reads_number_before_label_tiles():
+    # "Total followers" must take the number before it, not the next tile's (347)
+    assert linkedin.parse_dashboard(fixture("dashboard")) == {
+        "views": 12,
+        "profile_views": 347,
+        "followers": 2_481,
+    }
+    assert linkedin.parse_followers(fixture("dashboard")) == 2_481
+    assert linkedin.parse_dashboard("") == {}
+
+
+def test_harvest_fills_missing_totals_from_the_dashboard_when_analytics_is_empty(no_real_sleep):
+    routes = {
+        ACTIVITY: [fixture("recent_activity")],
+        linkedin.ANALYTICS_URL: "<html><body><main>No posts yet</main></body></html>",
+        linkedin.DASHBOARD_URL: fixture("dashboard"),
+    }
+    payload, page, _, _, logs = run(routes)
+    assert isinstance(payload, dict), payload
+    assert page.visited == [ACTIVITY, linkedin.ANALYTICS_URL, linkedin.DASHBOARD_URL]  # no profile visit
+    assert payload["account"] == {"views": 12, "profile_views": 347, "followers": 2_481}
+    assert any("dashboard totals" in line for line in logs)
+    assert page.closed
+
+
+def test_harvest_dashboard_failure_is_not_fatal(no_real_sleep):
+    routes = {
+        ACTIVITY: [fixture("recent_activity")],
+        linkedin.ANALYTICS_URL: "",
+        linkedin.DASHBOARD_URL: RuntimeError("net::ERR_ABORTED"),
+        PROFILE: fixture("profile"),
+    }
+    payload, _page, _, _, logs = run(routes)
+    assert isinstance(payload, dict) and payload["account"] == {"followers": 3_412}
+    assert any("dashboard skipped" in line for line in logs)
+
+
 def test_harvest_authwall_raises_login_required_and_closes_the_page(no_real_sleep):
     routes = {ACTIVITY: fixture("authwall")}
     err, page, *_ = run(routes, redirects={ACTIVITY: "https://www.linkedin.com/authwall?trk=bf"})
@@ -786,7 +823,7 @@ def test_harvest_continues_when_the_analytics_page_fails_and_reads_followers_fro
     }
     payload, page, _, _, logs = run(routes)
     assert isinstance(payload, dict), payload
-    assert page.visited == [ACTIVITY, linkedin.ANALYTICS_URL, PROFILE]
+    assert page.visited == [ACTIVITY, linkedin.ANALYTICS_URL, linkedin.DASHBOARD_URL, PROFILE]
     assert payload["account"] == {"followers": 3_412}
     assert [x["external_id"] for x in payload["posts"]] == [ID_B, ID_A, ID_C, ID_D, ID_G]
     assert by_id(payload["posts"])[ID_A]["views"] == 12_400  # activity numbers only

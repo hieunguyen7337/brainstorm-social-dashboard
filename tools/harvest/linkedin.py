@@ -42,6 +42,7 @@ except ImportError:  # imported as a top-level module with tools/harvest on sys.
 
 __all__ = [
     "ANALYTICS_URL",
+    "DASHBOARD_URL",
     "activity_url",
     "build_payload",
     "creator_analytics_url",
@@ -49,12 +50,14 @@ __all__ = [
     "looks_logged_out",
     "merge_posts",
     "parse_creator_content",
+    "parse_dashboard",
     "parse_followers",
     "parse_recent_activity",
     "profile_page_url",
 ]
 
 ANALYTICS_URL = "https://www.linkedin.com/analytics/creator/content/"
+DASHBOARD_URL = "https://www.linkedin.com/dashboard/"
 CONTENT_CHARS = 280
 SCROLL_STEPS = 6
 GOTO_TIMEOUT_MS = 45_000
@@ -674,6 +677,9 @@ _FOLLOW_AFTER = re.compile(r"(?<![\w.,])" + _NUM + r"\s*(?:followers?)\b", re.IG
 _FOLLOW_BEFORE = re.compile(
     r"\bfollowers?\s*[:\-\u2013]?\s*" + _NUM + r"(?![\w])", re.IGNORECASE
 )  # "Followers 1,234"
+# The member dashboard (/dashboard/) shows "1,567" then "Total followers", then the next tile's number, so the
+# number-first form must win there, before "Followers <n>" grabs the next tile ("Total followers 215 ...").
+_FOLLOW_TOTAL = re.compile(r"(?<![\w.,])" + _NUM + r"\s*total\s+followers?\b", re.IGNORECASE)
 
 
 def _sizes(root: _Node) -> dict[int, int]:
@@ -712,6 +718,9 @@ def parse_followers(html: str) -> int | None:
     if not html:
         return None
     lines, labels = _walk(_parse(html))
+    m = _FOLLOW_TOTAL.search(" ".join(lines))  # dashboard tile: "1,567" / "Total followers"
+    if m:
+        return _to_int(m.group(1))
     for ln in lines:
         m = _FOLLOW_AFTER.search(ln) or _FOLLOW_BEFORE.search(ln)
         if m:
@@ -756,6 +765,20 @@ def parse_creator_content(html: str) -> dict:
     if followers is not None:
         account["followers"] = followers
     return {"account": account, "posts": posts}
+
+
+def parse_dashboard(html: str) -> dict:
+    """The member dashboard (/dashboard/): "1 / Post impressions in 7 days", "1,567 / Total followers",
+    "215 / Profile viewers in 90 days" -> {"views", "followers", "profile_views"}, each only when shown.
+    The number sits before its label in every tile; "Search appearances" has no field and is ignored."""
+    if not html:
+        return {}
+    tiles = _stat_tiles(_parse(html), set())
+    account = {k: tiles[k] for k in ("views", "profile_views") if k in tiles}
+    followers = parse_followers(html)
+    if followers is not None:
+        account["followers"] = followers
+    return account
 
 
 # --------------------------------------------------------------------------------------------------
@@ -993,6 +1016,28 @@ def _read_creator(page, log, sleep) -> dict:
         return empty
 
 
+def _read_dashboard(page, log, sleep) -> dict:
+    """Non-fatal: the member dashboard's totals, or {} on any problem."""
+    try:
+        common.human_pause(sleep=sleep)
+        log(f"LinkedIn: opening {DASHBOARD_URL}")
+        status = _goto(page, DASHBOARD_URL)
+        common.human_pause(sleep=sleep)
+        if status is not None and status >= 400:
+            log(f"LinkedIn: dashboard returned HTTP {status}")
+            return {}
+        html = page.content()
+        if looks_logged_out(page.url, html):
+            log("LinkedIn: dashboard asked for a login")
+            return {}
+        account = parse_dashboard(html)
+        log(f"LinkedIn: dashboard totals: {', '.join(account) or 'none'}")
+        return account
+    except Exception as exc:  # noqa: BLE001 - non-fatal by design
+        log(f"LinkedIn: dashboard skipped ({type(exc).__name__}: {exc})")
+        return {}
+
+
 def _read_followers(page, url: str, log, sleep) -> int | None:
     try:
         common.human_pause(sleep=sleep)
@@ -1031,6 +1076,9 @@ def harvest(context, profile_url: str, *, max_posts: int = 30, log=print, sleep=
         posts = _read_activity(page, act_url, cap, log, sleep, now)
         if kind == "in":
             creator = _read_creator(page, log, sleep)
+            if any(k not in creator["account"] for k in ("views", "followers")):
+                for k, v in _read_dashboard(page, log, sleep).items():
+                    creator["account"].setdefault(k, v)  # the creator page's own figures win
         else:
             log("LinkedIn: company pages have no creator analytics page; using the posts page only")
             creator = {"account": {}, "posts": []}
