@@ -14,9 +14,8 @@ COPY apps/api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY apps/api/ /app/
 COPY --from=web /build/apps/mobile/dist /app/web
-RUN useradd --system --uid 10001 --home /app pulse \
- && mkdir -p /data && chown -R pulse /data /app
-USER pulse
+# Runs as root: Fly mounts the /data volume root-owned, so a non-root user could not write SQLite there.
+RUN mkdir -p /data
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=4).status==200 else 1)"
