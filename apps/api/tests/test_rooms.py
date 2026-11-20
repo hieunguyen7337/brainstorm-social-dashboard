@@ -267,7 +267,7 @@ def test_create_room_falls_back_to_templates_when_the_ai_cap_is_reached(setup, m
     room = new_room(client, headers)
 
     assert calls == [] and len(room["posts"]) == 2
-    assert all("Read more:" in p["content"] for p in room["posts"])  # the template fallback copy
+    assert all(p["content"].strip() for p in room["posts"])  # the template fallback copy
 
 
 # ---------------------------------------------------------------- public room

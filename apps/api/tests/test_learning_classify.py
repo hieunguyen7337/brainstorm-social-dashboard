@@ -82,8 +82,12 @@ def install_jev(monkeypatch, respond, *, key="jev-secret") -> list[httpx.Request
 
 
 def jev_says(*items: tuple[str, str, object]):
-    """A Jev handler answering 200 with {"assignments": [...]} built from (post_id, theme_id, confidence)."""
-    body = {"assignments": [{"post_id": p, "theme_id": t, "confidence": c} for p, t, c in items]}
+    """A Jev handler answering 200 in the real System One shape, built from (post_id, theme_id, confidence)."""
+    body = {
+        "model": "jev-1.14.0",
+        "answers": {p: {"type": "choice", "choice": t, "confidence": c} for p, t, c in items},
+        "usage": {},
+    }
     return lambda request: httpx.Response(200, json=body)
 
 
@@ -153,18 +157,14 @@ def test_jev_happy_path_sends_the_contract_and_writes_rows(env, monkeypatch):
     assert request.headers["authorization"] == "Bearer jev-secret"
     assert request.extensions["timeout"] == {"connect": 8.0, "read": 8.0, "write": 8.0, "pool": 8.0}
     body = json.loads(request.content)
-    assert set(body) == {"workspace_id", "themes", "posts"}
-    assert body["workspace_id"] == ws_id
-    expected_themes = {
-        r["id"]: {"id": r["id"], "name": r["name"], "description": r["description"]}
-        for r in conn.execute("SELECT * FROM themes WHERE workspace_id = ? AND active = 1", (ws_id,))
-    }
-    assert len(expected_themes) == 3  # the inactive theme is not offered
-    assert {t["id"]: t for t in body["themes"]} == expected_themes
-    assert body["posts"] == [
-        {"id": a, "platform": "instagram", "content": BEANS},
-        {"id": b, "platform": "instagram", "content": PLANTS},
-    ]
+    assert set(body) == {"model", "state", "questions"}
+    assert body["model"] == "jev-latest"
+    active = {r["id"] for r in conn.execute("SELECT id FROM themes WHERE workspace_id = ? AND active = 1", (ws_id,))}
+    assert len(active) == 3  # the inactive theme is not offered
+    assert set(body["questions"]) == {a, b}
+    for q in body["questions"].values():
+        assert q["type"] == "choice" and set(q["criteria"]) == active
+    assert BEANS in body["state"] and PLANTS in body["state"] and a in body["state"]
 
 
 def test_jev_without_a_key_sends_no_authorization_header(env, monkeypatch):
@@ -183,8 +183,8 @@ def test_jev_content_is_truncated(env, monkeypatch):
 
     classify.classify_posts(env.conn, env.ws_id, [a])
 
-    sent = json.loads(seen[0].content)["posts"][0]["content"]
-    assert len(sent) == 2000
+    sent = json.loads(seen[0].content)["state"]
+    assert sent.count("beans") == 333 and len(sent) < 2100  # 2,000 characters of content plus the post header
 
 
 def test_jev_clamps_confidence_and_keeps_the_best_item_per_post(env, monkeypatch):
@@ -193,8 +193,7 @@ def test_jev_clamps_confidence_and_keeps_the_best_item_per_post(env, monkeypatch
     install_jev(
         monkeypatch,
         jev_says(
-            (a, t["Plant care tips"], 0.3),
-            (a, t["Behind the beans"], 0.8),  # higher confidence for the same post wins
+            (a, t["Behind the beans"], 0.8),
             (b, t["Plant care tips"], 3.5),  # clamped to 1.0
         ),
     )
@@ -222,8 +221,8 @@ JEV_FAILURES = {
     "invalid-json": lambda request: httpx.Response(200, text="<html>not json</html>"),
     "list-not-object": lambda request: httpx.Response(200, json=[1, 2, 3]),
     "missing-key": lambda request: httpx.Response(200, json={"results": []}),
-    "assignments-not-a-list": lambda request: httpx.Response(200, json={"assignments": "nope"}),
-    "items-not-objects": lambda request: httpx.Response(200, json={"assignments": ["a", 1, None]}),
+    "answers-not-an-object": lambda request: httpx.Response(200, json={"answers": ["nope"]}),
+    "answers-not-objects": lambda request: httpx.Response(200, json={"answers": {"x": "a", "y": 1, "z": None}}),
     "connect-error": _raises(httpx.ConnectError("refused")),
     "timeout": _raises(httpx.ReadTimeout("slow")),
 }
@@ -468,7 +467,7 @@ def test_manual_rows_are_never_overwritten_or_added_to(env, monkeypatch):
 
     assert result == [(auto, t["Plant care tips"], 0.7, "jev")]
     assert rows_for(conn, manual) == [(t["Weekend deals"], 1.0, "manual")]
-    assert [p["id"] for p in json.loads(seen[0].content)["posts"]] == [auto]  # the manual post is not even sent
+    assert list(json.loads(seen[0].content)["questions"]) == [auto]  # the manual post is not even sent
 
     # Only manual posts in the call: nothing is requested at all.
     assert classify.classify_posts(conn, env.ws_id, [manual]) == []
@@ -578,9 +577,9 @@ def test_other_workspaces_are_ignored(env, monkeypatch):
 
     assert result == [(mine, t["Behind the beans"], pytest.approx(4 / 7, abs=1e-3), "keyword")]
     assert rows_for(env.conn, foreign) == []
-    sent_themes = {th["id"] for th in json.loads(seen[0].content)["themes"]}
+    sent_themes = set(next(iter(json.loads(seen[0].content)["questions"].values()))["criteria"])
     assert sent_themes == set(t.values())
-    assert foreign not in json.loads(seen[0].content)["posts"][0]["id"]
+    assert foreign not in json.loads(seen[0].content)["questions"]
     assert foreign not in calls[0]["messages"][0]["content"]
     persisted = {r["theme_id"] for r in env.conn.execute("SELECT theme_id FROM post_themes WHERE post_id = ?", (mine,))}
     assert persisted <= set(t.values())

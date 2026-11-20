@@ -24,7 +24,8 @@ log = logging.getLogger("pulse")
 
 JEV_TIMEOUT_S = 8.0
 JEV_CONTENT_CHARS = 2000
-JEV_BATCH = 100
+JEV_BATCH = 20
+JEV_MODEL = "jev-latest"
 CLAUDE_CONTENT_CHARS = 600
 CLAUDE_BATCH = 40  # ~55 output tokens per assignment keeps a full batch well inside max_tokens=4000
 SQL_CHUNK = 500
@@ -184,14 +185,24 @@ def _jev_stage(workspace_id: str, themes: list[dict], posts: list[dict]) -> dict
     headers = {"Authorization": f"Bearer {settings.jev_api_key.strip()}"} if settings.jev_api_key.strip() else {}
     theme_ids = {t["id"] for t in themes}
     found: dict[str, Pick] = {}
+    # Jev (TypeSafe System One) contract, verified live 2026-11-20: POST {model, state, questions}; each question
+    # {"type": "choice", "instructions", "criteria": {option: description}} -> answers[key] {"choice", "confidence"}.
+    criteria = {t["id"]: _trunc(f"{t['name']}: {t.get('description') or t['name']}", 300) for t in themes}
     for chunk in _chunks(posts, JEV_BATCH):
+        state = "\n\n".join(
+            f"Post {p['id']} ({p['platform']}):\n{_trunc(p['content'], JEV_CONTENT_CHARS)}" for p in chunk
+        )
         payload = {
-            "workspace_id": workspace_id,
-            "themes": themes,
-            "posts": [
-                {"id": p["id"], "platform": p["platform"], "content": _trunc(p["content"], JEV_CONTENT_CHARS)}
+            "model": JEV_MODEL,
+            "state": state,
+            "questions": {
+                p["id"]: {
+                    "type": "choice",
+                    "instructions": f"Which content theme best fits social media post {p['id']}? Judge only that post.",
+                    "criteria": criteria,
+                }
                 for p in chunk
-            ],
+            },
         }
         try:
             client = _jev_client()
@@ -213,15 +224,15 @@ def _jev_stage(workspace_id: str, themes: list[dict], posts: list[dict]) -> dict
 
 
 def _parse_jev(data: Any, post_ids: set[str], theme_ids: set[str]) -> dict[str, Pick]:
-    """Expects {"assignments": [{"post_id", "theme_id", "confidence"}]}; ignores everything malformed."""
-    items = data.get("assignments") if isinstance(data, dict) else None
-    if not isinstance(items, list):
+    """Expects {"answers": {post_id: {"choice": theme_id, "confidence": x}}}; ignores everything malformed."""
+    answers = data.get("answers") if isinstance(data, dict) else None
+    if not isinstance(answers, dict):
         log.warning("Jev classifier fell through: unexpected response shape")
         return {}
     triples = (
-        (item.get("post_id"), item.get("theme_id"), item.get("confidence"))
-        for item in items
-        if isinstance(item, dict)
+        (post_id, answer.get("choice"), answer.get("confidence"))
+        for post_id, answer in answers.items()
+        if isinstance(answer, dict)
     )
     return _best_valid(triples, post_ids, theme_ids)
 
