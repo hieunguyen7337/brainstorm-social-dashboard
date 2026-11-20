@@ -312,10 +312,12 @@ def test_template_fallback_covers_every_platform(client, seed, monkeypatch):
         assert post["link_url"] in post["content"]
         assert "{link}" not in post["content"]
         assert post["media_prompt"]
-        assert 5 <= len(post["hashtags"]) <= 10
+        limits = ai.channels.channel_for(post["platform"])
+        assert limits.min_hashtags <= len(post["hashtags"]) <= limits.max_hashtags
     by_platform = {p["platform"]: p for p in body["posts"]}
     assert len(by_platform["x"]["content"]) <= 270
-    assert 600 <= len(by_platform["linkedin"]["content"]) <= 1200
+    assert 1200 <= len(by_platform["linkedin"]["content"]) <= 1800
+    assert len(by_platform["linkedin"]["hashtags"]) == 3
     assert by_platform["facebook"]["content"].endswith("?")
     event = query("SELECT detail FROM events WHERE workspace_id = ? AND type = 'generated'", (ws_id,))
     assert event[0]["detail"] == "6 drafts (template)"
@@ -326,7 +328,8 @@ def test_template_fallback_covers_every_platform(client, seed, monkeypatch):
     thin = client.post("/api/generate", json={"platforms": PLATFORMS}, headers=thin_headers).json()
     thin_by_platform = {p["platform"]: p for p in thin["posts"]}
     assert len(thin_by_platform["x"]["content"]) <= 270
-    assert 600 <= len(thin_by_platform["linkedin"]["content"]) <= 1200
+    assert 1200 <= len(thin_by_platform["linkedin"]["content"]) <= 1800
+    assert len(thin_by_platform["linkedin"]["hashtags"]) == 3
 
 
 def test_save_variants_published_sets_timestamps(client, seed):

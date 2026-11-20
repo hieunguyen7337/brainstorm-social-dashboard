@@ -1,5 +1,6 @@
 """Themes CRUD, AI generation and AI usage (U2, see docs/CONTRACT.md)."""
 
+import logging
 import sqlite3
 import time
 
@@ -8,7 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_workspace
 from app.db import get_db, new_id, now_iso
 from app.models import AiUsage, GenerateRequest, GenerateResponse, Theme, ThemeCreate, ThemePatch
-from app.services import ai
+from app.services import ai, classify
+
+log = logging.getLogger("pulse")
 
 router = APIRouter()
 
@@ -130,6 +133,12 @@ def generate(
         status="draft",
         scheduled_at=None,
     )
+    if body.theme_id is None:
+        # No theme was chosen: let the classifier file the drafts under the workspace's themes (it never raises).
+        try:
+            classify.classify_posts(conn, ws["id"], [p.id for p in posts])
+        except Exception:
+            log.warning("classifying generated drafts failed", exc_info=True)
     detail = f"{len(posts)} drafts ({'AI' if ai_used else 'template'})"
     conn.execute(
         "INSERT INTO events (id, workspace_id, post_id, type, platform, detail, real, ts) "
