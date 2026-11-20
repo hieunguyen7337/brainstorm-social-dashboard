@@ -4,7 +4,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 const APP_NAME = process.env.APP_NAME || process.env.EXPO_PUBLIC_APP_NAME || 'Pulse';
 const BG = '#0b1020';
 // Set by EAS (eas init) or the lead; the OTA updates url is derived from it and omitted when unset.
-const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID;
+const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '2d758915-1983-489f-8518-5b107fca5af3';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
