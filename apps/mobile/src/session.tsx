@@ -4,6 +4,7 @@
  * the status to 'anon' so the layouts redirect to onboarding.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import {
   api,
@@ -59,6 +60,19 @@ export interface Session {
 
 const Ctx = createContext<Session | null>(null);
 
+/**
+ * Web: `/#ws=<token>` opens that workspace in this browser, so a workspace made elsewhere (a script, another device)
+ * can be opened with one link. The token sits in the hash, which browsers never send to the server, and the hash is
+ * removed from the address bar at once.
+ */
+function takeWorkspaceLinkToken(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  const m = /(?:^#|&)ws=([A-Za-z0-9_-]{20,64})(?:&|$)/.exec(window.location.hash);
+  if (!m) return null;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  return m[1];
+}
+
 function messageOf(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   return e instanceof Error ? e.message : 'Something went wrong.';
@@ -92,7 +106,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStatus('loading');
     setError(null);
     setNetworkError(false);
-    const stored = await loadStorage();
+    let stored = await loadStorage();
+    const linked = takeWorkspaceLinkToken();
+    if (linked && linked !== stored.token && !stored.mock) {
+      await setToken(linked);
+      stored = { ...stored, token: linked };
+    }
     setMock(stored.mock);
     if (!stored.token) {
       setStatus('anon');
