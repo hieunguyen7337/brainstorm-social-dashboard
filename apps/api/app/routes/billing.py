@@ -131,7 +131,7 @@ _DEMO_PAGE = """<!doctype html>
   <div class="price">{price}</div>
   <ul>{features}</ul>
   <form method="post" action="{action}">
-    <button type="submit">Pay A$29 (demo)</button>
+    <button type="submit">Pay A$5 (demo)</button>
   </form>
   <a class="cancel" href="{cancel}">Cancel</a>
 </div></main></body></html>"""

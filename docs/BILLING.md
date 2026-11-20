@@ -1,6 +1,6 @@
 # Pulse billing (MCP subscription, Stripe test mode)
 
-Pulse Pro is A$29/month and unlocks the MCP server and autopilot. Billing is wired for Stripe **test mode only**.
+Pulse Pro is A$5/month and unlocks the MCP server and autopilot. Billing is wired for Stripe **test mode only**.
 Any key that does not start with `sk_test_` is refused (checkout and portal return 503; `GET /api/billing` reports
 `mode: "demo"`). With no key at all, the app runs in **demo mode**: checkout returns a local page that looks like a
 checkout and upgrades the workspace with one tap. No real money moves in either mode.
@@ -9,7 +9,7 @@ checkout and upgrades the workspace with one tap. No real money moves in either 
 
 | Method | Path | Result |
 |---|---|---|
-| GET | /api/billing | `{plan, mode: "stripe_test"\|"demo", price_label: "A$29/mo", features: {free, pro}}` |
+| GET | /api/billing | `{plan, mode: "stripe_test"\|"demo", price_label: "A$5/mo", features: {free, pro}}` |
 | POST | /api/billing/checkout | body `{"success_url"?, "cancel_url"?}` -> `{"url"}` (Stripe Checkout, or demo page) |
 | POST | /api/billing/webhook | Stripe webhook; verifies `Stripe-Signature`; 400 if invalid |
 | POST | /api/billing/portal | `{"url"}` to the Stripe customer portal; 404 in demo mode |
@@ -29,12 +29,12 @@ Create a Stripe account, stay in **Test mode** (toggle in the dashboard), then:
 fly secrets set \
   STRIPE_SECRET_KEY=sk_test_... \
   STRIPE_WEBHOOK_SECRET=whsec_... \
-  STRIPE_PRICE_ID=price_...        # optional: omit to use an inline A$29/month price
+  STRIPE_PRICE_ID=price_...        # optional: omit to use an inline A$5/month price
 ```
 
 - `STRIPE_SECRET_KEY`: test secret key (`sk_test_...`). Never put a live key here.
 - `STRIPE_WEBHOOK_SECRET`: the signing secret (`whsec_...`) for the webhook endpoint. Without it, the webhook returns 503.
-- `STRIPE_PRICE_ID`: an optional recurring AUD 29/month test price. Empty means inline `price_data`.
+- `STRIPE_PRICE_ID`: an optional recurring AUD 5/month test price. Empty means inline `price_data`.
 
 Set `PUBLIC_BASE_URL` to the public Fly URL so success, cancel and portal redirects land on the app.
 
@@ -56,7 +56,7 @@ Pay with the test card **4242 4242 4242 4242** (any future expiry, any CVC, any 
 
 With no `STRIPE_SECRET_KEY`, `POST /api/billing/checkout` returns
 `<PUBLIC_BASE_URL>/api/billing/demo-checkout?ws=<id>&sig=<hmac>`. The link is HMAC-signed; a tampered or foreign
-link gets 403. Tapping "Pay A$29 (demo)" upgrades the workspace and redirects to `/settings?billing=success`.
+link gets 403. Tapping "Pay A$5 (demo)" upgrades the workspace and redirects to `/settings?billing=success`.
 
 ## Curl examples
 

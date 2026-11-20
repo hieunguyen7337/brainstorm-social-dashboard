@@ -52,7 +52,7 @@ def test_get_billing_demo_mode_and_features(auth, cfg):
     body = r.json()
     assert body["plan"] == "free"
     assert body["mode"] == "demo"
-    assert body["price_label"] == "A$29/mo"
+    assert body["price_label"] == "A$5/mo"
     assert set(body["features"]) == {"free", "pro"}
     assert body["features"]["pro"]
 
@@ -72,7 +72,7 @@ def test_demo_checkout_url_is_signed_and_upgrades(auth, cfg):
     page = client.get(path)
     assert page.status_code == 200
     assert "text/html" in page.headers["content-type"]
-    assert "Pay A$29 (demo)" in page.text
+    assert "Pay A$5 (demo)" in page.text
     assert "viewport" in page.text
 
     sig = re.search(r"sig=([0-9a-f]+)", path).group(1)
@@ -129,7 +129,7 @@ def test_test_key_checkout_uses_inline_price(auth, cfg, monkeypatch):
     assert kw["cancel_url"] == "https://pulse.test/settings?billing=cancel"
     (line,) = kw["line_items"]
     assert line["price_data"]["currency"] == "aud"
-    assert line["price_data"]["unit_amount"] == 2900
+    assert line["price_data"]["unit_amount"] == 500
     assert line["price_data"]["recurring"] == {"interval": "month"}
     assert line["price_data"]["product_data"]["name"] == "Pulse Pro: MCP + autopilot"
     assert stripe.api_key == "sk_test_abc"

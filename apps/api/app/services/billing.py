@@ -21,8 +21,8 @@ from app.config import settings
 log = logging.getLogger("pulse.billing")
 
 PLANS = ("free", "pro")
-PRICE_LABEL = "A$29/mo"
-PRICE_CENTS = 2900
+PRICE_LABEL = "A$5/mo"
+PRICE_CENTS = 500
 PRICE_CURRENCY = "aud"
 PRODUCT_NAME = "Pulse Pro: MCP + autopilot"
 FEATURES: dict[str, list[str]] = {
