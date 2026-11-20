@@ -70,6 +70,18 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | * | /mcp | MCP Streamable HTTP | U4 |
 | GET | / and /* | the Expo web export from `WEB_DIST` (SPA fallback to index.html) | core |
 | GET | /download/android | 302 to `ANDROID_APK_URL` | core |
+| POST | /api/rooms | create a crowd room (Bearer) -> code, join and screen URLs | W4 |
+| GET | /api/rooms/{code} | public room (title, posts A/B, status) | W4 |
+| POST | /api/rooms/{code}/vote | `{choice: "a"\|"b"}`, one per visitor cookie | W4 |
+| POST | /api/rooms/{code}/onboard | visitor tapped "Get started" | W4 |
+| GET | /api/rooms/{code}/stats | scans, votes, onboarded, funnel, winner | W4 |
+| POST | /api/rooms/{code}/close | owner closes; winner stored as insight | W4 |
+| GET | /v/{code}, /room/{code} | phone join page, big-screen page (HTML) | W4 |
+| PUT | /api/connections/{platform}/profile | set the profile URL to harvest | W2 |
+| POST | /api/metrics/ingest | real stats from the harvest script or Claude in Chrome | W2 |
+| GET | /api/metrics/snapshots, /api/connections/harvest-status | harvest history and status | W2 |
+
+Room details, share links and a curl walkthrough: `docs/ROOM.md`. Harvesting: `docs/HARVEST.md`.
 
 Errors: `{"detail": "..."}` with a fitting status. Timestamps are ISO-8601 UTC strings. Ids are strings.
 
