@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState, type ComponentProps } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_NAME } from '@/src/config';
+import { ConnectAccounts } from '@/src/components/connect/ConnectAccounts';
 import { ROOM_GUEST_BRAND, useRoomJoin } from '@/src/components/room/roomStore';
 import { useSession } from '@/src/session';
 import { colors, radius, space, type as t, withAlpha } from '@/src/theme';
@@ -13,25 +14,50 @@ import { Badge, Button, Logo, TextField } from '@/src/ui';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const FEATURES: { icon: IconName; color: string; title: string; text: string }[] = [
-  { icon: 'pie-chart', color: colors.accent, title: 'Live dashboard', text: 'Views by platform, a sales funnel and real clicks, updating as you watch.' },
+  {
+    icon: 'pie-chart',
+    color: colors.accent,
+    title: 'Your real numbers',
+    text: 'Upload a screenshot of your profile or insights, or type your numbers. Views, engagement and followers: only yours.',
+  },
   { icon: 'trending-up', color: colors.info, title: 'Real trends', text: 'Hacker News, Reddit and Google Trends, ranked for your brand.' },
-  { icon: 'sparkles', color: colors.accent2, title: 'Posts written by Claude', text: 'One native post per platform. Publish it and watch the numbers grow.' },
+  {
+    icon: 'sparkles',
+    color: colors.accent2,
+    title: 'Posts written by Claude',
+    text: 'One native post per platform. Share it from here and your numbers follow.',
+  },
 ];
 
-/** First screen: no sign-up, one tap creates a seeded guest workspace. */
+/**
+ * First screen, two steps. 1 (brand): no sign-up, one tap creates an empty private workspace. 2 (connect): the person adds
+ * their real numbers by screenshot or typing, or skips with "Later". Nothing on screen is sample data.
+ */
 export default function OnboardingScreen() {
-  const { status, start, startOfflineDemo, starting, error, networkError, mock } = useSession();
+  const { status, start, starting, error, networkError, mock } = useSession();
   const [brand, setBrand] = useState('');
+  // Set at the tap, before the request: `start()` makes the session 'ready' before this screen re-renders, and a ready
+  // session on this screen redirects to the dashboard, which would skip the connect step.
+  const [connecting, setConnecting] = useState(false);
+  // At least one account was saved in the connect step: "Later" becomes "Go to my dashboard".
+  const [saved, setSaved] = useState(false);
   // Someone who scanned a room code but could not get a workspace (offline) lands here: keep their room in view.
   const room = useRoomJoin();
   const inRoom = room.pending && !!room.code;
   const insets = useSafeAreaInsets();
 
-  if (status === 'ready') return <Redirect href="/dashboard" />;
+  if (status === 'ready' && !connecting) return <Redirect href="/dashboard" />;
+  const connectStep = connecting && status === 'ready';
 
-  const go = () => {
-    if (!starting) void start(brand || (inRoom ? ROOM_GUEST_BRAND : ''));
+  const go = async () => {
+    if (starting) return;
+    setSaved(false);
+    setConnecting(true);
+    const ok = await start(brand || (inRoom ? ROOM_GUEST_BRAND : ''));
+    if (!ok) setConnecting(false);
   };
+
+  const finish = () => router.replace('/dashboard');
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -41,8 +67,14 @@ export default function OnboardingScreen() {
         <View style={[styles.glow, styles.glowPink]} />
       </View>
 
+      {/* Keyed by step: the connect step starts at the top, not at wherever the brand step was scrolled to. */}
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xl }]}
+        key={connectStep ? 'connect' : 'brand'}
+        contentContainerStyle={[
+          styles.scroll,
+          connectStep && styles.scrollTop,
+          { paddingTop: insets.top + space.xl, paddingBottom: connectStep ? space.xl : insets.bottom + space.xl },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -50,81 +82,107 @@ export default function OnboardingScreen() {
           <View style={styles.brandRow}>
             <Logo size={44} />
             <Text style={t.h2}>{APP_NAME}</Text>
-            {mock ? <Badge label="Offline demo" tone="warn" icon="cloud-offline" /> : null}
+            {mock ? <Badge label="Test build" tone="warn" icon="cloud-offline" /> : null}
             {inRoom ? <Badge label={`Room ${room.code}`} tone="accent" icon="people" /> : null}
           </View>
 
-          <View style={styles.hero}>
-            <Text style={t.hero}>
-              Your social media,{'\n'}
-              <Text style={styles.heroAccent}>on autopilot.</Text>
-            </Text>
-            <Text style={styles.sub}>
-              See what works, spot what is trending and let Claude write posts for every platform. Try a live demo
-              workspace in one tap.
-            </Text>
-          </View>
-
-          <View style={styles.features}>
-            {FEATURES.map((f) => (
-              <View key={f.title} style={styles.feature}>
-                <View style={[styles.featureIcon, { backgroundColor: withAlpha(f.color, 0.16) }]}>
-                  <Ionicons name={f.icon} size={20} color={f.color} />
-                </View>
-                <View style={styles.featureText}>
-                  <Text style={t.h3}>{f.title}</Text>
-                  <Text style={t.small}>{f.text}</Text>
-                </View>
+          {connectStep ? (
+            <>
+              <View style={styles.hero}>
+                <Text style={t.h1} accessibilityRole="header">
+                  Connect your real accounts
+                </Text>
+                <Text style={styles.sub}>
+                  Upload a screenshot of your profile or insights page and Claude reads the numbers, or type them. You can
+                  also do this later in Settings.
+                </Text>
               </View>
-            ))}
-          </View>
-
-          <View style={styles.form}>
-            <TextField
-              label="Your brand (optional)"
-              placeholder="Brew & Bloom"
-              value={brand}
-              onChangeText={setBrand}
-              maxLength={60}
-              autoCapitalize="words"
-              returnKeyType="go"
-              onSubmitEditing={go}
-              editable={!starting}
-            />
-            <Button
-              title={starting ? 'Seeding your workspace…' : 'Start my demo'}
-              icon={starting ? undefined : 'rocket'}
-              loading={starting}
-              onPress={go}
-              full
-            />
-            <Text style={[t.small, styles.center]}>
-              No sign-up. We create a private guest workspace with 30 days of sample data.
-            </Text>
-
-            {error && !starting ? (
-              <View style={styles.errorCard} accessibilityRole="alert">
-                <View style={styles.errorHead}>
-                  <Ionicons name="alert-circle" size={18} color={colors.danger} />
-                  <Text style={[t.h3, { color: colors.danger }]}>
-                    {networkError ? "Can't reach the server" : "Couldn't start the demo"}
-                  </Text>
-                </View>
-                <Text style={t.dim}>{error}</Text>
-                <View style={styles.errorActions}>
-                  <Button title="Try again" variant="secondary" small icon="refresh" onPress={go} />
-                  <Button
-                    title="Use the offline demo"
-                    variant="ghost"
-                    small
-                    onPress={() => void startOfflineDemo(brand)}
-                  />
-                </View>
+              <ConnectAccounts onSaved={() => setSaved(true)} />
+            </>
+          ) : (
+            <>
+              <View style={styles.hero}>
+                <Text style={t.hero}>
+                  Your social media,{'\n'}
+                  <Text style={styles.heroAccent}>on autopilot.</Text>
+                </Text>
+                <Text style={styles.sub}>
+                  See what works, spot what is trending and let Claude write posts for every platform, all built on your
+                  own real numbers.
+                </Text>
               </View>
-            ) : null}
-          </View>
+
+              <View style={styles.features}>
+                {FEATURES.map((f) => (
+                  <View key={f.title} style={styles.feature}>
+                    <View style={[styles.featureIcon, { backgroundColor: withAlpha(f.color, 0.16) }]}>
+                      <Ionicons name={f.icon} size={20} color={f.color} />
+                    </View>
+                    <View style={styles.featureText}>
+                      <Text style={t.h3}>{f.title}</Text>
+                      <Text style={t.small}>{f.text}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.form}>
+                <TextField
+                  label="Your brand (optional)"
+                  placeholder="Brew & Bloom"
+                  value={brand}
+                  onChangeText={setBrand}
+                  maxLength={60}
+                  autoCapitalize="words"
+                  returnKeyType="go"
+                  onSubmitEditing={() => void go()}
+                  editable={!starting}
+                />
+                <Button
+                  title={starting ? 'Creating your workspace…' : 'Start my workspace'}
+                  icon={starting ? undefined : 'rocket'}
+                  loading={starting}
+                  onPress={() => void go()}
+                  full
+                />
+                <Text style={[t.small, styles.center]}>
+                  No sign-up. We create a private workspace with no data in it: every number comes from you.
+                </Text>
+
+                {error && !starting ? (
+                  <View style={styles.errorCard} accessibilityRole="alert">
+                    <View style={styles.errorHead}>
+                      <Ionicons name="alert-circle" size={18} color={colors.danger} />
+                      <Text style={[t.h3, { color: colors.danger }]}>
+                        {networkError ? "Can't reach the server" : "Couldn't start your workspace"}
+                      </Text>
+                    </View>
+                    <Text style={t.dim}>{error}</Text>
+                    <View style={styles.errorActions}>
+                      <Button title="Try again" variant="secondary" small icon="refresh" onPress={() => void go()} />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
+
+      {/* Outside the scroll view so "Later" is always in reach, however many accounts are open above it. */}
+      {connectStep ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
+          <View style={styles.footerInner}>
+            <Button
+              title={saved ? 'Go to my dashboard' : 'Later'}
+              variant={saved ? 'primary' : 'ghost'}
+              icon={saved ? 'arrow-forward' : undefined}
+              onPress={finish}
+              full
+            />
+          </View>
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -146,6 +204,8 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 160px 100px rgba(255, 92, 138, 0.16)',
   },
   scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg },
+  // The connect step grows and shrinks as account panels open: pin it to the top instead of re-centring it each time.
+  scrollTop: { justifyContent: 'flex-start' },
   column: { width: '100%', maxWidth: 480, gap: space.xl },
   brandRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.md },
   hero: { gap: space.md },
@@ -176,4 +236,13 @@ const styles = StyleSheet.create({
   },
   errorHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   errorActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: 4 },
+  footer: {
+    alignItems: 'center',
+    paddingTop: space.md,
+    paddingHorizontal: space.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  footerInner: { width: '100%', maxWidth: 480 },
 });

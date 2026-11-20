@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { useIsRealWorkspace } from '@/src/session';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
 import type { ActivityItem } from '@/src/types';
 import { Badge, Button, Card, PlatformIcon, SectionHeader, Skeleton } from '@/src/ui';
@@ -33,6 +34,7 @@ export function ActivityCard({
   maxRows?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const real = useIsRealWorkspace();
   return (
     <Card style={[styles.card, style]}>
       <SectionHeader title="Live activity" subtitle="Updates every few seconds" right={<LiveTag />} />
@@ -48,7 +50,9 @@ export function ActivityCard({
         )
       ) : items.length === 0 ? (
         <Text style={[t.dim, styles.empty]}>
-          No activity yet. Publish a post and its views, clicks and conversions will stream in here.
+          {real
+            ? 'No activity yet. Connected accounts and real clicks on your tracked links will show up here.'
+            : 'No activity yet. Publish a post and its views, clicks and conversions will stream in here.'}
         </Text>
       ) : (
         <ActivityList items={items} maxRows={maxRows} />

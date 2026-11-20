@@ -2,12 +2,52 @@
 import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 
-import { parseTs, timeAgo } from '@/src/format';
+import { fmtChange, parseTs, timeAgo } from '@/src/format';
 import { colors, platformMeta } from '@/src/theme';
 import type { ActivityItem, DayStats, FunnelStageName, Platform, Post, Totals } from '@/src/types';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 export type MetricKey = keyof Totals;
+
+/** How a KPI tile's change pill looks and reads aloud. */
+export interface ChangeView {
+  tone: string;
+  icon: IconName;
+  /** Text in the pill: "+12%", "0%" or "new". */
+  label: string;
+  /** What a screen reader says after the value, e.g. "up 12 percent versus the previous period". */
+  spoken: string;
+}
+
+/**
+ * The change pill of a KPI tile. In a real workspace (`real`: the summary says `data_mode === 'real'`) a change of 0 means
+ * there is nothing earlier to compare with yet (fewer than two snapshots), so it reads "new" instead of "0%". Everywhere
+ * else it is the plain percentage, exactly as before.
+ */
+export function changeView(changePct: number, real: boolean): ChangeView {
+  const pct = Number.isFinite(changePct) ? changePct : 0;
+  const rounded = Math.round(pct);
+  if (real && rounded === 0) {
+    return { tone: colors.textDim, icon: 'sparkles-outline', label: 'new', spoken: 'new, nothing earlier to compare' };
+  }
+  if (rounded > 0) {
+    return {
+      tone: colors.success,
+      icon: 'arrow-up',
+      label: fmtChange(pct),
+      spoken: `up ${rounded} percent versus the previous period`,
+    };
+  }
+  if (rounded < 0) {
+    return {
+      tone: colors.danger,
+      icon: 'arrow-down',
+      label: fmtChange(pct),
+      spoken: `down ${Math.abs(rounded)} percent versus the previous period`,
+    };
+  }
+  return { tone: colors.textMute, icon: 'remove', label: fmtChange(pct), spoken: 'unchanged versus the previous period' };
+}
 
 export interface MetricDef {
   key: MetricKey;

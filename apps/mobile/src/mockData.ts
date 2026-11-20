@@ -402,3 +402,28 @@ export const COPY: {
     ask: ['Tell us in the comments: how do you take your coffee?', "What's your go-to morning ritual?", 'What should we roast next? Let us know below.', 'Who is your coffee buddy? Tag them below. ☕'],
   },
 };
+
+// ---- real workspace: the canned screenshot read --------------------------------------------------
+
+/**
+ * What the mock `readScreenshot` returns when EXPO_PUBLIC_MOCK_AI=1 (with it off the mock answers 503, like a server with no
+ * key). A documented TEST FIXTURE, not a guess at what Claude would read. Numbers are drawn from these inclusive [min, max]
+ * ranges by a PRNG seeded with the brand and platform, so the same image reads the same twice (a second save then matches the
+ * same two posts). Account views and engagements stay above what the two posts add up to, so the dashboard shows the
+ * account figures (the larger of the two wins there).
+ * `{brand}` and `{platform}` are filled in; `days_ago` becomes `posted_at`.
+ */
+export const SCREENSHOT_FIXTURE = {
+  followers: [1150, 1250],
+  following: [120, 400],
+  posts_count: [20, 90],
+  views: [2800, 5200],
+  engagements: [180, 420],
+  profile_views: [300, 900],
+  period_days: 30,
+  notes: 'Mock read: test build',
+  posts: [
+    { content: 'Mock post 1 for {brand} on {platform}: a quick look behind the scenes.', days_ago: 3, views: [200, 900], likes: [20, 80], comments: [2, 12], shares: [1, 9] },
+    { content: 'Mock post 2 for {brand} on {platform}: our best tip of the week.', days_ago: 9, views: [120, 600], likes: [10, 50], comments: [0, 8], shares: [0, 5] },
+  ],
+} as const;

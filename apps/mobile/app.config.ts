@@ -56,6 +56,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-font',
     'expo-asset',
     [
+      // "Upload a screenshot" (docs/REAL.md). Photos only: no camera, no microphone. Native builds made before this plugin
+      // existed have no image-picker module; the app detects that at call time (src/pickImage.ts) and opens the web upload
+      // page instead, so an OTA update on the installed 1.0.0 APK never crashes. The version stays 1.0.0 on purpose.
+      'expo-image-picker',
+      {
+        photosPermission: `${APP_NAME} reads the screenshots you choose to find your follower and view counts.`,
+        cameraPermission: false,
+        microphonePermission: false,
+      },
+    ],
+    [
       'expo-splash-screen',
       {
         image: './assets/splash-icon.png',

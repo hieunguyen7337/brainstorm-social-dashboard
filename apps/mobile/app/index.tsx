@@ -21,8 +21,7 @@ function webRoomParam(): string | null {
  *
  * A room link (`/?room=CODE` on web, `pulse://?room=CODE` on native) skips onboarding entirely: with no session it creates
  * the guest workspace straight away (splash while it is in flight, no form), with a session it keeps that workspace; both
- * land on the Dashboard, which shows the welcome. Only if the workspace cannot be created does the person see onboarding
- * (with its offline-demo option).
+ * land on the Dashboard, which shows the welcome. Only if the workspace cannot be created does the person see onboarding.
  */
 export default function Index() {
   const params = useLocalSearchParams<{ room?: string | string[] }>();

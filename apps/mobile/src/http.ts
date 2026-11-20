@@ -38,7 +38,9 @@ export async function loadStorage(): Promise<{ token: string | null; mock: boole
   try {
     const [t, m] = await Promise.all([AsyncStorage.getItem(TOKEN_KEY), AsyncStorage.getItem(MOCK_KEY)]);
     token = t || null;
-    if (!BUILD_MOCK) mock = m === '1';
+    // The offline demo is gone (every workspace is real, docs/REAL.md). A flag saved by an older version must not keep this
+    // device on fake numbers: drop it. Only an EXPO_PUBLIC_MOCK=1 build (tests) runs on the in-memory fake.
+    if (m !== null && !BUILD_MOCK) await AsyncStorage.removeItem(MOCK_KEY);
   } catch {
     // Storage blocked (private window, etc.): run without persistence.
   }
@@ -59,7 +61,7 @@ export async function setToken(next: string | null): Promise<void> {
   }
 }
 
-/** True when API calls go to the in-memory fake (EXPO_PUBLIC_MOCK=1 build, or the offline-demo fallback). */
+/** True when API calls go to the in-memory fake: only an EXPO_PUBLIC_MOCK=1 build (tests, development). */
 export function isMock(): boolean {
   return mock;
 }
@@ -81,7 +83,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 }
 
 /** Clear the token, send the user back to onboarding, and return the error to throw. */
-export function raiseUnauthorized(message = 'Your session expired. Start a new demo.'): ApiError {
+export function raiseUnauthorized(message = 'Your session expired. Start a new workspace.'): ApiError {
   void setToken(null);
   onUnauthorized?.();
   return new ApiError(401, message);

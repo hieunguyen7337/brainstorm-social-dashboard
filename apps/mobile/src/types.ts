@@ -19,7 +19,15 @@ export const PLATFORMS: readonly Platform[] = [
 
 export interface WorkspaceCreate {
   brand_name?: string | null;
+  /**
+   * true: a real workspace (docs/REAL.md): no seeded audience, posts or numbers; they appear when the person connects an
+   * account. The app always sends true. false keeps the sample seed (tests, the MCP demo).
+   */
+  real?: boolean;
 }
+
+/** 'real': every number comes from the person (a screenshot or typed). 'sample': the seeded demo workspace. */
+export type DataMode = 'sample' | 'real';
 
 export interface Workspace {
   id: string;
@@ -30,6 +38,8 @@ export interface Workspace {
   offer: string;
   product_url: string;
   created_at: string;
+  /** Absent on servers older than docs/REAL.md: treat as 'sample'. */
+  data_mode?: DataMode;
 }
 
 export interface WorkspaceWithToken extends Workspace {
@@ -120,6 +130,8 @@ export interface PlatformStats {
   conversions: number;
   /** Share of total views, 0..1. */
   share: number;
+  /** Followers on this platform (connected platforms only). Absent on servers older than docs/REAL.md. */
+  followers?: number;
 }
 
 export type FunnelStageName = 'views' | 'engagements' | 'clicks' | 'conversions';
@@ -158,6 +170,10 @@ export interface DashboardSummary {
   /** Clicks by real people on tracked links in the period. */
   real_clicks: number;
   real_conversions: number;
+  /** Absent on servers older than docs/REAL.md. In a real workspace a 0 in `change_pct` means "no history yet": show "new". */
+  data_mode?: DataMode;
+  /** Followers across the connected platforms. Absent on servers older than docs/REAL.md. */
+  followers_total?: number;
 }
 
 export interface ActivityItem {
@@ -325,6 +341,109 @@ export interface Health {
   version: string;
 }
 
+// ---- real numbers: screenshot read + ingest (docs/REAL.md) ------------------------------------
+
+export type ScreenshotMediaType = 'image/png' | 'image/jpeg' | 'image/webp';
+
+/** POST /api/connections/{platform}/screenshot body. `image_base64` has no `data:` prefix; decoded size at most 5 MB. */
+export interface ScreenshotRequest {
+  image_base64: string;
+  media_type: ScreenshotMediaType;
+}
+
+export interface ScreenshotPost {
+  /** First 200 characters. */
+  content: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  /** YYYY-MM-DD. */
+  posted_at: string | null;
+}
+
+/** What Claude read from the image. Nothing is saved by that call; null means "not shown in the image". */
+export interface ScreenshotRead {
+  /** The platform in the request path. */
+  platform: Platform;
+  /** What the image looks like; the app warns when it differs from `platform`. */
+  detected_platform: Platform | null;
+  handle: string | null;
+  followers: number | null;
+  following: number | null;
+  posts_count: number | null;
+  views: number | null;
+  engagements: number | null;
+  profile_views: number | null;
+  /** The window views, engagements and profile views cover, when the image shows one. */
+  period_days: 7 | 30 | 90 | null;
+  /** Max 20. */
+  posts: ScreenshotPost[];
+  confidence: 'high' | 'medium' | 'low';
+  /** One short line for the person. */
+  notes: string | null;
+  ai_used: boolean;
+}
+
+/** `screenshot` = read by Claude and checked by the person, `manual` = typed, `device` = read on the phone. */
+export type IngestSource = 'script' | 'claude_chrome' | 'manual' | 'screenshot' | 'device';
+
+export interface IngestAccount {
+  followers?: number | null;
+  views?: number | null;
+  engagements?: number | null;
+  clicks?: number | null;
+  profile_views?: number | null;
+}
+
+export interface IngestPost {
+  external_id?: string | null;
+  url?: string | null;
+  content?: string | null;
+  /** YYYY-MM-DD. */
+  posted_at?: string | null;
+  /** Required by the API: send 0 for a missing one only when the other is known, else skip the post. */
+  views: number;
+  engagements: number;
+  clicks?: number | null;
+  conversions?: number | null;
+}
+
+/** POST /api/metrics/ingest body. */
+export interface IngestRequest {
+  platform: Platform;
+  source: IngestSource;
+  /** Max 100 characters; a leading `@` is stripped by the server. */
+  handle?: string | null;
+  /** The window views, engagements and profile views cover. */
+  period_days?: number | null;
+  account?: IngestAccount;
+  posts?: IngestPost[];
+}
+
+export interface IngestResult {
+  platform: Platform;
+  source: string;
+  matched: number;
+  created: number;
+  snapshots: number;
+  /** ISO time the numbers were saved. */
+  captured_at: string;
+}
+
+/** GET /api/connections/harvest-status (one entry per platform). */
+export interface HarvestStatus {
+  platform: Platform;
+  connected: boolean;
+  profile_url: string | null;
+  /** When numbers were last saved for this platform (ISO), whatever the source. */
+  last_harvest_at: string | null;
+  last_source: string | null;
+  followers: number | null;
+  real_posts: number;
+  snapshots: number;
+}
+
 // ---- the client surface (real client and in-memory mock both implement this) -------------------
 
 export interface DashboardQuery {
@@ -404,6 +523,13 @@ export interface PulseApi {
   runAutopilot(): Promise<AutopilotRun>;
 
   listTrends(query?: TrendsQuery): Promise<Trend[]>;
+
+  /** POST /api/connections/{platform}/screenshot: Claude reads a profile or insights screenshot. Saves nothing. 503 = AI off or capped. */
+  readScreenshot(platform: Platform, body: ScreenshotRequest): Promise<ScreenshotRead>;
+  /** POST /api/metrics/ingest: save numbers the person checked (source "screenshot") or typed (source "manual"). */
+  ingestMetrics(body: IngestRequest): Promise<IngestResult>;
+  /** GET /api/connections/harvest-status: when each platform's numbers were last saved. */
+  getHarvestStatus(): Promise<HarvestStatus[]>;
 
   /** GET /api/posts/{id}/share (may 404 until the room/share API is deployed: callers fall back to `buildShareInfo`). */
   getShare(postId: string): Promise<ShareInfo>;

@@ -40,10 +40,15 @@ export function normalizeRoom(raw: unknown): RoomInfo {
 export const realApi: PulseApi = {
   health: () => request('GET', '/api/health', { auth: false }),
 
+  // Every workspace this app creates is a real one (docs/REAL.md): no seeded audience, posts or numbers. `real: false`
+  // (the sample seed) is only for tests and the MCP demo, so it must be asked for explicitly.
   createWorkspace: (body) =>
     request('POST', '/api/workspaces', {
       auth: false,
-      body: body?.brand_name?.trim() ? { brand_name: body.brand_name.trim() } : {},
+      body: {
+        ...(body?.brand_name?.trim() ? { brand_name: body.brand_name.trim() } : {}),
+        real: body?.real ?? true,
+      },
     }),
   getWorkspace: () => request('GET', '/api/workspace'),
   patchWorkspace: (body) => request('PATCH', '/api/workspace', { body }),
@@ -76,6 +81,12 @@ export const realApi: PulseApi = {
   // Claude can take a while to write six variants.
   generate: (body) => request('POST', '/api/generate', { body, timeoutMs: 90000 }),
   getAiUsage: () => request('GET', '/api/ai/usage'),
+
+  // Claude reads the image with a vision call: allow it longer than a normal request. Nothing is saved by this call.
+  readScreenshot: (platform, body) =>
+    request('POST', `/api/connections/${encodeURIComponent(platform)}/screenshot`, { body, timeoutMs: 60000 }),
+  ingestMetrics: (body) => request('POST', '/api/metrics/ingest', { body }),
+  getHarvestStatus: () => request('GET', '/api/connections/harvest-status'),
 
   getAutopilot: () => request('GET', '/api/autopilot'),
   putAutopilot: (body) => request('PUT', '/api/autopilot', { body }),

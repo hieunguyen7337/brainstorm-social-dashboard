@@ -1,27 +1,31 @@
 /**
- * In-memory fake of the whole Pulse REST API (docs/CONTRACT.md), implementing `PulseApi`. Used for development
- * (EXPO_PUBLIC_MOCK=1) and as the offline-demo fallback when the real server is unreachable.
+ * In-memory fake of the whole Pulse REST API (docs/CONTRACT.md, docs/REAL.md), implementing `PulseApi`. Only EXPO_PUBLIC_MOCK=1
+ * builds use it (UI tests and development): the app has no offline demo any more.
  *
- * - One module-level workspace, created (and seeded) by `createWorkspace`: 120 days of daily metrics, 6
- *   connections, 4 themes, 24 posts, trends and a lived-in activity feed. Seeds are deterministic per brand.
+ * - One module-level workspace, created by `createWorkspace`. Without `real` it is the sample seed: 120 days of daily metrics,
+ *   6 connections, 4 themes, 24 posts, trends and a lived-in activity feed (deterministic per brand). With `real: true` it is a
+ *   real workspace: the same themes and trends, six disconnected `live` connections and no numbers, posts or activity until
+ *   `ingestMetrics` saves some. `readScreenshot` returns a canned read (SCREENSHOT_FIXTURE) so a test build can run the whole
+ *   connect flow.
  * - No background timers: the audience simulation is closed-form and catches up lazily (`tick`) at the start of
- *   every polled call, so a post published a minute ago visibly grows on each 5 s poll.
+ *   every polled call, so a post published a minute ago visibly grows on each 5 s poll. It skips `live` connections: a real
+ *   workspace never grows a number the person did not save.
  * - Activity `type` values: published, scheduled, views, engagement, click, conversion, generated, autopilot,
  *   connection. Events caused by a real person (tracked-link clicks/conversions) have `real: true`.
  */
 import { APP_NAME } from './config';
 import { ApiError, getToken, publicBaseUrl, raiseUnauthorized } from './http';
 import {
-  COPY, DEFAULT_BRAND, DEFAULT_PROFILE, FACTS, GENERIC_FACTS, LABEL, MEDIA, MODEL, SEED_NOTES, SEED_POSTS,
-  SEED_THEMES, SHOTS, TAGS, THEME_CLASSIFIERS, THEME_EDGE, TREND_SEEDS,
+  COPY, DEFAULT_BRAND, DEFAULT_PROFILE, FACTS, GENERIC_FACTS, LABEL, MEDIA, MODEL, SCREENSHOT_FIXTURE, SEED_NOTES,
+  SEED_POSTS, SEED_THEMES, SHOTS, TAGS, THEME_CLASSIFIERS, THEME_EDGE, TREND_SEEDS,
 } from './mockData';
 import type { Mode } from './mockData';
 import { buildShareInfo } from './shareLinks';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
-  InsightMetrics, InsightsResponse, LiftBy, Platform, PlatformInsight, Post, PostStatus, PulseApi, Theme,
-  ThemeInsight, Totals, Trend, Workspace,
+  HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
+  PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, Workspace,
 } from './types';
 
 // ---- small helpers ------------------------------------------------------------------------------
@@ -97,6 +101,10 @@ function unprocessable(msg: string): never {
 function notFound(what: string): never {
   throw new ApiError(404, `${what} not found`);
 }
+/** The real server's 404 for a platform it does not know (screenshot path, ingest body). */
+function unknownPlatform(v: unknown): never {
+  throw new ApiError(404, `unknown platform '${String(v)}'`);
+}
 
 const isPlatform = (v: unknown): v is Platform => typeof v === 'string' && (PLATFORMS as readonly string[]).includes(v);
 
@@ -148,8 +156,22 @@ interface Sim {
   noteEng: number;
   noteAt: number;
 }
-interface PostRec { post: Post; sim: Sim }
+/** `real`: the numbers came from the person (a saved screenshot or typed), not from the simulation. */
+interface PostRec { post: Post; sim: Sim; real?: boolean }
 interface RealEvent { kind: 'click' | 'conversion'; platform: Platform; ts: number }
+
+/** One account snapshot the person saved: the windowed numbers and the window they cover (`period_days`). */
+interface Snap { views: number | null; engagements: number | null; period: number }
+/** What the person has saved for one platform through `ingestMetrics`. */
+interface Saved {
+  saves: number; // ingest calls so far: the dashboard shows a change only from the second
+  snaps: Snap[]; // oldest first, only calls that carried account numbers
+  snapshots: number; // rows the real server would hold: one per post plus one per account snapshot
+  at: number | null; // when numbers were last saved
+  source: IngestSource | null;
+  followers: number | null; // from the latest save that had it
+}
+const newSaved = (): Saved => ({ saves: 0, snaps: [], snapshots: 0, at: null, source: null, followers: null });
 
 interface State {
   token: string;
@@ -169,6 +191,7 @@ interface State {
   gen: number; // generate batches so far (varies the copy on every tap)
   aiUsed: number;
   aiSpent: number;
+  saved: Record<Platform, Saved>;
 }
 
 let state: State | null = null;
@@ -331,6 +354,7 @@ function tick(s: State): void {
   }
   for (const r of s.posts) {
     if (r.post.status !== 'published' || !r.post.published_at) continue;
+    if (conn(s, r.post.platform).mode === 'live') continue; // real numbers only: no simulated audience (docs/REAL.md)
     const age = (now - parseIso(r.post.published_at)) / HOUR;
     if (age <= r.sim.age) continue;
     const dv = r.sim.vmax * (reached(age) - reached(r.sim.age)) * (0.85 + 0.3 * s.rng());
@@ -338,8 +362,8 @@ function tick(s: State): void {
     grow(s, r, dv, now);
   }
   for (const c of s.conns) {
-    // Real-data connectors re-read their profile every few minutes.
-    if (c.real_data && c.status === 'connected' && now - parseIso(c.last_harvested_at ?? c.connected_at) >= HARVEST_EVERY) {
+    // Real-data connectors re-read their profile every few minutes (a live one only changes when the person saves numbers).
+    if (c.mode !== 'live' && c.real_data && c.status === 'connected' && now - parseIso(c.last_harvested_at ?? c.connected_at) >= HARVEST_EVERY) {
       c.last_harvested_at = iso(now);
     }
   }
@@ -354,8 +378,34 @@ function tick(s: State): void {
 
 // ---- dashboard --------------------------------------------------------------------------------------
 
+/** The latest number the person saved for `key` on `p` whose window (`period_days`) fits inside `days`; 0 when there is none. */
+function savedValue(s: State, p: Platform, days: number, key: 'views' | 'engagements'): number {
+  const snap = [...s.saved[p].snaps].reverse().find((n) => n.period <= days && n[key] !== null);
+  return snap?.[key] ?? 0;
+}
+
+/**
+ * Change of a real workspace, from real history only: a platform's latest saved number against the one before it (same
+ * window), 0 until it has two (the app shows "new"). Summed over the connected platforms in view, as a percentage.
+ */
+function savedChange(s: State, ps: Platform[], key: 'views' | 'engagements'): number {
+  let latest = 0;
+  let earlier = 0;
+  for (const p of ps) {
+    if (conn(s, p).status !== 'connected') continue;
+    const list = s.saved[p].snaps.filter((n) => n[key] !== null);
+    const last = list[list.length - 1];
+    const prior = last ? list.slice(0, -1).reverse().find((n) => n.period === last.period) : undefined;
+    if (!last || !prior) continue;
+    latest += last[key] ?? 0;
+    earlier += prior[key] ?? 0;
+  }
+  return earlier > 0 ? Math.round(((latest - earlier) / earlier) * 100) : 0;
+}
+
 function dashboard(s: State, days: number, platform: Platform | null): DashboardSummary {
   const now = Date.now();
+  const isReal = s.ws.data_mode === 'real';
   const plats: Platform[] = platform ? [platform] : [...PLATFORMS];
   /** Sum daily rows for `n` days starting `from` days back (0 = today). */
   const sum = (ps: Platform[], from: number, n: number): Totals => {
@@ -368,10 +418,28 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
     }
     return t;
   };
-  const totals = sum(plats, 0, days);
+  /**
+   * What one platform shows. In a real workspace, views and engagements on a connected platform are the larger of the daily
+   * rows and the latest saved account number whose window fits inside `days` (docs/REAL.md); clicks and conversions stay the
+   * tracked-link events. The sample workspace shows its daily rows as they are.
+   */
+  const shown = (p: Platform): Totals => {
+    const t = sum([p], 0, days);
+    if (isReal && conn(s, p).status === 'connected') {
+      t.views = Math.max(t.views, savedValue(s, p, days, 'views'));
+      t.engagements = Math.max(t.engagements, savedValue(s, p, days, 'engagements'));
+    }
+    return t;
+  };
+  const rows = plats.map((p) => ({ p, t: shown(p) }));
+  const totals: Totals = { views: 0, engagements: 0, clicks: 0, conversions: 0 };
+  for (const { t } of rows) add(totals, t.views, t.engagements, t.clicks, t.conversions);
   const prev = sum(plats, days, days);
   const pct = (a: number, b: number): number => (b > 0 ? Math.round(((a - b) / b) * 100) : 0);
   const rate = (a: number, b: number): number => (b > 0 ? a / b : 0);
+  // Typed numbers can put engagements above views: the real server caps every funnel step at 100%.
+  const step = isReal ? (a: number, b: number): number => Math.min(1, rate(a, b)) : rate;
+  const change = (key: 'views' | 'engagements'): number => (isReal ? savedChange(s, plats, key) : pct(totals[key], prev[key]));
   const since = Date.parse(`${dayOf(now - (days - 1) * DAY)}T00:00:00Z`);
   const real = s.events.filter((e) => e.ts >= since && (!platform || e.platform === platform));
 
@@ -379,23 +447,30 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
     days,
     totals,
     change_pct: {
-      views: pct(totals.views, prev.views), engagements: pct(totals.engagements, prev.engagements),
+      views: change('views'), engagements: change('engagements'),
       clicks: pct(totals.clicks, prev.clicks), conversions: pct(totals.conversions, prev.conversions),
     },
-    by_platform: plats
-      .map((p) => {
-        const t = sum([p], 0, days);
-        return { platform: p, ...t, share: rate(t.views, totals.views) };
-      })
+    by_platform: rows
+      // A real workspace lists the connected platforms and any with numbers; nothing connected gives an empty list.
+      .filter(({ p, t }) => !isReal || conn(s, p).status === 'connected' || t.views + t.engagements + t.clicks + t.conversions > 0)
+      .map(({ p, t }) => ({
+        platform: p, ...t, share: rate(t.views, totals.views),
+        ...(conn(s, p).status === 'connected' ? { followers: conn(s, p).followers } : {}),
+      }))
       .sort((a, b) => b.views - a.views),
     funnel: [
       { stage: 'views', value: totals.views, rate: 1 },
-      { stage: 'engagements', value: totals.engagements, rate: rate(totals.engagements, totals.views) },
-      { stage: 'clicks', value: totals.clicks, rate: rate(totals.clicks, totals.engagements) },
-      { stage: 'conversions', value: totals.conversions, rate: rate(totals.conversions, totals.clicks) },
+      { stage: 'engagements', value: totals.engagements, rate: step(totals.engagements, totals.views) },
+      { stage: 'clicks', value: totals.clicks, rate: step(totals.clicks, totals.engagements) },
+      { stage: 'conversions', value: totals.conversions, rate: step(totals.conversions, totals.clicks) },
     ],
     timeseries: Array.from({ length: days }, (_v, k) => {
       const t = sum(plats, days - 1 - k, 1);
+      if (isReal && k === days - 1) {
+        // Saved account numbers have no day of their own: today's bar carries what the daily rows lack, so the chart adds up.
+        const daily = sum(plats, 0, days);
+        add(t, totals.views - daily.views, totals.engagements - daily.engagements, 0, 0);
+      }
       return { day: dayOf(now - (days - 1 - k) * DAY), ...t };
     }),
     top_posts: s.posts
@@ -405,6 +480,9 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
       .map((r) => r.post),
     real_clicks: real.filter((e) => e.kind === 'click').length,
     real_conversions: real.filter((e) => e.kind === 'conversion').length,
+    data_mode: s.ws.data_mode ?? 'sample',
+    // Follows the platform filter like everything else in the summary (all connected platforms when there is none).
+    followers_total: plats.reduce((n, p) => (conn(s, p).status === 'connected' ? n + conn(s, p).followers : n), 0),
   };
 }
 
@@ -499,7 +577,8 @@ function insights(s: State, days: number): InsightsResponse {
     const pa = byPlatform.get(p.platform) ?? newAcc();
     byPlatform.set(p.platform, pa);
     addToAcc(pa, p);
-    if (REAL_DATA_PLATFORMS.includes(p.platform) && conn(s, p.platform).real_data) real += 1;
+    // A real workspace has no simulated audience: every published post counts as real.
+    if (s.ws.data_mode === 'real' || (REAL_DATA_PLATFORMS.includes(p.platform) && conn(s, p.platform).real_data)) real += 1;
     if (!p.theme_id || !s.themes.some((t) => t.id === p.theme_id)) continue;
     const g = byTheme.get(p.theme_id) ?? { acc: newAcc(), classifiers: {} };
     byTheme.set(p.theme_id, g);
@@ -535,7 +614,7 @@ function insights(s: State, days: number): InsightsResponse {
     if (top_themes.length) parts.push(`'${top_themes[0].name}' is the strongest theme: its onboard rate is ${vsAverage(top_themes[0].lift)} (${top_themes[0].posts} posts).`);
     const best = strongest(platforms);
     if (platforms.length >= 2 && best >= 0) parts.push(`${LABEL[platforms[best].platform]} is the strongest platform: its onboard rate is ${vsAverage(platforms[best].lift)} (${platforms[best].posts} posts).`);
-    parts.push(sources.real > 0 ? `${sources.real} of these ${b.posts} posts have real metrics; the rest are simulated.` : 'All of these numbers come from simulated sandbox audiences, not real people.');
+    if (s.ws.data_mode !== 'real') parts.push(sources.real > 0 ? `${sources.real} of these ${b.posts} posts have real metrics; the rest are simulated.` : 'All of these numbers come from simulated sandbox audiences, not real people.');
   }
 
   return {
@@ -642,7 +721,7 @@ function seed(brandInput: string | null | undefined): State {
     ws: {
       id: rid(rng), name: `${brand} workspace`, brand_name: brand, brand_voice: DEFAULT_PROFILE.voice,
       audience: DEFAULT_PROFILE.audience, offer: DEFAULT_PROFILE.offer, product_url: `https://${slug}.example.com`,
-      created_at: created,
+      created_at: created, data_mode: 'sample',
     },
     slug,
     conns: PLATFORMS.map(
@@ -670,10 +749,28 @@ function seed(brandInput: string | null | undefined): State {
     autopilot: { enabled: false, interval_min: 30, platforms: [], require_approval: true, last_run_at: null },
     nextAutoAt: null,
     runs: 0, gen: 0, aiUsed: 0, aiSpent: 3.42,
+    saved: { linkedin: newSaved(), instagram: newSaved(), x: newSaved(), tiktok: newSaved(), reddit: newSaved(), facebook: newSaved() },
   };
   seedDaily(s, now, rng);
   seedPosts(s, now, rng);
   seedActivity(s, now, rng);
+  return s;
+}
+
+/**
+ * A real workspace (docs/REAL.md): the sample seed's brand, themes and trends (so ids and copy match for a brand), but six
+ * disconnected `live` connections and no daily numbers, posts, events or activity. Numbers appear only when `ingestMetrics`
+ * saves some; the audience simulation never touches a `live` connection.
+ */
+function seedReal(brandInput: string | null | undefined): State {
+  const s = seed(brandInput);
+  const created = iso(Date.now());
+  s.ws = { ...s.ws, created_at: created, data_mode: 'real' };
+  s.conns = PLATFORMS.map((p): Connection => ({ platform: p, handle: '', status: 'disconnected', mode: 'live', followers: 0, connected_at: created }));
+  s.posts = [];
+  s.daily = new Map();
+  s.events = [];
+  s.activity = [];
   return s;
 }
 
@@ -848,6 +945,136 @@ function autopilotCycle(s: State, now: number): AutopilotRun | null {
   return { ran_at: cfg.last_run_at, trend_id: trend?.id ?? null, theme_id: theme?.id ?? null, posts: recs.map((r) => r.post) };
 }
 
+// ---- real numbers: save and read ------------------------------------------------------------------------
+
+/** An optional whole number from 0 to 10^12 (the API's `Count`); null when absent. */
+function count(v: number | null | undefined, field: string): number | null {
+  if (v === null || v === undefined) return null;
+  if (!Number.isInteger(v) || v < 0 || v > 1e12) unprocessable(`${field}: Input should be a whole number from 0 to 1000000000000`);
+  return v;
+}
+
+const SOURCES: readonly IngestSource[] = ['script', 'claude_chrome', 'manual', 'screenshot', 'device'];
+
+/** Casefolded, single-spaced, no trailing ellipsis: a feed truncates posts, so "Hello wor..." must still match "Hello world". */
+const flat = (t: string): string => t.toLowerCase().replace(/\s+/g, ' ').trim().replace(/\s*(?:…|\.\.\.)$/, '');
+
+/** The same post when one text starts with the other and the shorter has at least 20 characters (like the real ingest). */
+function sameStart(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.length >= 20 && long.startsWith(short);
+}
+
+/** The day a post's numbers count on: its publish day when that is in the last 30 days, else today (like the real ingest). */
+function bucketDay(publishedMs: number, now: number): string {
+  const day = dayOf(publishedMs);
+  return day >= dayOf(now - 29 * DAY) ? day : dayOf(now);
+}
+
+/** Change a daily row by a delta (negative when a post's numbers were corrected downwards); a day never drops below 0. */
+function shift(s: State, p: Platform, day: string, dv: number, de: number, dc: number, dq: number): void {
+  const row = dayRow(s, p, day);
+  add(row, dv, de, dc, dq);
+  for (const k of ['views', 'engagements', 'clicks', 'conversions'] as const) row[k] = Math.max(0, row[k]);
+}
+
+/**
+ * `POST /api/metrics/ingest`: save numbers the person checked (a screenshot) or typed. The connection turns `connected` and
+ * `live`. Account numbers become a snapshot that the dashboard folds in (`dashboard`), post numbers update or create posts
+ * and count on their publish day, like the real server. Everything is validated before anything changes.
+ */
+function ingest(s: State, b: IngestRequest): IngestResult {
+  const p = b.platform;
+  if (!isPlatform(p)) unknownPlatform(p);
+  if (!SOURCES.includes(b.source)) unprocessable(`source: Input should be ${SOURCES.join(', ')}`);
+  const handle = (b.handle ?? '').trim().replace(/^@+/, '');
+  if (handle.length > 100) unprocessable('handle: String should have at most 100 characters');
+  const period = b.period_days ?? 30; // numbers saved without a window count as the app's default
+  if (!Number.isInteger(period) || period < 1 || period > 365) unprocessable('period_days: Input should be between 1 and 365');
+  const a = b.account ?? {};
+  const acct = {
+    followers: count(a.followers, 'account.followers'), views: count(a.views, 'account.views'),
+    engagements: count(a.engagements, 'account.engagements'), clicks: count(a.clicks, 'account.clicks'),
+    profile_views: count(a.profile_views, 'account.profile_views'),
+  };
+  const given = Object.values(acct).some((v) => v !== null);
+  if ((b.posts ?? []).length > 500) unprocessable('posts: List should have at most 500 items');
+  const now = Date.now();
+  const posts = (b.posts ?? []).map((x) => {
+    const posted = x.posted_at ? parseIso(x.posted_at.trim()) : NaN;
+    return {
+      text: (x.content ?? '').trim().slice(0, 5000) || (x.url ?? '').trim().slice(0, 2048) || 'Imported post',
+      at: Number.isNaN(posted) ? now : Math.min(posted, now),
+      views: count(x.views, 'posts.views') ?? unprocessable('posts.views: Field required'),
+      engagements: count(x.engagements, 'posts.engagements') ?? unprocessable('posts.engagements: Field required'),
+      clicks: count(x.clicks, 'posts.clicks'),
+      conversions: count(x.conversions, 'posts.conversions'),
+    };
+  });
+
+  const h = s.saved[p];
+  const c = conn(s, p);
+  const first = h.saves === 0;
+  const mine = s.posts.filter((r) => r.post.platform === p).reverse(); // newest first, like the real ingest
+  const used = new Set<PostRec>();
+  for (const x of posts) {
+    const key = flat(x.text);
+    const hit = mine.find((r) => !used.has(r) && sameStart(key, flat(r.post.content)));
+    if (hit) used.add(hit);
+    const rec = hit ?? addPost(s, { platform: p, content: x.text, status: 'published', source: 'manual' }, { at: now });
+    const post = rec.post;
+    const old: Totals = { views: post.views, engagements: post.engagements, clicks: post.clicks, conversions: post.conversions };
+    post.views = x.views;
+    post.engagements = x.engagements;
+    if (x.clicks !== null) post.clicks = x.clicks;
+    if (x.conversions !== null) post.conversions = x.conversions;
+    if (post.status !== 'published' || !post.published_at) Object.assign(post, { status: 'published', published_at: iso(x.at), scheduled_at: null });
+    rec.real = true;
+    shift(
+      s, p, bucketDay(parseIso(post.published_at ?? iso(x.at)), now),
+      post.views - old.views, post.engagements - old.engagements, post.clicks - old.clicks, post.conversions - old.conversions,
+    );
+  }
+
+  Object.assign(c, { status: 'connected', mode: 'live', real_data: true, last_harvested_at: iso(now) });
+  if (handle) c.handle = handle;
+  if (acct.followers !== null) c.followers = acct.followers;
+  if (first) {
+    c.connected_at = iso(now);
+    note(s, 'connection', `Connected ${LABEL[p]} (real)`, { platform: p, real: true, at: now });
+  }
+  const snapshots = posts.length + (given ? 1 : 0);
+  if (given) h.snaps.push({ views: acct.views, engagements: acct.engagements, period });
+  Object.assign(h, { saves: h.saves + 1, snapshots: h.snapshots + snapshots, at: now, source: b.source });
+  if (acct.followers !== null) h.followers = acct.followers;
+  return { platform: p, source: b.source, matched: used.size, created: posts.length - used.size, snapshots, captured_at: iso(now) };
+}
+
+const SCREENSHOT_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
+const SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024;
+/** Decoded size of a base64 string. */
+const decodedBytes = (b64: string): number => Math.floor((b64.length * 3) / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+
+/** The canned read (SCREENSHOT_FIXTURE): deterministic per brand and platform, so the same image reads the same twice. */
+function screenshotRead(s: State, platform: Platform): ScreenshotRead {
+  const f = SCREENSHOT_FIXTURE;
+  const rng = mulberry32(hashStr(`${s.slug}|${platform}|screenshot`));
+  const between = ([lo, hi]: Range): number => lo + Math.floor(rng() * (hi - lo + 1));
+  const vars = { brand: s.ws.brand_name, platform: LABEL[platform] };
+  const now = Date.now();
+  return {
+    platform, detected_platform: platform, handle: platform === 'reddit' ? `u/${s.slug}` : s.slug,
+    followers: between(f.followers), following: between(f.following), posts_count: between(f.posts_count),
+    views: between(f.views), engagements: between(f.engagements), profile_views: between(f.profile_views),
+    period_days: f.period_days,
+    posts: f.posts.map((x) => ({
+      content: fill(x.content, vars), views: between(x.views), likes: between(x.likes), comments: between(x.comments),
+      shares: between(x.shares), posted_at: dayOf(now - x.days_ago * DAY),
+    })),
+    confidence: 'high', notes: f.notes, ai_used: true,
+  };
+}
+
 // ---- call plumbing --------------------------------------------------------------------------------------
 
 const FAST: Range = [80, 260];
@@ -885,7 +1112,7 @@ export const mockApi: PulseApi = {
 
   createWorkspace: (body) =>
     call(() => {
-      const s = seed(body?.brand_name);
+      const s = body?.real === true ? seedReal(body.brand_name) : seed(body?.brand_name);
       state = s;
       return { ...s.ws, token: s.token };
     }),
@@ -909,11 +1136,12 @@ export const mockApi: PulseApi = {
       const handle = (b?.handle ?? '').trim();
       if (!handle || handle.length > 60) unprocessable('handle: String should have between 1 and 60 characters');
       const c = conn(s, p);
+      const real = s.ws.data_mode === 'real'; // a real workspace never gets invented followers or a simulated audience
       Object.assign(c, {
-        handle, status: 'connected', mode: 'sandbox', connected_at: iso(Date.now()),
-        followers: c.followers > 0 ? c.followers : 800 + Math.floor(s.rng() * 3200),
+        handle, status: 'connected', mode: real ? 'live' : 'sandbox', connected_at: iso(Date.now()),
+        followers: real || c.followers > 0 ? c.followers : 800 + Math.floor(s.rng() * 3200),
       });
-      if (c.real_data) Object.assign(c, { profile_url: profileUrl(p, handle), last_harvested_at: iso(Date.now()) });
+      if (c.real_data && !real) Object.assign(c, { profile_url: profileUrl(p, handle), last_harvested_at: iso(Date.now()) });
       note(s, 'connection', `Connected ${LABEL[p]} (${handle})`, { platform: p });
       return c;
     }),
@@ -1090,6 +1318,37 @@ export const mockApi: PulseApi = {
       }
       return [...s.trends].sort(byRelevance).slice(0, int(q?.limit, 20, 1, 100));
     }),
+
+  readScreenshot: (platform, b) =>
+    authed(
+      (s) => {
+        if (!isPlatform(platform)) unknownPlatform(platform);
+        if (!SCREENSHOT_TYPES.includes(b?.media_type)) throw new ApiError(415, 'Unsupported image type: use PNG, JPEG or WebP.');
+        if (typeof b.image_base64 !== 'string' || !b.image_base64) unprocessable('image_base64: Field required');
+        if (decodedBytes(b.image_base64) > SCREENSHOT_MAX_BYTES) throw new ApiError(413, 'The image is larger than 5 MB.');
+        // Same wording and caps as the real server: no key (the mock's AI switch is off) or a cap reached is a 503.
+        if (!aiAvailable || s.aiUsed >= AI_LIMIT || s.aiSpent >= AI_CAP_USD) {
+          throw new ApiError(503, "Couldn't read the screenshot right now. Type the numbers instead.");
+        }
+        s.aiUsed = Math.min(AI_LIMIT, s.aiUsed + 1);
+        s.aiSpent = Math.round((s.aiSpent + 0.02 + s.rng() * 0.02) * 10000) / 10000;
+        return screenshotRead(s, platform);
+      },
+      aiAvailable ? [700, 1400] : FAST, // a vision call takes a moment, the 503 does not
+    ),
+  ingestMetrics: (b) => authed((s) => ingest(s, b)),
+  getHarvestStatus: () =>
+    authed((s) =>
+      PLATFORMS.map((p): HarvestStatus => {
+        const c = conn(s, p);
+        const h = s.saved[p];
+        return {
+          platform: p, connected: c.status === 'connected', profile_url: c.profile_url ?? null,
+          last_harvest_at: h.at === null ? null : iso(h.at), last_source: h.source, followers: h.followers,
+          real_posts: s.posts.filter((r) => r.real && r.post.platform === p).length, snapshots: h.snapshots,
+        };
+      }),
+    ),
 
   getShare: (id) => authed((s) => buildShareInfo(findPost(s, id).post)),
   createRoom: () =>

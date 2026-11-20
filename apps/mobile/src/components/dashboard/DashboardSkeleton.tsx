@@ -17,9 +17,26 @@ function CardTitle({ width = '38%' }: { width?: `${number}%` | number }) {
   );
 }
 
-/** Placeholder with the same structure as the loaded dashboard (chips, KPI grid, then the cards). */
-export function DashboardSkeleton() {
+/**
+ * Placeholder with the same structure as the loaded dashboard (chips, KPI grid, then the cards). `followers`: a real
+ * workspace, whose KPI grid has the full-width Followers tile above it.
+ */
+export function DashboardSkeleton({ followers = false }: { followers?: boolean }) {
   const { onLayout, tileWidth } = useKpiLayout();
+  const kpis = (
+    <View style={styles.grid} onLayout={onLayout}>
+      {METRICS.map((m) => (
+        <Card key={m.key} padded={false} style={{ width: tileWidth }}>
+          <View style={styles.kpiTop}>
+            <Skeleton width={70} height={11} />
+            <Skeleton width="60%" height={30} rounded={8} />
+            <Skeleton width={58} height={22} rounded={11} />
+          </View>
+          <Skeleton height={KPI_SPARK_HEIGHT} rounded={0} />
+        </Card>
+      ))}
+    </View>
+  );
   return (
     <>
       <View style={styles.chips}>
@@ -28,18 +45,20 @@ export function DashboardSkeleton() {
         ))}
       </View>
 
-      <View style={styles.grid} onLayout={onLayout}>
-        {METRICS.map((m) => (
-          <Card key={m.key} padded={false} style={{ width: tileWidth }}>
+      {followers ? (
+        <View style={styles.kpiStack}>
+          <Card padded={false}>
             <View style={styles.kpiTop}>
               <Skeleton width={70} height={11} />
-              <Skeleton width="60%" height={30} rounded={8} />
-              <Skeleton width={58} height={22} rounded={11} />
+              <Skeleton width="34%" height={30} rounded={8} />
+              <Skeleton width="62%" height={28} rounded={14} />
             </View>
-            <Skeleton height={KPI_SPARK_HEIGHT} rounded={0} />
           </Card>
-        ))}
-      </View>
+          {kpis}
+        </View>
+      ) : (
+        kpis
+      )}
 
       <Card style={styles.card}>
         <CardTitle width="34%" />
@@ -97,6 +116,7 @@ export function DashboardSkeleton() {
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: space.sm, overflow: 'hidden' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  kpiStack: { gap: space.md },
   kpiTop: { padding: KPI_PAD, paddingBottom: space.sm, gap: 10 },
   card: { gap: space.md, backgroundColor: colors.card },
   title: { gap: 6 },

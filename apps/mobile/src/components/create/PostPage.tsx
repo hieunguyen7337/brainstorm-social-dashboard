@@ -4,6 +4,8 @@ import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { PostPreview } from '@/src/components/previews';
 import { fmtDateTime, timeAgo } from '@/src/format';
+import { publishedCardTitle } from '@/src/realCopy';
+import { useIsRealWorkspace } from '@/src/session';
 import { colors, platformMeta, radius, withAlpha } from '@/src/theme';
 import type { Post } from '@/src/types';
 
@@ -27,8 +29,12 @@ export interface PostPageProps {
   onOpenLink: (post: Post) => void;
 }
 
-/** "Published to LinkedIn" / "Scheduled for ..." / "Failed" pill above the card; pops in when it appears. */
+/**
+ * "Published to LinkedIn" (in a real workspace "Marked as published on LinkedIn": Pulse never posts for the person) /
+ * "Scheduled for ..." / "Failed" pill above the card; pops in when it appears.
+ */
 function StatusPill({ post }: { post: Post }) {
+  const real = useIsRealWorkspace();
   const pop = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, friction: 6, tension: 120, useNativeDriver: Platform.OS !== 'web' }).start();
@@ -37,7 +43,7 @@ function StatusPill({ post }: { post: Post }) {
   const label = platformMeta[post.platform].label;
   let tint: string = colors.success;
   let icon: 'checkmark-circle' | 'time' | 'alert-circle' = 'checkmark-circle';
-  let text = `Published to ${label}`;
+  let text = publishedCardTitle(label, real);
   if (post.status === 'scheduled') {
     tint = colors.info;
     icon = 'time';

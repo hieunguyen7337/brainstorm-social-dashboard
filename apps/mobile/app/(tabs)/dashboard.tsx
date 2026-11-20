@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { api, PLATFORMS, type Platform } from '@/src/api';
+import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import {
   ActivityCard,
+  ConnectCta,
   DashboardBoard,
   DashboardSkeleton,
+  FollowersTile,
   FunnelCard,
   KpiGrid,
   PlatformDonutCard,
@@ -13,6 +17,8 @@ import {
   Reveal,
   TopPostsCard,
   TrendCard,
+  dashMode,
+  followerChips,
   pickLinkPost,
   sortedDays,
 } from '@/src/components/dashboard';
@@ -21,17 +27,23 @@ import { StartRoom } from '@/src/components/room/StartRoom';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
-import { useSession } from '@/src/session';
-import { platformMeta } from '@/src/theme';
+import { useIsRealWorkspace, useSession } from '@/src/session';
+import { platformMeta, space } from '@/src/theme';
 import { Card, Chip, ChipStrip, ErrorState, Screen } from '@/src/ui';
 
 /** After "Open a tracked link" fires, re-fetch quietly at these delays instead of waiting for the next 5 s poll. */
 const QUICK_REFRESH_MS = [900, 2600];
+/** Connections change only when the person saves numbers (which refetches at once), so a slow beat is plenty. */
+const CONNECTIONS_POLL_MS = POLL_MS * 3;
 
 export default function DashboardScreen() {
   // Wide windows (>= 1024 px) get the board; below that the phone column below renders exactly as it always did.
   const wide = useWide();
   const { workspace } = useSession();
+  // docs/REAL.md: a real workspace shows only what the person connected; an old sample one renders exactly as it always did.
+  const real = useIsRealWorkspace();
+  // Bumps after every save in the connect dialog, so a save refreshes this screen at once instead of at the next poll.
+  const { version } = useConnectSheet();
   const [platform, setPlatform] = useState<Platform | null>(null);
   // Bumping this re-runs the loaders quietly (no skeleton, no pull-to-refresh spinner).
   const [nonce, setNonce] = useState(0);
@@ -41,10 +53,18 @@ export default function DashboardScreen() {
   // The result carries the filter it was fetched for, so numbers can tell "new filter" from "live increment".
   const dash = useAsync(
     async () => ({ platform, summary: await api.getDashboard({ days: 30, platform }) }),
-    [platform, nonce],
+    [platform, nonce, version],
     { intervalMs: POLL_MS },
   );
-  const activity = useAsync(() => api.getActivity(20), [nonce], { intervalMs: POLL_MS });
+  const activity = useAsync(() => api.getActivity(20), [nonce, version], { intervalMs: POLL_MS });
+  // Loaded once here and shared with the board: in a real workspace the connections decide between the call to action
+  // and the numbers. A sample workspace needs them only for the board's connectors card, as it always did.
+  const needConnections = real || wide;
+  const connections = useAsync(() => api.listConnections(), [version], {
+    intervalMs: CONNECTIONS_POLL_MS,
+    enabled: needConnections,
+  });
+  const mode = dashMode(real, connections);
   // Newest published posts, kept warm (refetched on focus) so the tracked-link button can open the browser inside
   // the tap itself: iOS Safari blocks a popup opened after an awaited request.
   const latest = useAsync(() => api.listPosts({ status: 'published', limit: 10 }), []);
@@ -55,14 +75,23 @@ export default function DashboardScreen() {
   const dataContext = dataPlatform ?? 'all';
   const days = useMemo(() => (summary ? sortedDays(summary.timeseries).slice(-30) : []), [summary]);
   const linkPost = useMemo(() => (latest.data ? pickLinkPost(latest.data) : undefined), [latest.data]);
+  // The summary says 'real' (docs/REAL.md): a change of 0 means nothing earlier to compare, so the tiles say "new".
+  const realNumbers = summary?.data_mode === 'real';
+  // Real workspace: the Followers tile (hidden when an older server sends no total) and where those followers are.
+  const followers =
+    real && summary && typeof summary.followers_total === 'number'
+      ? { total: summary.followers_total, chips: followerChips(summary.by_platform, connections.data, dataPlatform) }
+      : undefined;
 
   const { reload: reloadDash } = dash;
   const { reload: reloadActivity } = activity;
   const { reload: reloadLatest } = latest;
+  const { reload: reloadConnections } = connections;
   const reloadAll = useCallback(() => {
     setBoardNonce((n) => n + 1);
-    void Promise.all([reloadDash(), reloadActivity(), reloadLatest()]);
-  }, [reloadDash, reloadActivity, reloadLatest]);
+    // `reload` fetches even when the loader is disabled: a sample phone never asked for the connections.
+    void Promise.all([reloadDash(), reloadActivity(), reloadLatest(), needConnections ? reloadConnections() : undefined]);
+  }, [reloadDash, reloadActivity, reloadLatest, reloadConnections, needConnections]);
 
   const quickTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(
@@ -79,14 +108,17 @@ export default function DashboardScreen() {
   const brand = workspace?.brand_name?.trim() || workspace?.name?.trim() || APP_NAME;
   const reconnecting = (!!dash.error && !!dash.data) || (!!activity.error && !!activity.data);
 
+  const refreshing = dash.refreshing || activity.refreshing || connections.refreshing;
+
   if (wide) {
     return (
-      <Screen bare title="Dashboard" onRefresh={reloadAll} refreshing={dash.refreshing || activity.refreshing}>
+      <Screen bare title="Dashboard" onRefresh={reloadAll} refreshing={refreshing}>
         <TopBanners />
         <DashboardBoard
           brand={brand}
           dash={dash}
           activity={activity}
+          connections={connections}
           days={days}
           platform={platform}
           onPlatform={setPlatform}
@@ -105,10 +137,23 @@ export default function DashboardScreen() {
       subtitle={`${brand} · Last 30 days`}
       right={reconnecting ? <ReconnectingChip /> : undefined}
       onRefresh={reloadAll}
-      refreshing={dash.refreshing || activity.refreshing}
+      refreshing={refreshing}
     >
       <TopBanners />
-      {!summary ? (
+      {mode === 'loading' ? (
+        // A real workspace waits for its connections before drawing anything: no flash of charts, then a call to action.
+        <DashboardSkeleton followers />
+      ) : mode === 'empty' ? (
+        <>
+          <Reveal index={0}>
+            <ConnectCta />
+          </Reveal>
+          {/* Not a number or a chart, so it stays: the crowd room works without any account connected. */}
+          <Reveal index={1}>
+            <StartRoom />
+          </Reveal>
+        </>
+      ) : !summary ? (
         // First load: skeleton. If it failed, a retry (the skeleton shows again while the retry is in flight).
         dash.error && !dash.refreshing ? (
           <Card>
@@ -139,7 +184,26 @@ export default function DashboardScreen() {
           </Reveal>
 
           <Reveal index={1}>
-            <KpiGrid totals={summary.totals} change={summary.change_pct} timeseries={days} context={dataContext} />
+            {followers ? (
+              <View style={styles.kpis}>
+                <FollowersTile total={followers.total} chips={followers.chips} context={dataContext} />
+                <KpiGrid
+                  totals={summary.totals}
+                  change={summary.change_pct}
+                  timeseries={days}
+                  context={dataContext}
+                  real={realNumbers}
+                />
+              </View>
+            ) : (
+              <KpiGrid
+                totals={summary.totals}
+                change={summary.change_pct}
+                timeseries={days}
+                context={dataContext}
+                real={realNumbers}
+              />
+            )}
           </Reveal>
 
           <Reveal index={2}>
@@ -186,3 +250,8 @@ export default function DashboardScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  // The Followers tile sits above the 2x2 KPI grid with the grid's own gap.
+  kpis: { gap: space.md },
+});

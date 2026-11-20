@@ -11,7 +11,6 @@ import { QueueBoard } from '@/src/components/queue/QueueBoard';
 import {
   applyOverlay,
   parseQueueTab,
-  plural,
   pruneOverlay,
   reuseUnchanged,
   splitPosts,
@@ -28,7 +27,8 @@ import { APP_NAME, POLL_MS } from '@/src/config';
 import { fmtDateTime } from '@/src/format';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
-import { useSession } from '@/src/session';
+import { publishedAllToast, publishedToast, queueSubtitle } from '@/src/realCopy';
+import { useIsRealWorkspace, useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
 import { Screen, Segmented, ErrorState, confirm, haptic, useToast, type SegmentedOption } from '@/src/ui';
 
@@ -52,6 +52,7 @@ export default function QueueScreen() {
   const wide = useWide();
   const toast = useToast();
   const { workspace } = useSession();
+  const real = useIsRealWorkspace();
   const focused = useIsFocused();
   const navigation = useNavigation<TabNavigation>();
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -252,14 +253,14 @@ export default function QueueScreen() {
       if (!saved) return;
       if (saved.status === 'published') {
         haptic.success();
-        toast.show(`Published to ${label} (sandbox)`);
+        toast.show(publishedToast(label, real, post.platform));
         goTab('published');
       } else {
         toast.show(`Couldn't publish to ${label}. Try again.`, 'error');
       }
       void reload();
     },
-    [run, publishRequest, toast, goTab, reload],
+    [run, publishRequest, toast, goTab, reload, real],
   );
 
   const onDelete = useCallback(
@@ -339,7 +340,7 @@ export default function QueueScreen() {
         toast.show("Couldn't open the link", 'error');
         return;
       }
-      if (isMock()) toast.show('Click recorded (offline demo)', 'info');
+      if (isMock()) toast.show('Click recorded (test build)', 'info');
       reloadSoon(1500); // the click lands in the counters without waiting for the next poll
     },
     [toast, reloadSoon],
@@ -388,10 +389,10 @@ export default function QueueScreen() {
       haptic.success();
       goTab('published');
     }
-    if (failed === 0) toast.show(`Published ${plural(published, 'post')} (sandbox)`);
+    if (failed === 0) toast.show(publishedAllToast(published, real));
     else toast.show(`Published ${published} of ${targets.length}. ${failed} could not be published.`, 'error');
     void reload();
-  }, [run, publishRequest, goTab, toast, reload]);
+  }, [run, publishRequest, goTab, toast, reload, real]);
 
   const onRefresh = useCallback(async () => {
     setPulling(true);
@@ -433,7 +434,7 @@ export default function QueueScreen() {
     return (
       <Screen
         title="Queue"
-        subtitle="Review, schedule and publish. Numbers update live."
+        subtitle={queueSubtitle(real)}
         onRefresh={onRefresh}
         refreshing={pulling}
       >
@@ -504,7 +505,7 @@ export default function QueueScreen() {
     <Screen
       key={scrollEpoch}
       title="Queue"
-      subtitle="Review, schedule and publish. Numbers update live."
+      subtitle={queueSubtitle(real)}
       onRefresh={onRefresh}
       refreshing={pulling}
     >

@@ -4,7 +4,7 @@
  *   import { api, type Post, ApiError } from '@/src/api';
  *
  * `api` routes to the real HTTP client, or to the in-memory mock when `isMock()` is true
- * (EXPO_PUBLIC_MOCK=1 builds, or the offline-demo fallback chosen on the onboarding screen).
+ * (EXPO_PUBLIC_MOCK=1 builds only: tests and development. No screen in the app offers the mock as a demo).
  */
 import { Linking, Platform as RNPlatform } from 'react-native';
 
@@ -30,8 +30,8 @@ export {
 } from './http';
 
 /**
- * The in-memory mock (53 KB) is only needed for the offline demo and mock builds, so it is loaded on first use
- * instead of sitting in the first-load chunk of real web builds. Every PulseApi method already returns a Promise.
+ * The in-memory mock (53 KB) is only needed for mock builds, so it is loaded on first use instead of sitting in the
+ * first-load chunk of real web builds. Every PulseApi method already returns a Promise.
  */
 const loadMock = () => import('./mock');
 const lazyMockApi: PulseApi = new Proxy({} as PulseApi, {

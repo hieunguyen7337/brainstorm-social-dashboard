@@ -18,12 +18,11 @@ export function SplashView() {
 
 /** A saved workspace exists but the server cannot be reached. */
 export function OfflineView() {
-  const { retry, error, signOut, startOfflineDemo } = useSession();
+  const { retry, error, signOut } = useSession();
   return (
     <View style={styles.center}>
       <ErrorState title="Can't reach the server" message={error ?? 'Check your connection and try again.'} onRetry={() => void retry()} />
       <View style={styles.actions}>
-        <Button title="Use the offline demo" variant="ghost" small onPress={() => void startOfflineDemo()} />
         <Button title="Start over" variant="ghost" small onPress={() => void signOut()} />
       </View>
     </View>

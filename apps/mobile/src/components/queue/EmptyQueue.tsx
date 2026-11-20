@@ -1,3 +1,5 @@
+import { emptyPublishedMessage, emptyScheduledMessage } from '@/src/realCopy';
+import { useIsRealWorkspace } from '@/src/session';
 import { Button, EmptyState } from '@/src/ui';
 import type { QueueTab } from './queueModel';
 
@@ -14,12 +16,13 @@ export function EmptyQueue({
   onCreate: () => void;
   onGoDrafts: () => void;
 }) {
+  const real = useIsRealWorkspace();
   if (tab === 'published') {
     return (
       <EmptyState
         icon="rocket-outline"
         title="Nothing published yet"
-        message="Publish a draft to see it here, then watch the numbers grow."
+        message={emptyPublishedMessage(real)}
         action={
           hasDrafts ? (
             <Button title="Go to drafts" variant="secondary" small onPress={onGoDrafts} />
@@ -35,7 +38,7 @@ export function EmptyQueue({
       <EmptyState
         icon="calendar-outline"
         title="Nothing scheduled"
-        message="Schedule a draft and it will wait here until it goes out."
+        message={emptyScheduledMessage(real)}
         action={<Button title="Create posts" icon="sparkles" onPress={onCreate} />}
       />
     );

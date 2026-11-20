@@ -3,6 +3,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { autopilotPublishedLine } from '@/src/realCopy';
+import { useIsRealWorkspace } from '@/src/session';
 import { colors, platformMeta, space, type as t, withAlpha } from '@/src/theme';
 import type { AutopilotRun } from '@/src/types';
 import { Button, Card, IconButton, PlatformBadge, Skeleton } from '@/src/ui';
@@ -162,6 +164,7 @@ export function RunResultCard({
   onDismiss: () => void;
 }) {
   const { run, names } = view;
+  const real = useIsRealWorkspace();
   const posts = run.posts ?? [];
   const published = posts.filter((p) => p.status === 'published').length;
   const drafted = posts.length - published;
@@ -178,7 +181,7 @@ export function RunResultCard({
     ? 'Make sure you have an active theme and at least one platform selected, then try again.'
     : drafted > 0
       ? 'Waiting in your Queue for your approval.'
-      : 'Published to your connected platforms (sandbox).';
+      : autopilotPublishedLine(real);
 
   const platforms = Array.from(new Set(posts.map((p) => p.platform)));
   const tint = empty ? colors.info : colors.success;

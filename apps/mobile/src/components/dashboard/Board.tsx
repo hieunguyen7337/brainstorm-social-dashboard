@@ -6,26 +6,46 @@
  *   row 3   Social media connectors                   (cols 1-8)  |  (the column above)
  *   row 4   Top posts (cols 1-6)                                  |  Live activity         (cols 7-12)
  *
- * The screen owns the dashboard and activity loaders (shared with the phone layout); the board loads the rest
- * (trends, posts, connectors, insights) itself, so phones never fetch them. A failing side loader only empties its
- * own card: nothing here can take the rest of the board down.
+ * A real workspace with nothing connected (docs/REAL.md) has no numbers to draw: the header strip keeps its place and
+ * the call to action takes the rest of the big left area; only the cards without numbers stay.
+ *
+ *   row 1   header strip + call to action             (cols 1-8)  |  Outside trends        (cols 9-12)
+ *   row 2   Social media connectors                   (cols 1-8)  |  Generate              (cols 9-12, rows 2-3)
+ *   row 3   Themes                                    (cols 1-8)  |  (the card above)
+ *
+ * The screen owns the dashboard, activity and connections loaders (shared with the phone layout); the board loads the
+ * rest (trends, posts, harvest status, insights) itself, so phones never fetch them. A failing side loader only empties
+ * its own card: nothing here can take the rest of the board down.
  */
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { api, PLATFORMS, type ActivityItem, type DashboardSummary, type DayStats, type Platform, type Post } from '@/src/api';
+import {
+  api,
+  PLATFORMS,
+  type ActivityItem,
+  type Connection,
+  type DashboardSummary,
+  type DayStats,
+  type Platform,
+  type Post,
+} from '@/src/api';
+import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import { POLL_MS } from '@/src/config';
 import { useAsync, type AsyncState } from '@/src/hooks';
 import { Col, Grid } from '@/src/layout';
+import { useIsRealWorkspace } from '@/src/session';
 import { platformMeta, space, type as t } from '@/src/theme';
 import { Card, Chip, ChipRow, ErrorState, Skeleton } from '@/src/ui';
 import { ActivityCard } from './ActivityCard';
 import { BigChartsCard } from './BigChartsCard';
 import { BoardKpis } from './BoardKpis';
+import { ConnectCta } from './ConnectCta';
 import { ConnectorsCard } from './ConnectorsCard';
 import { GenerateCard } from './GenerateColumn';
 import { ReconnectingChip, Reveal, LiveTag } from './live';
 import { OutsideTrendsCard } from './OutsideTrendsCard';
 import { RealPeopleCard } from './RealPeopleCard';
+import { dashMode, followerChips } from './realModel';
 import { ThemesCard } from './ThemesCard';
 import { TopPostsCard } from './TopPostsCard';
 
@@ -40,6 +60,11 @@ export interface DashboardBoardProps {
   brand: string;
   dash: AsyncState<DashData>;
   activity: AsyncState<ActivityItem[]>;
+  /**
+   * The workspace's connections, loaded once by the screen. In a real workspace they decide between the call to action
+   * and the numbers; the connectors card shows them either way.
+   */
+  connections: AsyncState<Connection[]>;
   /** Daily rows of the loaded summary, oldest first. */
   days: DayStats[];
   platform: Platform | null;
@@ -56,6 +81,7 @@ export function DashboardBoard({
   brand,
   dash,
   activity,
+  connections,
   days,
   platform,
   onPlatform,
@@ -64,15 +90,32 @@ export function DashboardBoard({
   reconnecting,
   reloadSignal,
 }: DashboardBoardProps) {
+  const real = useIsRealWorkspace();
+  // Bumps after every save in the connect dialog: what a save changes is refetched at once instead of at the next poll.
+  const { version } = useConnectSheet();
   const trends = useAsync(() => api.listTrends({ limit: 5 }), [reloadSignal], { intervalMs: TRENDS_POLL_MS });
-  const posts = useAsync(() => api.listPosts({ limit: 200 }), [reloadSignal], { intervalMs: POLL_MS });
-  const connections = useAsync(() => api.listConnections(), [reloadSignal], { intervalMs: SLOW_POLL_MS });
-  const insights = useAsync(() => api.getInsights({ days: 30 }), [reloadSignal], { intervalMs: SLOW_POLL_MS });
+  const posts = useAsync(() => api.listPosts({ limit: 200 }), [reloadSignal, version], { intervalMs: POLL_MS });
+  const insights = useAsync(() => api.getInsights({ days: 30 }), [reloadSignal, version], { intervalMs: SLOW_POLL_MS });
+  // Best effort: when each platform's numbers were last saved. Its failure only means "Updated ..." falls back to the
+  // connection's own times, so the error is never shown.
+  const harvest = useAsync(() => api.getHarvestStatus(), [reloadSignal, version], {
+    intervalMs: SLOW_POLL_MS,
+    enabled: real,
+  });
 
-  const summary = dash.data?.summary;
+  // Real workspace: nothing numeric is drawn while the connections load (no flash of charts before the call to action).
+  const mode = dashMode(real, connections);
+  const waiting = mode === 'loading';
+  const empty = mode === 'empty';
+
+  const summary = waiting ? undefined : dash.data?.summary;
   // The filter the numbers on screen belong to (the chip selection can be ahead of it for a moment).
   const dataPlatform = dash.data?.platform ?? null;
   const dataContext = dataPlatform ?? 'all';
+  const followers =
+    real && summary && typeof summary.followers_total === 'number'
+      ? { total: summary.followers_total, chips: followerChips(summary.by_platform, connections.data, dataPlatform) }
+      : undefined;
 
   const { setData: setPosts, reload: reloadPosts } = posts;
   const onGenerated = (created: Post[]) => {
@@ -82,30 +125,69 @@ export function DashboardBoard({
 
   const header = <BoardHeader brand={brand} platform={platform} onPlatform={onPlatform} reconnecting={reconnecting} />;
 
+  // Keyed: they move between cells when the first account is connected, and fade in again in their new place.
+  const connectors = (
+    <Reveal key="connectors" index={5} style={styles.fill}>
+      <ConnectorsCard
+        style={styles.fill}
+        connections={connections.data}
+        loading={connections.loading}
+        error={connections.error}
+        onRetry={() => void connections.reload()}
+        real={real}
+        harvest={harvest.data}
+      />
+    </Reveal>
+  );
+  const themes = (
+    <Reveal key="themes" index={4} style={styles.fill}>
+      <ThemesCard
+        style={styles.fill}
+        insights={insights.data}
+        loading={insights.loading}
+        error={insights.error}
+        onRetry={() => void insights.reload()}
+      />
+    </Reveal>
+  );
+
   return (
     <Grid testID="dashboard-board">
-      {/* Row 1 left: header strip, KPI tiles, Real people. */}
+      {/* Row 1 left: header strip, then the KPI tiles and Real people (or, with nothing connected, the call to action). */}
       <Col span={8} start={1} row={1}>
         <Reveal index={0} style={styles.fill}>
           <View style={styles.stack}>
             {header}
-            {summary ? (
-              <BoardKpis totals={summary.totals} change={summary.change_pct} timeseries={days} context={dataContext} />
+            {empty ? (
+              <ConnectCta style={styles.fill} />
             ) : (
-              <KpiSkeleton />
-            )}
-            {summary ? (
-              <RealPeopleCard
-                compact
-                clicks={summary.real_clicks}
-                conversions={summary.real_conversions}
-                context={dataContext}
-                filterLabel={dataPlatform ? platformMeta[dataPlatform].label : undefined}
-                linkPost={linkPost}
-                onFired={onFired}
-              />
-            ) : (
-              <Skeleton height={64} rounded={16} />
+              <>
+                {summary ? (
+                  <BoardKpis
+                    totals={summary.totals}
+                    change={summary.change_pct}
+                    timeseries={days}
+                    context={dataContext}
+                    real={summary.data_mode === 'real'}
+                    followers={followers}
+                  />
+                ) : (
+                  <KpiSkeleton count={real ? 5 : 4} />
+                )}
+                {summary ? (
+                  <RealPeopleCard
+                    compact
+                    clicks={summary.real_clicks}
+                    conversions={summary.real_conversions}
+                    context={dataContext}
+                    filterLabel={dataPlatform ? platformMeta[dataPlatform].label : undefined}
+                    linkPost={linkPost}
+                    onFired={onFired}
+                  />
+                ) : (
+                  <Skeleton height={64} rounded={16} />
+                )}
+              </>
             )}
           </View>
         </Reveal>
@@ -124,78 +206,76 @@ export function DashboardBoard({
         </Reveal>
       </Col>
 
-      {/* Row 2 left: the big card. */}
+      {/* Row 2 left: the big card (nothing connected: the connectors, the only card here that is not a number). */}
       <Col span={8} start={1} row={2}>
-        <Reveal index={2} style={styles.fill}>
-          {summary ? (
-            <BigChartsCard style={styles.fill} summary={summary} days={days} context={dataContext} />
-          ) : dash.error && !dash.refreshing ? (
-            <Card style={styles.fill}>
-              <ErrorState
-                title="Couldn't load your dashboard"
-                message={dash.error.message || 'Something went wrong.'}
-                onRetry={() => void dash.reload()}
-              />
-            </Card>
-          ) : (
-            <ChartsSkeleton />
-          )}
-        </Reveal>
+        {empty ? (
+          connectors
+        ) : (
+          <Reveal key="charts" index={2} style={styles.fill}>
+            {summary ? (
+              <BigChartsCard style={styles.fill} summary={summary} days={days} context={dataContext} />
+            ) : !waiting && dash.error && !dash.refreshing ? (
+              <Card style={styles.fill}>
+                <ErrorState
+                  title="Couldn't load your dashboard"
+                  message={dash.error.message || 'Something went wrong.'}
+                  onRetry={() => void dash.reload()}
+                />
+              </Card>
+            ) : (
+              <ChartsSkeleton />
+            )}
+          </Reveal>
+        )}
       </Col>
 
-      {/* Rows 2-3 right: Generate on top, Themes (Jev AI) below it taking the rest of the column. */}
+      {/* Rows 2-3 right: Generate on top, Themes (Jev AI) below it taking the rest of the column (nothing connected:
+          Themes sits under the connectors on the left, so both columns end at about the same height). */}
       <Col span={4} start={9} row={2} rowSpan={2} style={styles.column}>
-        <Reveal index={3}>
-          <GenerateCard posts={Array.isArray(posts.data) ? posts.data : undefined} loading={posts.loading} onGenerated={onGenerated} />
-        </Reveal>
-        <Reveal index={4} style={styles.fill}>
-          <ThemesCard
-            style={styles.fill}
-            insights={insights.data}
-            loading={insights.loading}
-            error={insights.error}
-            onRetry={() => void insights.reload()}
+        <Reveal index={3} style={empty ? styles.fill : undefined}>
+          <GenerateCard
+            style={empty ? styles.fill : undefined}
+            posts={Array.isArray(posts.data) ? posts.data : undefined}
+            loading={posts.loading}
+            onGenerated={onGenerated}
           />
         </Reveal>
+        {empty ? null : themes}
       </Col>
 
       {/* Row 3 left. */}
       <Col span={8} start={1} row={3}>
-        <Reveal index={5} style={styles.fill}>
-          <ConnectorsCard
-            style={styles.fill}
-            connections={connections.data}
-            loading={connections.loading}
-            error={connections.error}
-            onRetry={() => void connections.reload()}
-          />
-        </Reveal>
+        {empty ? themes : connectors}
       </Col>
 
-      {/* Row 4: Top posts and the live feed side by side. */}
-      <Col span={6} start={1} row={4}>
-        <Reveal index={6} style={styles.fill}>
-          {summary ? (
-            <TopPostsCard style={styles.fill} posts={summary.top_posts} />
-          ) : (
-            <Card style={styles.fill}>
-              <Skeleton height={200} rounded={12} />
-            </Card>
-          )}
-        </Reveal>
-      </Col>
-      <Col span={6} start={7} row={4}>
-        <Reveal index={7} style={styles.fill}>
-          <ActivityCard
-            style={styles.fill}
-            maxRows={ACTIVITY_ROWS}
-            items={activity.data}
-            loading={activity.loading}
-            error={activity.error}
-            onRetry={() => void activity.reload()}
-          />
-        </Reveal>
-      </Col>
+      {/* Row 4: Top posts and the live feed side by side. Numbers, so not drawn until something is connected. */}
+      {empty ? null : (
+        <>
+          <Col span={6} start={1} row={4}>
+            <Reveal index={6} style={styles.fill}>
+              {summary ? (
+                <TopPostsCard style={styles.fill} posts={summary.top_posts} />
+              ) : (
+                <Card style={styles.fill}>
+                  <Skeleton height={200} rounded={12} />
+                </Card>
+              )}
+            </Reveal>
+          </Col>
+          <Col span={6} start={7} row={4}>
+            <Reveal index={7} style={styles.fill}>
+              <ActivityCard
+                style={styles.fill}
+                maxRows={ACTIVITY_ROWS}
+                items={waiting ? undefined : activity.data}
+                loading={waiting || activity.loading}
+                error={waiting ? null : activity.error}
+                onRetry={() => void activity.reload()}
+              />
+            </Reveal>
+          </Col>
+        </>
+      )}
     </Grid>
   );
 }
@@ -243,10 +323,11 @@ function BoardHeader({
   );
 }
 
-function KpiSkeleton() {
+/** A real workspace has a Followers tile in front of the four metrics. */
+function KpiSkeleton({ count }: { count: number }) {
   return (
     <View style={styles.kpiSkeleton}>
-      {[0, 1, 2, 3].map((i) => (
+      {Array.from({ length: count }, (_, i) => (
         <Skeleton key={i} height={132} rounded={16} style={styles.fill} />
       ))}
     </View>

@@ -10,6 +10,7 @@ import {
   type FunnelDatum,
 } from '@/src/charts';
 import { fmtCompact } from '@/src/format';
+import { useIsRealWorkspace } from '@/src/session';
 import { platformMeta, space, type as t } from '@/src/theme';
 import type { DayStats, FunnelStage, FunnelStageName, PlatformStats, Totals } from '@/src/types';
 import { Card, Chip, ChipRow, SectionHeader } from '@/src/ui';
@@ -41,6 +42,7 @@ export function PlatformDonutCard({
   bare?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const real = useIsRealWorkspace();
   const slices: DonutDatum[] = byPlatform
     .filter((p) => isPlatform(p.platform) && p.views > 0)
     .sort((a, b) => b.views - a.views)
@@ -56,7 +58,14 @@ export function PlatformDonutCard({
     <Frame bare={bare} style={style}>
       <SectionHeader title="Views by platform" subtitle="Share of views, last 30 days" />
       {data.length === 0 ? (
-        <NoData text="No views yet. Publish a post and they will show up here." />
+        <NoData
+          text={
+            // Real numbers do not stream in from publishing: they come from what the person adds.
+            real
+              ? 'No views yet. Add your views from a screenshot, or type them in.'
+              : 'No views yet. Publish a post and they will show up here.'
+          }
+        />
       ) : (
         <Donut data={data} centerValue={fmtCompact(totalViews)} centerLabel="views" legend title="Views by platform" />
       )}
@@ -81,6 +90,7 @@ export function FunnelCard({
   bare?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const real = useIsRealWorkspace();
   const rows: FunnelDatum[] = FUNNEL_ORDER.flatMap((name) => {
     const s = stages.find((x) => x.stage === name);
     return s ? [{ key: s.stage, label: labels[s.stage], value: s.value, rate: s.rate }] : [];
@@ -92,7 +102,13 @@ export function FunnelCard({
     <Frame bare={bare} style={style}>
       <SectionHeader title="Sales funnel" subtitle="From first view to conversion" />
       {empty ? (
-        <NoData text="No traffic yet. The funnel fills as people view and click your posts." />
+        <NoData
+          text={
+            real
+              ? 'No traffic yet. The funnel fills as you add your views and people click your tracked links.'
+              : 'No traffic yet. The funnel fills as people view and click your posts.'
+          }
+        />
       ) : (
         <Funnel data={data} height={chartHeight} title="Sales funnel from views to conversions" />
       )}

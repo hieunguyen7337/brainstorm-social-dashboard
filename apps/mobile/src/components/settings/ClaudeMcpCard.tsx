@@ -55,7 +55,7 @@ export function ClaudeMcpCard() {
           <View style={styles.banner} accessibilityRole="alert">
             <Ionicons name="cloud-offline-outline" size={16} color={colors.info} />
             <Text style={styles.bannerText}>
-              Offline demo (mock data): MCP needs the live server, so Claude can&apos;t connect to this workspace.
+              Test build (mock data): MCP needs the live server, so Claude can&apos;t connect to this workspace.
             </Text>
           </View>
         ) : null}

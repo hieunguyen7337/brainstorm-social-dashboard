@@ -10,6 +10,8 @@ import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-nativ
 
 import { api } from '@/src/api';
 import { useAsync } from '@/src/hooks';
+import { autopilotOffHint, autopilotSubtitle } from '@/src/realCopy';
+import { useIsRealWorkspace } from '@/src/session';
 import { colors, platformMeta, space, type as t, withAlpha } from '@/src/theme';
 import { PLATFORMS, type AutopilotRun, type Platform as PlatformId, type Theme, type Trend } from '@/src/types';
 import {
@@ -74,6 +76,7 @@ async function lookUpNames(run: AutopilotRun): Promise<RunNames> {
 
 export function AutopilotSection() {
   const { show } = useToast();
+  const real = useIsRealWorkspace();
   const { cfg, error, loading, refreshing, reload, edit, runCycle, savedAt } = useAutopilotConfig();
   const conns = useAsync(() => api.listConnections(), [], { intervalMs: CONNECTIONS_POLL_MS });
   const reloadConnections = conns.reload;
@@ -291,7 +294,7 @@ export function AutopilotSection() {
           <Text style={[t.small, styles.explainText]}>
             {cfg.require_approval
               ? 'On: autopilot drafts land in your Queue for approval. Nothing goes out until you say so.'
-              : 'Off: posts are published automatically (sandbox, so nothing leaves the app).'}
+              : autopilotOffHint(real)}
           </Text>
         </View>
       </Card>
@@ -313,12 +316,8 @@ export function AutopilotSection() {
 }
 
 function Header() {
-  return (
-    <SectionHeader
-      title="Autopilot"
-      subtitle="Claude picks a trend and a theme, drafts posts, and queues or publishes them for you"
-    />
-  );
+  const real = useIsRealWorkspace();
+  return <SectionHeader title="Autopilot" subtitle={autopilotSubtitle(real)} />;
 }
 
 const styles = StyleSheet.create({

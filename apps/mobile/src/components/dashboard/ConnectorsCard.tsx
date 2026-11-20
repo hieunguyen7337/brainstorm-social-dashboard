@@ -3,7 +3,9 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
-import { PLATFORMS, type Connection, type Platform } from '@/src/api';
+import { PLATFORMS, type Connection, type HarvestStatus, type Platform } from '@/src/api';
+import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
+import { followersLabel, latestIso, updatedLabel } from '@/src/connect';
 import { fmtCompact, timeAgo } from '@/src/format';
 import { colors, platformMeta, radius, space, type as t, withAlpha } from '@/src/theme';
 import { Badge, Button, Card, PlatformBadge, SectionHeader, Skeleton } from '@/src/ui';
@@ -22,6 +24,10 @@ const followersText = (n: number): string => `${fmtCompact(n)} ${n === 1 ? 'foll
 /**
  * "Social media connectors": LinkedIn and Instagram lead (profile link, connected state, last harvest, a "Real data"
  * badge when the API says the numbers are real), then the sandbox connectors. Manage them in Settings.
+ *
+ * In a real workspace (`real`, docs/REAL.md) every platform is one the person fills in themselves: a connected one shows its
+ * handle, followers, a "Real" badge and when it was last updated, with an "Update" button; the others say "Not connected"
+ * with a "Connect" button. Both open the connect dialog, never Settings.
  */
 export function ConnectorsCard({
   connections,
@@ -29,13 +35,20 @@ export function ConnectorsCard({
   error,
   onRetry,
   style,
+  real = false,
+  harvest,
 }: {
   connections: Connection[] | undefined;
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
   style?: StyleProp<ViewStyle>;
+  /** A real workspace: the connect dialog instead of Settings, and no sandbox wording. */
+  real?: boolean;
+  /** `GET /api/connections/harvest-status`, best effort: its "last saved" time makes "Updated ..." exact. */
+  harvest?: HarvestStatus[];
 }) {
+  const { open } = useConnectSheet();
   const [width, setWidth] = useState(0);
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const w = Math.round(e.nativeEvent.layout.width);
@@ -47,6 +60,11 @@ export function ConnectorsCard({
     for (const c of Array.isArray(connections) ? connections : []) map.set(c.platform, c);
     return map;
   }, [connections]);
+  const harvestBy = useMemo(() => {
+    const map = new Map<Platform, HarvestStatus>();
+    for (const h of Array.isArray(harvest) ? harvest : []) map.set(h.platform, h);
+    return map;
+  }, [harvest]);
   const order = orderConnectors(PLATFORMS);
   const featured = order.slice(0, FEATURED_CONNECTORS.length);
   const others = order.slice(FEATURED_CONNECTORS.length);
@@ -58,8 +76,19 @@ export function ConnectorsCard({
     <Card style={[styles.card, style]}>
       <SectionHeader
         title="Social media connectors"
-        subtitle="LinkedIn and Instagram bring real data. The rest are sandbox accounts."
-        right={<Button title="Manage" variant="ghost" small onPress={() => router.push('/settings')} />}
+        subtitle={
+          real
+            ? 'Your real numbers, from screenshots or typed in.'
+            : 'LinkedIn and Instagram bring real data. The rest are sandbox accounts.'
+        }
+        right={
+          <Button
+            title="Manage"
+            variant="ghost"
+            small
+            onPress={real ? () => open() : () => router.push('/settings')}
+          />
+        }
       />
       {!connections ? (
         error && !loading ? (
@@ -74,14 +103,35 @@ export function ConnectorsCard({
       ) : (
         <View style={styles.body} onLayout={onLayout}>
           <View style={styles.featuredRow}>
-            {featured.map((p) => (
-              <FeaturedConnector key={p} platform={p} conn={byPlatform.get(p)} />
-            ))}
+            {featured.map((p) =>
+              real ? (
+                <RealFeaturedConnector
+                  key={p}
+                  platform={p}
+                  conn={byPlatform.get(p)}
+                  harvest={harvestBy.get(p)}
+                  onOpen={open}
+                />
+              ) : (
+                <FeaturedConnector key={p} platform={p} conn={byPlatform.get(p)} />
+              ),
+            )}
           </View>
           <View style={styles.othersRow}>
-            {others.map((p) => (
-              <OtherConnector key={p} platform={p} conn={byPlatform.get(p)} width={otherWidth} />
-            ))}
+            {others.map((p) =>
+              real ? (
+                <RealOtherConnector
+                  key={p}
+                  platform={p}
+                  conn={byPlatform.get(p)}
+                  harvest={harvestBy.get(p)}
+                  width={otherWidth}
+                  onOpen={open}
+                />
+              ) : (
+                <OtherConnector key={p} platform={p} conn={byPlatform.get(p)} width={otherWidth} />
+              ),
+            )}
           </View>
         </View>
       )}
@@ -198,6 +248,144 @@ function OtherConnector({
   );
 }
 
+// ---- real workspace ---------------------------------------------------------------------------------
+
+/** "hieu73372025 · 46 followers"; a count of 0 is left out (a typed set of numbers need not include followers). */
+function detailLine(conn: Connection): string {
+  const parts = [conn.handle.trim(), conn.followers > 0 ? followersLabel(conn.followers, fmtCompact) : ''];
+  return parts.filter(Boolean).join(' · ');
+}
+
+/** "Updated 3h ago", from the newest of the harvest status and the connection's own times. */
+const updatedOf = (conn: Connection, harvest: HarvestStatus | undefined): string | null =>
+  updatedLabel(latestIso(harvest?.last_harvest_at, conn.last_harvested_at, conn.connected_at));
+
+function RealFeaturedConnector({
+  platform,
+  conn,
+  harvest,
+  onOpen,
+}: {
+  platform: Platform;
+  conn: Connection | undefined;
+  harvest: HarvestStatus | undefined;
+  onOpen: (platform: Platform) => void;
+}) {
+  const meta = platformMeta[platform];
+  const connected = conn && isConnected(conn) ? conn : null;
+  const detail = connected ? detailLine(connected) : '';
+  const updated = connected ? updatedOf(connected, harvest) : null;
+
+  return (
+    <View style={[styles.featured, { borderColor: withAlpha(meta.color, connected ? 0.5 : 0.25) }]}>
+      <View style={styles.featuredHead}>
+        <PlatformBadge platform={platform} size={40} />
+        <View style={styles.featuredTitle}>
+          <Text style={t.h3} numberOfLines={1}>
+            {meta.label}
+          </Text>
+          <View style={styles.statusRow}>
+            <StatusDot on={!!connected} />
+            {connected ? <Badge label="Real" tone="success" icon="shield-checkmark" /> : null}
+          </View>
+        </View>
+      </View>
+
+      {connected ? (
+        <>
+          {detail ? (
+            <Text style={styles.handle} numberOfLines={1}>
+              {detail}
+            </Text>
+          ) : null}
+          {updated ? (
+            <View style={styles.harvest}>
+              <Ionicons name="sync" size={12} color={colors.textMute} />
+              <Text style={t.small}>{updated}</Text>
+            </View>
+          ) : null}
+          <Button
+            title="Update"
+            accessibilityLabel={`Update ${meta.label}`}
+            small
+            variant="secondary"
+            style={styles.action}
+            onPress={() => onOpen(platform)}
+          />
+        </>
+      ) : (
+        <Button
+          title="Connect"
+          accessibilityLabel={`Connect ${meta.label}`}
+          small
+          variant="secondary"
+          style={styles.action}
+          onPress={() => onOpen(platform)}
+        />
+      )}
+    </View>
+  );
+}
+
+function RealOtherConnector({
+  platform,
+  conn,
+  harvest,
+  width,
+  onOpen,
+}: {
+  platform: Platform;
+  conn: Connection | undefined;
+  harvest: HarvestStatus | undefined;
+  width: number | undefined;
+  onOpen: (platform: Platform) => void;
+}) {
+  const meta = platformMeta[platform];
+  const connected = conn && isConnected(conn) ? conn : null;
+  const handle = connected?.handle.trim() ?? '';
+  const updated = connected ? updatedOf(connected, harvest) : null;
+
+  return (
+    <View style={[styles.other, width ? { width } : styles.otherFallback]}>
+      <View style={styles.otherHead}>
+        <PlatformBadge platform={platform} size={28} />
+        <View style={styles.flex}>
+          <Text style={styles.otherName} numberOfLines={1}>
+            {meta.label}
+          </Text>
+          <Text style={t.small} numberOfLines={1}>
+            {connected ? handle || 'Connected' : 'Not connected'}
+          </Text>
+        </View>
+      </View>
+      {connected ? (
+        <View style={styles.otherMeta}>
+          {connected.followers > 0 ? (
+            <Text style={t.small} numberOfLines={1}>
+              {followersLabel(connected.followers, fmtCompact)}
+            </Text>
+          ) : null}
+          <Badge label="Real" tone="success" icon="shield-checkmark" />
+          {updated ? (
+            <Text style={[t.small, styles.metaFull]} numberOfLines={1}>
+              {updated}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      <Button
+        title={connected ? 'Update' : 'Connect'}
+        accessibilityLabel={`${connected ? 'Update' : 'Connect'} ${meta.label}`}
+        small
+        variant="secondary"
+        full
+        style={styles.pushDown}
+        onPress={() => onOpen(platform)}
+      />
+    </View>
+  );
+}
+
 function ConnectorsSkeleton() {
   return (
     <View style={styles.body}>
@@ -254,6 +442,11 @@ const styles = StyleSheet.create({
   otherHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   otherName: { color: colors.text, fontSize: 13.5, fontWeight: '700' },
   otherFoot: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  otherMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.sm, rowGap: 4 },
+  metaFull: { flexBasis: '100%' },
+  // Tiles in a row share a height: the button sits at the bottom of each, whatever its content wraps to.
+  action: { alignSelf: 'flex-start', marginTop: 'auto' },
+  pushDown: { marginTop: 'auto' },
   message: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.md },
   messageText: { flex: 1 },
   featuredSkeleton: { flexGrow: 1, flexBasis: 220 },

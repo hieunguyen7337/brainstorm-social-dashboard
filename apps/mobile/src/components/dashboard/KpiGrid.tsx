@@ -4,12 +4,12 @@ import { StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } f
 
 import { Sparkline } from '@/src/charts';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
-import { fmtChange, fmtCompact } from '@/src/format';
+import { fmtCompact } from '@/src/format';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
 import type { DayStats, Totals } from '@/src/types';
 import { Card } from '@/src/ui';
 import { LiveNumber, useStable } from './live';
-import { METRICS, type MetricDef } from './model';
+import { changeView, METRICS, type MetricDef } from './model';
 
 const GAP = space.md;
 /** Column width at which the four tiles go 4 across instead of 2x2. */
@@ -41,6 +41,7 @@ export function KpiGrid({
   change,
   timeseries,
   context,
+  real = false,
 }: {
   totals: Totals;
   change: Totals;
@@ -48,6 +49,8 @@ export function KpiGrid({
   timeseries: DayStats[];
   /** Changes when the data switches to another filter, so counters do not flash for it. */
   context: string;
+  /** The summary's `data_mode` is 'real': a change of 0 means nothing earlier to compare, so the pill says "new". */
+  real?: boolean;
 }) {
   const { onLayout, tileWidth } = useKpiLayout();
   return (
@@ -61,6 +64,7 @@ export function KpiGrid({
           values={timeseries.map((d) => d[m.key])}
           width={tileWidth}
           context={context}
+          real={real}
         />
       ))}
     </View>
@@ -74,6 +78,7 @@ function KpiTile({
   values,
   width,
   context,
+  real,
 }: {
   metric: MetricDef;
   value: number;
@@ -81,20 +86,17 @@ function KpiTile({
   values: number[];
   width: number;
   context: string;
+  real: boolean;
 }) {
   const series = useStable(values, values.join(','));
-  const pct = Number.isFinite(changePct) ? changePct : 0;
-  const direction = Math.round(pct) > 0 ? 'up' : Math.round(pct) < 0 ? 'down' : 'flat';
-  const tone = direction === 'up' ? colors.success : direction === 'down' ? colors.danger : colors.textMute;
-  const spoken =
-    direction === 'flat' ? 'unchanged' : `${direction} ${Math.abs(Math.round(pct))} percent`;
+  const view = changeView(changePct, real);
 
   return (
     <Card padded={false} style={{ width }}>
       <View
         style={styles.top}
         accessible
-        accessibilityLabel={`${metric.label} ${fmtCompact(value)}, ${spoken} versus the previous period`}
+        accessibilityLabel={`${metric.label} ${fmtCompact(value)}, ${view.spoken}`}
       >
         <View style={styles.labelRow}>
           <View style={[styles.dot, { backgroundColor: metric.color }]} />
@@ -103,9 +105,9 @@ function KpiTile({
           </Text>
         </View>
         <LiveNumber value={value} format={fmtCompact} fromZero context={context} style={styles.number} />
-        <View style={[styles.pill, { backgroundColor: withAlpha(tone, 0.14) }]}>
-          <Ionicons name={direction === 'up' ? 'arrow-up' : direction === 'down' ? 'arrow-down' : 'remove'} size={11} color={tone} />
-          <Text style={[styles.pillText, { color: tone }]}>{fmtChange(pct)}</Text>
+        <View style={[styles.pill, { backgroundColor: withAlpha(view.tone, 0.14) }]}>
+          <Ionicons name={view.icon} size={11} color={view.tone} />
+          <Text style={[styles.pillText, { color: view.tone }]}>{view.label}</Text>
         </View>
       </View>
       {series.length >= 2 ? (

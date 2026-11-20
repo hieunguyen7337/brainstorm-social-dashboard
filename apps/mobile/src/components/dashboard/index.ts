@@ -1,9 +1,12 @@
 export { ActivityCard } from './ActivityCard';
 export { DashboardBoard, type DashboardBoardProps } from './Board';
 export { FunnelCard, PlatformDonutCard, TrendCard } from './ChartCards';
+export { ConnectCta } from './ConnectCta';
 export { DashboardSkeleton } from './DashboardSkeleton';
+export { FollowersTile } from './FollowersTile';
 export { KpiGrid } from './KpiGrid';
 export { ReconnectingChip, Reveal } from './live';
 export { pickLinkPost, sortedDays } from './model';
 export { RealPeopleCard } from './RealPeopleCard';
+export { dashMode, followerChips, type DashMode, type FollowerChip } from './realModel';
 export { TopPostsCard } from './TopPostsCard';
