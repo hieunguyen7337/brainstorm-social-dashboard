@@ -45,7 +45,7 @@ export function PlatformDonutCard({ byPlatform, totalViews }: { byPlatform: Plat
   );
 }
 
-/** Views -> Engagement -> Clicks -> Conversions with the step rates. */
+/** Views -> Engagement -> Clicks -> Onboard with the step rates. */
 export function FunnelCard({ stages }: { stages: FunnelStage[] }) {
   const rows: FunnelDatum[] = FUNNEL_ORDER.flatMap((name) => {
     const s = stages.find((x) => x.stage === name);
@@ -56,11 +56,11 @@ export function FunnelCard({ stages }: { stages: FunnelStage[] }) {
 
   return (
     <Card style={styles.card}>
-      <SectionHeader title="Sales funnel" subtitle="From first view to conversion" />
+      <SectionHeader title="Sales funnel" subtitle="From first view to onboarded customer" />
       {empty ? (
         <NoData text="No traffic yet. The funnel fills as people view and click your posts." />
       ) : (
-        <Funnel data={data} title="Sales funnel from views to conversions" />
+        <Funnel data={data} title="Sales funnel from views to onboard" />
       )}
     </Card>
   );

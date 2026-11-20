@@ -6,14 +6,18 @@
 export type Platform = 'linkedin' | 'instagram' | 'x' | 'tiktok' | 'reddit' | 'facebook';
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed';
 
+/** Channel order everywhere in the UI (founders' priority): LinkedIn, Instagram (+ TikTok), X, Reddit, Facebook. */
 export const PLATFORMS: readonly Platform[] = [
   'linkedin',
   'instagram',
-  'x',
   'tiktok',
+  'x',
   'reddit',
   'facebook',
 ] as const;
+
+/** Preselected on Create. */
+export const PRIMARY_PLATFORMS: readonly Platform[] = ['linkedin', 'instagram'] as const;
 
 // ---- workspace -------------------------------------------------------------------------------
 

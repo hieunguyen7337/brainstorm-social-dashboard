@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { STAGE_LABEL } from '@/src/config';
 import { fmtCompact, fmtInt } from '@/src/format';
 import { colors, withAlpha } from '@/src/theme';
 import { AnimatedNumber } from '@/src/ui';
@@ -13,7 +14,7 @@ const STATS: readonly { key: keyof Counters; label: string; icon: IconName; colo
   { key: 'views', label: 'Views', icon: 'eye-outline', color: colors.info },
   { key: 'engagements', label: 'Engagements', icon: 'heart-outline', color: colors.accent2 },
   { key: 'clicks', label: 'Clicks', icon: 'hand-left-outline', color: colors.warn },
-  { key: 'conversions', label: 'Conversions', icon: 'cart-outline', color: colors.success },
+  { key: 'conversions', label: STAGE_LABEL.conversions, icon: 'cart-outline', color: colors.success },
 ];
 
 /** How long the "+N" chip stays after a counter grew. */

@@ -99,7 +99,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus('ready');
     } catch (e) {
       if (!alive.current) return;
-      if (e instanceof ApiError && e.status === 401) return; // handler already moved us to 'anon'
+      if (e instanceof ApiError && e.status === 401) {
+        // The handler already moved us to 'anon'; explain why a shared link did not open anything.
+        if (stored.fromUrl) setError('That workspace link is not valid any more. Start a new demo below.');
+        return;
+      }
       setError(messageOf(e));
       const net = e instanceof ApiError && e.isNetwork;
       setNetworkError(net);

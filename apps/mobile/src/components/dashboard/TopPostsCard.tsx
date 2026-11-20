@@ -62,7 +62,7 @@ function PostRow({ post, rank, last }: { post: Post; rank: number; last: boolean
       accessibilityLabel={
         `Number ${rank}: ${text}. ${fmtCompact(post.views)} views, ${fmtCompact(post.engagements)} engagements` +
         (post.clicks > 0 ? `, ${fmtCompact(post.clicks)} clicks` : '') +
-        (post.conversions > 0 ? `, ${fmtCompact(post.conversions)} conversions` : '')
+        (post.conversions > 0 ? `, ${fmtCompact(post.conversions)} onboarded` : '')
       }
       onPress={openPublished}
       style={({ pressed }) => [styles.row, !last && styles.rowDivider, pressed && styles.pressed]}

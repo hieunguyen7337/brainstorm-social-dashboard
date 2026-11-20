@@ -16,7 +16,7 @@ import { APP_NAME, MAX_CONTENT_WIDTH } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useSession } from '@/src/session';
 import { colors, space } from '@/src/theme';
-import { PLATFORMS, type Platform, type Trend } from '@/src/types';
+import { PRIMARY_PLATFORMS, type Platform, type Trend } from '@/src/types';
 import { Button, Card, ErrorState, Screen, haptic } from '@/src/ui';
 
 type Phase = 'form' | 'generating' | 'result';
@@ -41,7 +41,7 @@ export default function CreateScreen() {
   const trends = useAsync(() => api.listTrends({ limit: TREND_FETCH }), [], { enabled: trendsWanted });
 
   // ---- form ------------------------------------------------------------------------------------------------------
-  /** null until the user touches the chips: then the default (connected platforms) keeps following the connections. */
+  /** null until the user touches the chips: until then LinkedIn and Instagram are preselected (founders' priority). */
   const [picked, setPicked] = useState<Platform[] | null>(null);
   const [themeId, setThemeId] = useState<string | null>(null);
   const [trend, setTrend] = useState<TrendChoice | null>(null);
@@ -56,14 +56,7 @@ export default function CreateScreen() {
   const requesting = useRef(false);
 
   // ---- derived ---------------------------------------------------------------------------------------------------
-  const connected = useMemo(
-    () => (connections.data ?? []).filter((c) => c.status === 'connected').map((c) => c.platform),
-    [connections.data],
-  );
-  const platforms = useMemo<Platform[]>(
-    () => picked ?? (connected.length > 0 ? PLATFORMS.filter((p) => connected.includes(p)) : [...PLATFORMS]),
-    [picked, connected],
-  );
+  const platforms = useMemo<Platform[]>(() => picked ?? [...PRIMARY_PLATFORMS], [picked]);
 
   const activeThemes = useMemo(() => (themes.data ?? []).filter((x) => x.active), [themes.data]);
   const theme = activeThemes.find((x) => x.id === themeId) ?? null;
@@ -177,7 +170,7 @@ export default function CreateScreen() {
     <Screen
       key={showResult ? 'result' : 'form'}
       title="Create"
-      subtitle="One idea, six platform-native posts"
+      subtitle="One idea, a native post for every channel"
       onRefresh={refreshAll}
       refreshing={refreshing}
       footer={showResult ? undefined : generateBar}

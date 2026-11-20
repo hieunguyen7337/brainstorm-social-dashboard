@@ -27,7 +27,7 @@ export interface DonutProps {
 
 export interface FunnelDatum {
   key: string;
-  /** "Views", "Engagement", "Clicks", "Conversions". */
+  /** "Views", "Engagement", "Clicks", "Onboard". */
   label: string;
   value: number;
   /** Conversion from the previous stage, 0..1 (1 for the first stage). */

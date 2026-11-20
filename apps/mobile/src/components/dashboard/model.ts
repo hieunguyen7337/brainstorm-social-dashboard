@@ -2,6 +2,7 @@
 import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 
+import { STAGE_LABEL } from '@/src/config';
 import { parseTs, timeAgo } from '@/src/format';
 import { colors, platformMeta } from '@/src/theme';
 import type { ActivityItem, DayStats, FunnelStageName, Platform, Post, Totals } from '@/src/types';
@@ -24,7 +25,7 @@ export const METRICS: readonly MetricDef[] = [
   { key: 'views', label: 'Views', chip: 'Views', color: colors.accent, icon: 'eye' },
   { key: 'engagements', label: 'Engagements', chip: 'Engagement', color: colors.accent2, icon: 'heart' },
   { key: 'clicks', label: 'Clicks', chip: 'Clicks', color: colors.info, icon: 'finger-print' },
-  { key: 'conversions', label: 'Conversions', chip: 'Conversions', color: colors.success, icon: 'checkmark-circle' },
+  { key: 'conversions', label: STAGE_LABEL.conversions, chip: STAGE_LABEL.conversions, color: colors.success, icon: 'checkmark-circle' },
 ];
 
 export const METRIC_BY_KEY: Record<MetricKey, MetricDef> = {
@@ -36,12 +37,7 @@ export const METRIC_BY_KEY: Record<MetricKey, MetricDef> = {
 
 export const FUNNEL_ORDER: readonly FunnelStageName[] = ['views', 'engagements', 'clicks', 'conversions'];
 
-export const FUNNEL_LABELS: Record<FunnelStageName, string> = {
-  views: 'Views',
-  engagements: 'Engagement',
-  clicks: 'Clicks',
-  conversions: 'Conversions',
-};
+export const FUNNEL_LABELS: Record<FunnelStageName, string> = { ...STAGE_LABEL };
 
 /** Guard for strings that come from the server before indexing `platformMeta`. */
 export const isPlatform = (p: string | null | undefined): p is Platform => !!p && p in platformMeta;

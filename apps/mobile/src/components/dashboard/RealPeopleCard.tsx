@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { api, ApiError, openTrackedLink, type Post } from '@/src/api';
+import { STAGE_LABEL } from '@/src/config';
 import { colors, gradient, radius, space, type as t, withAlpha } from '@/src/theme';
 import { Badge, Button, haptic, useToast } from '@/src/ui';
 import { LiveDot, LiveNumber, useIncreaseFlash, useSettled } from './live';
@@ -15,7 +16,7 @@ const HINT_MS = 8000;
 const BORDER = 1.5;
 
 /**
- * The "Real people" card: clicks and conversions from real visitors on tracked links, plus the button that
+ * The "Real people" card: clicks and onboards from real visitors on tracked links, plus the button that
  * plays visitor. The counters flash and the whole card glows when a real event lands.
  */
 export function RealPeopleCard({
@@ -114,12 +115,12 @@ export function RealPeopleCard({
 
           <View style={styles.stats}>
             <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
-            <Stat label="Conversions" icon="checkmark-circle" color={colors.success} value={conversions} context={context} />
+            <Stat label={STAGE_LABEL.conversions} icon="checkmark-circle" color={colors.success} value={conversions} context={context} />
           </View>
 
           <Text style={t.dim}>
-            Clicks and conversions from real visitors on your tracked links. Publish a post, open its link, and watch
-            your click land in the funnel.
+            Real visitors who click your tracked links and get onboarded. Publish a post, open its link, and watch your
+            click land in the funnel.
           </Text>
 
           {hint === 'sent' ? (

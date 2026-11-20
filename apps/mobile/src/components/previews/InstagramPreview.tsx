@@ -33,7 +33,7 @@ const IG = {
 const PINK = '#ff4f8b';
 const ORANGE = '#ff9a3c';
 
-/** Instagram post: gradient-ring avatar, 1:1 gradient media with the image brief, actions, likes, caption. */
+/** Instagram post: gradient-ring avatar, 1:1 gradient media with the visual plan (media_prompt), actions, likes, caption. */
 export function InstagramPreview({
   content,
   hashtags,
@@ -96,7 +96,7 @@ export function InstagramPreview({
           <View style={styles.brief}>
             <View style={styles.briefHead}>
               <Ionicons name="image-outline" size={13} color={colors.white} />
-              <Text style={styles.briefLabel}>Image brief</Text>
+              <Text style={styles.briefLabel}>Visual plan</Text>
             </View>
             <PreviewText
               value={brief}
@@ -106,7 +106,7 @@ export function InstagramPreview({
               style={styles.briefText}
               mutedColor="rgba(255, 255, 255, 0.6)"
               accent={colors.white}
-              label="Image brief"
+              label="Visual plan"
               maxLines={small ? 2 : 4}
             />
           </View>

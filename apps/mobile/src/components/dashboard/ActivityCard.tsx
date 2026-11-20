@@ -43,7 +43,7 @@ export function ActivityCard({
         )
       ) : items.length === 0 ? (
         <Text style={[t.dim, styles.empty]}>
-          No activity yet. Publish a post and its views, clicks and conversions will stream in here.
+          No activity yet. Publish a post and its views, clicks and onboards will stream in here.
         </Text>
       ) : (
         <ActivityList items={items} />

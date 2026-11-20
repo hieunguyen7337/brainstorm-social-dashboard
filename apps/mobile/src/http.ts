@@ -27,14 +27,40 @@ export class ApiError extends Error {
   }
 }
 
+// ---- team workspace link --------------------------------------------------------------------
+
+/**
+ * Web only: `https://<host>/?token=<t>` opens that existing (team) workspace instead of a fresh guest one.
+ * Read once at module load, before the router can touch the URL, then removed from the address bar so the token
+ * does not linger in history, screenshots or referrers (it is persisted like any other session token).
+ */
+function readUrlToken(): string | null {
+  if (RNPlatform.OS !== 'web' || typeof window === 'undefined') return null;
+  try {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get('token');
+    if (raw === null) return null;
+    url.searchParams.delete('token');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    const clean = raw.trim();
+    return /^[A-Za-z0-9._~-]{1,200}$/.test(clean) ? clean : null;
+  } catch {
+    return null;
+  }
+}
+const URL_TOKEN = readUrlToken();
+
 // ---- persisted session state ------------------------------------------------------------------
 
 let token: string | null = null;
 let mock = BUILD_MOCK;
 let onUnauthorized: (() => void) | null = null;
 
-/** Load the persisted token and mock flag once at app start. Never throws. */
-export async function loadStorage(): Promise<{ token: string | null; mock: boolean }> {
+/**
+ * Load the persisted token and mock flag once at app start. A `?token=` in the URL (web) wins over the stored one
+ * and is persisted. Never throws.
+ */
+export async function loadStorage(): Promise<{ token: string | null; mock: boolean; fromUrl: boolean }> {
   try {
     const [t, m] = await Promise.all([AsyncStorage.getItem(TOKEN_KEY), AsyncStorage.getItem(MOCK_KEY)]);
     token = t || null;
@@ -42,7 +68,18 @@ export async function loadStorage(): Promise<{ token: string | null; mock: boole
   } catch {
     // Storage blocked (private window, etc.): run without persistence.
   }
-  return { token, mock };
+  const fromUrl = URL_TOKEN !== null && !BUILD_MOCK;
+  if (fromUrl) {
+    // A team link points at the real server, never at the offline demo.
+    token = URL_TOKEN;
+    mock = false;
+    try {
+      await Promise.all([AsyncStorage.setItem(TOKEN_KEY, URL_TOKEN as string), AsyncStorage.removeItem(MOCK_KEY)]);
+    } catch {
+      // ignore
+    }
+  }
+  return { token, mock, fromUrl };
 }
 
 export function getToken(): string | null {

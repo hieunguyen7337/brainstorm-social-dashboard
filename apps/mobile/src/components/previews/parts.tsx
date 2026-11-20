@@ -82,16 +82,16 @@ export function domainOf(link: string | null | undefined): string {
   return host.replace(/^www\./i, '').toLowerCase();
 }
 
-/** "37 clicks · 1 conversion". */
+/** "37 clicks · 1 onboarded". */
 export function linkStatsText(s: Pick<PreviewStats, 'clicks' | 'conversions'>): string {
   const clicks = Math.max(0, Math.round(s.clicks || 0));
   const conv = Math.max(0, Math.round(s.conversions || 0));
-  return `${fmtInt(clicks)} click${clicks === 1 ? '' : 's'} · ${fmtInt(conv)} conversion${conv === 1 ? '' : 's'}`;
+  return `${fmtInt(clicks)} click${clicks === 1 ? '' : 's'} · ${fmtInt(conv)} onboarded`;
 }
 
 /** Screen-reader summary of the counters. */
 export function statsSpeech(s: PreviewStats): string {
-  return `${fmtInt(s.views)} views, ${fmtInt(s.engagements)} engagements, ${fmtInt(s.clicks)} clicks, ${fmtInt(s.conversions)} conversions`;
+  return `${fmtInt(s.views)} views, ${fmtInt(s.engagements)} engagements, ${fmtInt(s.clicks)} clicks, ${fmtInt(s.conversions)} onboarded`;
 }
 
 /** First non-empty line of a text (TikTok caption, previews). */

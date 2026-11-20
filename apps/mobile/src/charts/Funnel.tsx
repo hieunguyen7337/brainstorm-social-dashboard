@@ -71,7 +71,7 @@ function fmtRate(rate: number): string {
 }
 
 /**
- * The whiteboard's sales funnel: stacked trapezoids narrowing from Views down to Conversions, a violet to pink
+ * The whiteboard's sales funnel: stacked trapezoids narrowing from Views down to Onboard, a violet to pink
  * gradient flowing through them, the stage's compact value, and the conversion rate from the stage above as a
  * pill on the seam between them. Stages ease in one after the other on first mount only.
  */
