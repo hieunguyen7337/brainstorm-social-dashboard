@@ -199,6 +199,32 @@ async function errorDetail(res: Response): Promise<string | null> {
   return null;
 }
 
+// ---- optional endpoints ---------------------------------------------------------------------------
+
+let openapiPaths: Promise<Set<string> | null> | null = null;
+
+/**
+ * Is `template` (an OpenAPI path such as "/api/insights") served by this API? One cached GET of /openapi.json.
+ * Asking first keeps a server without the endpoint from logging a 404 (and a console error) on every screen.
+ * If the schema cannot be read, assume yes and let the call itself decide.
+ */
+export async function endpointAvailable(template: string): Promise<boolean> {
+  if (!openapiPaths) {
+    openapiPaths = (async () => {
+      try {
+        const res = await fetch(`${apiBase()}/openapi.json`, { headers: { Accept: 'application/json' } });
+        if (!res.ok) return null;
+        const doc = (await res.json()) as { paths?: Record<string, unknown> };
+        return doc.paths ? new Set(Object.keys(doc.paths)) : null;
+      } catch {
+        return null;
+      }
+    })();
+  }
+  const paths = await openapiPaths;
+  return paths ? paths.has(template) : true;
+}
+
 export async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const { body, query, auth = true, timeoutMs = 20000 } = opts;
   const headers: Record<string, string> = { Accept: 'application/json' };

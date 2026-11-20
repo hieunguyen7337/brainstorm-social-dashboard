@@ -1,5 +1,20 @@
-import { request } from './http';
+import { ApiError, endpointAvailable, request } from './http';
+import { normalizeHarvestStatus, normalizeInsights } from './normalize';
 import type { PulseApi } from './types';
+
+/**
+ * Optional features (insights, harvest, billing): `null` when this server does not have the endpoint, so the UI can
+ * hide itself. The OpenAPI document is consulted first, so a missing endpoint never produces a 404 in the console.
+ */
+async function optional<T>(template: string, call: () => Promise<T>): Promise<T | null> {
+  if (!(await endpointAvailable(template))) return null;
+  try {
+    return await call();
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 405 || e.status === 501)) return null;
+    throw e;
+  }
+}
 
 /** The real HTTP client: one function per row of the REST table in docs/CONTRACT.md. */
 export const realApi: PulseApi = {
@@ -47,4 +62,22 @@ export const realApi: PulseApi = {
 
   listTrends: (q) =>
     request('GET', '/api/trends', { query: { refresh: q?.refresh ? 'true' : undefined, limit: q?.limit ?? 20 } }),
+
+  getInsights: (days = 30) =>
+    optional('/api/insights', async () => normalizeInsights(await request('GET', '/api/insights', { query: { days } }), days)),
+  refreshInsights: () =>
+    optional('/api/insights/refresh', async () =>
+      normalizeInsights(await request('POST', '/api/insights/refresh', { timeoutMs: 60000 })),
+    ),
+
+  setConnectionProfile: (platform, profileUrl) =>
+    request('PUT', `/api/connections/${platform}/profile`, { body: { profile_url: profileUrl } }),
+  getHarvestStatus: () =>
+    optional('/api/connections/harvest-status', async () =>
+      normalizeHarvestStatus(await request('GET', '/api/connections/harvest-status')),
+    ),
+
+  getBilling: () => optional('/api/billing', () => request('GET', '/api/billing')),
+  createCheckout: (body) => request('POST', '/api/billing/checkout', { body: body ?? {} }),
+  createPortal: () => request('POST', '/api/billing/portal'),
 };

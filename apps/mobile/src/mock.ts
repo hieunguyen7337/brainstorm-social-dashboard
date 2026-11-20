@@ -18,8 +18,8 @@ import {
 import type { Mode } from './mockData';
 import { PLATFORMS } from './types';
 import type {
-  ActivityItem, AutopilotConfig, AutopilotRun, Connection, DashboardSummary, Platform, Post, PostStatus, PulseApi,
-  Theme, Totals, Trend, Workspace,
+  ActivityItem, AutopilotConfig, AutopilotRun, Connection, DashboardSummary, HarvestStatus, Insights, Platform, Post,
+  PostStatus, PulseApi, Theme, Totals, Trend, Workspace,
 } from './types';
 
 // ---- small helpers ------------------------------------------------------------------------------
@@ -692,6 +692,7 @@ function autopilotCycle(s: State, now: number): AutopilotRun | null {
 // ---- call plumbing --------------------------------------------------------------------------------------
 
 const FAST: Range = [80, 260];
+const SLOW: Range = [600, 1200];
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /** Simulated latency, then the work; the result is deep-copied so the UI may mutate it freely. */
@@ -718,6 +719,101 @@ const findTheme = (s: State, id: string): Theme => s.themes.find((t) => t.id ===
 const findTrend = (s: State, id: string): Trend => s.trends.find((t) => t.id === id) ?? notFound('trend');
 const int = (v: number | undefined, d: number, lo: number, hi: number): number =>
   v === undefined || !Number.isFinite(v) ? d : clamp(Math.floor(v), lo, hi);
+
+
+// ---- insights / harvest / billing (optional features; shapes provisional, see src/types.ts) -------------------
+
+/** Per-workspace extras that the base State does not carry. */
+interface Extras {
+  plan: 'free' | 'pro';
+  harvestedAt: Partial<Record<Platform, string>>;
+  harvestedPosts: Partial<Record<Platform, number>>;
+  insightsAt: string | null;
+  relearn: number; // times "Re-learn" was pressed (nudges the numbers so the button visibly does something)
+}
+const extrasByState = new WeakMap<State, Extras>();
+const extras = (s: State): Extras => {
+  let e = extrasByState.get(s);
+  if (!e) {
+    e = { plan: 'free', harvestedAt: {}, harvestedPosts: {}, insightsAt: null, relearn: 0 };
+    extrasByState.set(s, e);
+  }
+  return e;
+};
+
+const FEATURES = {
+  free: ['Dashboard, outside trends and themes', 'Manual posts with tracked links', 'Limited AI generations'],
+  pro: [
+    'Everything in free',
+    'MCP server access for Claude (Desktop, Code, claude.ai)',
+    'Autopilot: background drafting and publishing',
+    'Higher AI generation limits',
+  ],
+};
+
+const HARVEST_PLATFORMS: Platform[] = ['linkedin', 'instagram'];
+
+function insights(s: State, days: number): Insights {
+  const e = extras(s);
+  const dash = dashboard(s, days, null);
+  const published = s.posts.map((r) => r.post).filter((p) => p.status === 'published');
+  const avg = dash.totals.views > 0 ? dash.totals.engagements / dash.totals.views : 0;
+  // Real lift where themes have published posts behind them; a stable, plausible spread otherwise.
+  const SPREAD = [0.38, 0.17, -0.06, -0.21, 0.09, -0.12];
+  const top_themes = s.themes
+    .filter((t) => t.active)
+    .map((t, i): Insights['top_themes'][number] => {
+      const own = published.filter((p) => p.theme_id === t.id);
+      const views = own.reduce((n, p) => n + p.views, 0);
+      const eng = own.reduce((n, p) => n + p.engagements, 0);
+      const measured = own.length >= 2 && views > 0 && avg > 0;
+      const base = measured ? eng / views / avg - 1 : SPREAD[(i + e.relearn) % SPREAD.length];
+      const lift = Math.round(clamp(base + (e.relearn % 2 === 1 ? 0.03 : 0), -0.6, 1.5) * 100) / 100;
+      const posts = measured ? own.length : 2 + ((hashStr(t.name) + i) % 7);
+      return {
+        theme_id: t.id, name: t.name, color: t.color, posts, lift,
+        engagement_rate: measured ? Math.round((eng / views) * 1000) / 1000 : Math.round(avg * (1 + lift) * 1000) / 1000,
+      };
+    })
+    .sort((a, b) => b.lift - a.lift);
+  const by_platform = dash.by_platform.map(
+    (p): Insights['by_platform'][number] => ({
+      platform: p.platform,
+      views: p.views,
+      engagement_rate: p.views > 0 ? p.engagements / p.views : 0,
+      click_rate: p.views > 0 ? p.clicks / p.views : 0,
+      conversion_rate: p.clicks > 0 ? p.conversions / p.clicks : 0,
+    }),
+  );
+  const real = published.filter((p) => p.metrics_source === 'real').length;
+  const best = top_themes[0];
+  const bestPlatform = [...by_platform].sort((a, b) => b.engagement_rate - a.engagement_rate)[0];
+  const summary = best
+    ? `${best.name} posts earn ${Math.round(best.lift * 100)}% more engagement than your average` +
+      (bestPlatform ? `, and ${LABEL[bestPlatform.platform]} engages best (${(bestPlatform.engagement_rate * 100).toFixed(1)}%).` : '.') +
+      ` Lean into ${best.name.toLowerCase()} on LinkedIn and Instagram this week.`
+    : 'Publish a few posts and Pulse will learn which themes and platforms work best for you.';
+  return {
+    days, summary, top_themes, by_platform,
+    sources: { real, simulated: Math.max(0, published.length - real) },
+    generated_at: e.insightsAt,
+  };
+}
+
+function harvestStatus(s: State): HarvestStatus {
+  const e = extras(s);
+  const platforms = HARVEST_PLATFORMS.map(
+    (p): HarvestStatus['platforms'][number] => ({
+      platform: p,
+      profile_url: conn(s, p).profile_url ?? null,
+      last_harvested_at: e.harvestedAt[p] ?? null,
+      posts_harvested: e.harvestedPosts[p] ?? null,
+      status: e.harvestedAt[p] ? 'ok' : conn(s, p).profile_url ? 'waiting' : null,
+    }),
+  );
+  const latest = platforms.map((p) => p.last_harvested_at).filter((v): v is string => !!v).sort().pop() ?? null;
+  return { platforms, last_harvested_at: latest };
+}
 
 // ---- the API ----------------------------------------------------------------------------------------------
 
@@ -924,6 +1020,46 @@ export const mockApi: PulseApi = {
       }
       return [...s.trends].sort(byRelevance).slice(0, int(q?.limit, 20, 1, 100));
     }),
+  getInsights: (days = 30) => live((s) => insights(s, int(days, 30, 1, HISTORY_DAYS))),
+  refreshInsights: () =>
+    live((s) => {
+      const e = extras(s);
+      e.relearn += 1;
+      e.insightsAt = iso(Date.now());
+      note(s, 'generated', 'Re-learned what works from your latest numbers');
+      return insights(s, 30);
+    }, SLOW),
+
+  setConnectionProfile: (platform, profileUrl) =>
+    authed((s) => {
+      const p = platformOf(platform);
+      if (!HARVEST_PLATFORMS.includes(p)) notFound('profile link for this platform');
+      const url = (profileUrl ?? '').trim();
+      if (!/^https?:\/\/\S+\.\S+/i.test(url)) unprocessable('profile_url: Input should be a valid URL');
+      const c = conn(s, p);
+      c.profile_url = url;
+      // Pretend the first harvest ran: the newest published posts of that platform now carry real numbers.
+      const e = extras(s);
+      const mine = s.posts.map((r) => r.post).filter((x) => x.platform === p && x.status === 'published');
+      mine.slice(0, 3).forEach((x) => {
+        x.metrics_source = 'real';
+        x.harvested_at = iso(Date.now());
+      });
+      e.harvestedAt[p] = iso(Date.now());
+      e.harvestedPosts[p] = Math.min(3, mine.length);
+      note(s, 'connection', `Saved your ${LABEL[p]} profile link`, { platform: p });
+      return c;
+    }),
+  getHarvestStatus: () => live((s) => harvestStatus(s)),
+
+  getBilling: () =>
+    authed((s) => ({ plan: extras(s).plan, mode: 'demo', price_label: 'A$29/mo', features: FEATURES })),
+  createCheckout: () =>
+    authed((s) => {
+      extras(s).plan = 'pro'; // the offline demo upgrades instantly: nothing to open
+      return { url: '' };
+    }, SLOW),
+  createPortal: () => authed(() => notFound('customer portal (not available in demo mode)')),
 };
 
 /** Simulate a real person tapping a tracked link (`/r/<code>`), optionally converting on the landing page. */

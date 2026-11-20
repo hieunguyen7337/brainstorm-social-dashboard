@@ -58,6 +58,8 @@ export interface Connection {
   mode: 'sandbox' | 'live';
   followers: number;
   connected_at: string;
+  /** Public profile link harvested for real stats (LinkedIn / Instagram). Added by the harvest unit; optional. */
+  profile_url?: string | null;
 }
 
 export interface ConnectionCreate {
@@ -87,6 +89,10 @@ export interface Post {
   clicks: number;
   conversions: number;
   created_at: string;
+  /** Where the counters come from: 'real' (harvested from the platform) or 'sim' (sandbox simulation). Optional until
+   *  every server has the harvest unit. */
+  metrics_source?: 'real' | 'sim' | string;
+  harvested_at?: string | null;
 }
 
 export interface PostCreate {
@@ -253,6 +259,82 @@ export interface Health {
   version: string;
 }
 
+// ---- insights: "What's working" (learning unit; SHAPE PROVISIONAL, see src/normalize.ts) ------------------------
+
+export interface ThemeInsight {
+  theme_id: string | null;
+  name: string;
+  color: string | null;
+  /** Posts behind the number. */
+  posts: number;
+  /** Relative improvement over the workspace average, as a fraction: 0.35 = 35% better, -0.12 = 12% worse. */
+  lift: number;
+  engagement_rate: number | null;
+}
+
+export interface PlatformRate {
+  platform: Platform;
+  views: number;
+  /** engagements / views, 0..1 */
+  engagement_rate: number;
+  /** clicks / views, 0..1 */
+  click_rate: number;
+  /** conversions ("Onboard") / clicks, 0..1 */
+  conversion_rate: number;
+}
+
+export interface InsightSources {
+  /** Counts of posts (or snapshots) whose metrics are real vs simulated. */
+  real: number;
+  simulated: number;
+}
+
+export interface Insights {
+  days: number;
+  /** One or two sentences of plain-language advice. */
+  summary: string;
+  top_themes: ThemeInsight[];
+  by_platform: PlatformRate[];
+  sources: InsightSources;
+  generated_at: string | null;
+}
+
+// ---- harvest: real stats for LinkedIn and Instagram (harvest unit; SHAPE PROVISIONAL) -----------------------------
+
+export interface HarvestPlatformStatus {
+  platform: Platform;
+  profile_url: string | null;
+  last_harvested_at: string | null;
+  posts_harvested: number | null;
+  status: string | null;
+}
+
+export interface HarvestStatus {
+  platforms: HarvestPlatformStatus[];
+  /** Most recent harvest across platforms. */
+  last_harvested_at: string | null;
+}
+
+// ---- billing: Pulse Pro (billing unit; shapes taken from its docs/BILLING.md) -----------------------------------
+
+export interface BillingInfo {
+  plan: 'free' | 'pro' | string;
+  mode: 'stripe_test' | 'demo' | string;
+  /** "A$29/mo" */
+  price_label: string;
+  features: { free: string[]; pro: string[] };
+}
+
+export interface CheckoutRequest {
+  success_url?: string;
+  cancel_url?: string;
+}
+
+export interface UrlResult {
+  /** Stripe Checkout / customer portal / demo checkout page. Empty: nothing to open (instant mock upgrade). */
+  url: string;
+}
+
 // ---- the client surface (real client and in-memory mock both implement this) -------------------
 
 export interface DashboardQuery {
@@ -307,4 +389,20 @@ export interface PulseApi {
   runAutopilot(): Promise<AutopilotRun>;
 
   listTrends(query?: TrendsQuery): Promise<Trend[]>;
+
+  // ---- optional features: each resolves null when the server does not have the endpoint (hide the UI) ----------
+  /** GET /api/insights?days=30 */
+  getInsights(days?: number): Promise<Insights | null>;
+  /** POST /api/insights/refresh ("Re-learn") */
+  refreshInsights(): Promise<Insights | null>;
+  /** PUT /api/connections/{platform}/profile */
+  setConnectionProfile(platform: Platform, profileUrl: string): Promise<Connection>;
+  /** GET /api/connections/harvest-status */
+  getHarvestStatus(): Promise<HarvestStatus | null>;
+  /** GET /api/billing */
+  getBilling(): Promise<BillingInfo | null>;
+  /** POST /api/billing/checkout */
+  createCheckout(body?: CheckoutRequest): Promise<UrlResult>;
+  /** POST /api/billing/portal (404 in demo mode) */
+  createPortal(): Promise<UrlResult>;
 }
