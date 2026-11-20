@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- HAND-WRITTEN APPROXIMATION of what a LOGGED-OUT visitor sees on a public profile: the profile header
+     is still rendered (so og:description has counts) but a login wall / interstitial sits on top.
+     It is NOT a capture of a real page; markup and wording are best guesses.
+     Edge case for looks_logged_out(): a profile header is present AND it is logged out. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pulse Demo (@pulse.demo) • Instagram photos and videos</title>
+<meta property="og:url" content="https://www.instagram.com/pulse.demo/">
+<meta property="og:description" content="1,234 Followers, 567 Following, 89 Posts - See Instagram photos and videos from Pulse Demo (@pulse.demo)">
+</head>
+<body>
+<div class="top-bar">
+  <a href="/accounts/login/">Log In</a>
+  <a href="/accounts/emailsignup/">Sign Up</a>
+</div>
+<main>
+<header>
+  <h2>pulse.demo</h2>
+  <ul><li><span>89</span> posts</li><li><span>1,234</span> followers</li><li><span>567</span> following</li></ul>
+</header>
+<div class="grid"><a href="/pulse.demo/p/C8xKq2LpA01/"><img alt="Sunrise run"></a></div>
+</main>
+<div role="dialog" class="interstitial">
+  <h3>Log in to see photos and videos from Pulse Demo</h3>
+  <p>Log in or sign up for Instagram to see more.</p>
+  <a href="/accounts/login/">Log in</a> <a href="/accounts/emailsignup/">Sign up</a>
+</div>
+</body>
+</html>

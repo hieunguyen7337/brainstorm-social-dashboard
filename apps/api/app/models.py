@@ -61,7 +61,9 @@ class Post(BaseModel):
     link_code: str | None
     link_url: str | None  # absolute tracked link, PUBLIC_BASE_URL + /r/<code>
     status: PostStatus
-    source: Literal["manual", "ai", "autopilot", "seed"]
+    source: Literal["manual", "ai", "autopilot", "seed", "harvested"]
+    metrics_source: Literal["sim", "real"] = "sim"
+    harvested_at: str | None = None
     scheduled_at: str | None
     published_at: str | None
     views: int

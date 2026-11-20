@@ -51,6 +51,8 @@ def row_to_post(conn: sqlite3.Connection, row: sqlite3.Row) -> Post:
         clicks=row["clicks"],
         conversions=row["conversions"],
         created_at=row["created_at"],
+        metrics_source=row["metrics_source"] if "metrics_source" in row.keys() else "sim",  # noqa: SIM118 (sqlite3.Row "in" checks values)
+        harvested_at=row["harvested_at"] if "harvested_at" in row.keys() else None,  # noqa: SIM118
     )
 
 

@@ -1,0 +1,44 @@
+<!-- HAND-WRITTEN APPROXIMATION, NOT a capture (no live access): edge cases for the LinkedIn activity parser.
+     Logged-in page (global-nav) whose posts mention "Sign in" / "Join now" on their own lines, so a naive
+     "sign in + join now" check would wrongly call it a login wall.
+     X1 (7270000000000000011): >280 chars of text with <br>, body text that quotes "500 comments" / "1,000 reactions"
+        (must not be counted), social proof "You and 86 others" (87 reactions), "1 comment", "1 repost",
+        "1.5M impressions", age "1w"
+     X2 (7270000000000000012): doubly entity-encoded text, explicit "0 comments", "0 reposts", 5 reactions, no impressions,
+        age "Just now"-style "now" -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Activity | LinkedIn</title></head>
+<body>
+<header id="global-nav" class="global-nav"><a href="/m/logout/">Sign out</a></header>
+<div class="scaffold-finite-scroll__content">
+
+<div class="feed-shared-update-v2" data-urn="urn:li:activity:7270000000000000011" role="article">
+  <div class="update-components-actor"><span class="update-components-actor__title">Alex Rivera</span><span class="update-components-actor__sub-description">1w &bull; Edited &bull;</span></div>
+  <div class="update-components-text relative"><span dir="ltr">Thread on how we onboard new members.<br>
+    Step 1: Sign in<br>Step 2: Join now<br>
+    We got 500 comments and 1,000 reactions on the last launch (no kidding), and 12 impressions per tweet.   It was
+    a   lot of   work, so here is the long version: we wrote every   email by hand, we answered every   reply within the
+    hour, and we kept a spreadsheet of every   conversation so nobody fell through the cracks. That is the whole secret, it is boring.
+    <button class="feed-shared-inline-show-more-text__see-more-less-toggle">&hellip;see more</button></span></div>
+  <div class="social-details-social-counts"><ul>
+    <li class="social-details-social-counts__reactions"><button><span class="social-details-social-counts__social-proof-text">You and 86 others</span></button></li>
+    <li class="social-details-social-counts__comments"><button><span>1 comment</span></button></li>
+    <li class="social-details-social-counts__item"><button><span>1 repost</span></button></li>
+  </ul></div>
+  <div class="ca-entry-point"><strong>1.5M impressions</strong> <span>View analytics</span></div>
+</div>
+
+<div class="feed-shared-update-v2" data-urn="urn:li:activity:7270000000000000012" role="article">
+  <div class="update-components-actor"><span class="update-components-actor__title">Alex Rivera</span><span class="update-components-actor__sub-description">now &bull;</span></div>
+  <div class="update-components-text"><span dir="ltr">Fish &amp;amp; chips &amp;#128640; for lunch, &amp;quot;again&amp;quot;</span></div>
+  <div class="social-details-social-counts"><ul>
+    <li><button aria-label="5 reactions"><span>5</span></button></li>
+    <li><button aria-label="0 comments"><span>0 comments</span></button></li>
+    <li><button aria-label="0 reposts"><span>0 reposts</span></button></li>
+  </ul></div>
+</div>
+
+</div>
+</body>
+</html>

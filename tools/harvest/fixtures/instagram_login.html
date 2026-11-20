@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- HAND-WRITTEN APPROXIMATION of Instagram's /accounts/login/ page. It is NOT a capture of a real page;
+     markup and wording are best guesses. Used only by tools/harvest/test_instagram_parsers.py. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Login • Instagram</title>
+<meta property="og:title" content="Login • Instagram">
+<meta property="og:url" content="https://www.instagram.com/accounts/login/">
+<link rel="canonical" href="https://www.instagram.com/accounts/login/">
+</head>
+<body>
+<div id="loginForm">
+  <h1>Instagram</h1>
+  <form method="post" action="/accounts/login/ajax/">
+    <label>Phone number, username, or email
+      <input type="text" name="username" aria-label="Phone number, username, or email" autocomplete="username">
+    </label>
+    <label>Password
+      <input type="password" name="password" aria-label="Password" autocomplete="current-password">
+    </label>
+    <button type="submit">Log in</button>
+  </form>
+  <div>OR</div>
+  <button type="button">Log in with Facebook</button>
+  <a href="/accounts/password/reset/">Forgot password?</a>
+</div>
+<div>Don't have an account? <a href="/accounts/emailsignup/">Sign up</a></div>
+<footer>Meta · About · Help · Privacy · Terms</footer>
+</body>
+</html>

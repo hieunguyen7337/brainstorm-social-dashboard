@@ -1,0 +1,68 @@
+<!-- HAND-WRITTEN APPROXIMATION of LinkedIn's /analytics/creator/content/ ("Content performance") page. NOT a capture:
+     there was no live access; the structure is a guess at how the totals tiles and the top-posts list look.
+     Names, ids and numbers are invented. Totals (past 7 days): impressions 45,308; reactions 640; comments 88;
+     reposts 31 (engagements = 759); followers 3,412. Top posts:
+       1 data-urn card for the post that is also on the activity page as A   (analytics impressions 15,100 > 12.4K)
+       2 plain <li> linked via /feed/update/ for the post that is also D      (analytics impressions 2,450 > 2.3K)
+       3 <li> linked only via /posts/...-activity-<id>-... : NOT on the activity page (older post), no reposts row -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Content performance | LinkedIn</title>
+<style>.stat{display:flex}</style></head>
+<body>
+<header id="global-nav" class="global-nav"><a href="/m/logout/">Sign out</a></header>
+<main class="analytics-creator">
+  <h1>Content performance</h1>
+  <div class="analytics-creator__period"><button aria-haspopup="listbox"><span>Past 7 days</span></button></div>
+
+  <section class="analytics-summary" aria-label="Overall performance">
+    <div class="analytics-stat">
+      <span class="analytics-stat__label">Impressions</span>
+      <span class="analytics-stat__value">45,308</span>
+      <span class="analytics-stat__delta">&uarr; 12.4% past 7 days</span>
+    </div>
+    <div class="analytics-stat">
+      <span class="analytics-stat__label">Members reached</span>
+      <span class="analytics-stat__value">21,004</span>
+    </div>
+  </section>
+
+  <section class="analytics-engagement">
+    <h2>Engagement</h2>
+    <div class="analytics-stat"><p class="analytics-stat__value">640</p><p class="analytics-stat__label">Reactions</p></div>
+    <div class="analytics-stat"><p class="analytics-stat__value">88</p><p class="analytics-stat__label">Comments</p></div>
+    <div class="analytics-stat"><p class="analytics-stat__value">31</p><p class="analytics-stat__label">Reposts</p></div>
+  </section>
+
+  <section class="analytics-audience">
+    <h2>Followers</h2>
+    <div class="analytics-stat"><span class="analytics-stat__label">Total followers</span> <span class="analytics-stat__value">3,412</span></div>
+  </section>
+
+  <section class="analytics-top-posts">
+    <h2>Top posts</h2>
+    <ul class="analytics-top-posts__list">
+      <li class="analytics-top-post" data-urn="urn:li:activity:7263100000000000001">
+        <a class="analytics-top-post__link" href="/analytics/post-summary/urn:li:activity:7263100000000000001/">
+          <p class="analytics-top-post__snippet">Shipped our Pulse demo this week. Three days, four people, one dashboard that pulls real post stats&hellip;</p>
+        </a>
+        <div class="analytics-top-post__metrics">
+          <span><strong>15,100</strong> impressions</span>
+          <span aria-label="1,310 reactions">1,310 reactions</span>
+          <span aria-label="90 comments">90 comments</span>
+          <span aria-label="15 reposts">15 reposts</span>
+        </div>
+      </li>
+      <li class="analytics-top-post">
+        <a class="analytics-top-post__link" href="https://www.linkedin.com/feed/update/urn:li:activity:7259900000000000004/">Lessons from our first 100 users &amp; what we got wrong</a>
+        <div class="analytics-top-post__metrics">2,450 impressions &middot; 91 reactions &middot; 13 comments &middot; 4 reposts</div>
+      </li>
+      <li class="analytics-top-post">
+        <a class="analytics-top-post__link" href="https://www.linkedin.com/posts/alex-rivera-demo_why-we-chose-sqlite-activity-7255500000000000077-Qz9x?utm_source=share">Why we chose SQLite for a social dashboard (and what would make us switch)</a>
+        <div class="analytics-top-post__metrics"><span>1,980 impressions</span> <span>55 reactions</span> <span>6 comments</span></div>
+      </li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

@@ -60,7 +60,7 @@ def tick(conn: sqlite3.Connection, workspace_id: str) -> None:
     rows = conn.execute(
         """SELECT p.id, p.platform, p.quality, p.published_at, p.last_tick_at, c.followers, c.status, c.mode
            FROM posts p LEFT JOIN connections c ON c.workspace_id = p.workspace_id AND c.platform = p.platform
-           WHERE p.workspace_id = ? AND p.status = 'published' AND p.published_at IS NOT NULL""",
+           WHERE p.workspace_id = ? AND p.status = 'published' AND p.published_at IS NOT NULL AND p.metrics_source = 'sim'""",
         (workspace_id,),
     ).fetchall()
     day = now.date().isoformat()

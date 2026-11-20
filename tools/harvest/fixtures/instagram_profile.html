@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- HAND-WRITTEN APPROXIMATION of Instagram's web markup for a logged-in PROFESSIONAL account profile
+     (og: meta tags, header stat list, grid anchors with img alt / aria-label / overlay text).
+     It is NOT a capture of a real page: element names, classes and wording are best guesses.
+     Used only by tools/harvest/test_instagram_parsers.py. 15 distinct grid posts + 1 duplicate anchor. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pulse Demo (@pulse.demo) • Instagram photos and videos</title>
+<meta property="og:title" content="Pulse Demo (@pulse.demo) • Instagram photos and videos">
+<meta property="og:url" content="https://www.instagram.com/pulse.demo/">
+<meta property="og:description" content="1,234 Followers, 567 Following, 89 Posts - See Instagram photos and videos from Pulse Demo (@pulse.demo)">
+<link rel="canonical" href="https://www.instagram.com/pulse.demo/">
+<script type="application/json">{"note": "1 Followers, 1 Following in a script must be ignored"}</script>
+</head>
+<body>
+<div id="react-root">
+<nav>
+  <a href="/">Home</a>
+  <a href="/explore/">Explore</a>
+  <a href="/direct/inbox/">Messages</a>
+  <a href="/pulse.demo/">Profile</a>
+</nav>
+<main>
+<header>
+  <h2>pulse.demo</h2>
+  <div class="actions">
+    <a href="/accounts/edit/">Edit profile</a>
+    <a href="/archive/stories/">View archive</a>
+    <a href="/accounts/insights/">View insights</a>
+    <button type="button">Professional dashboard</button>
+  </div>
+  <ul>
+    <li><span>89</span> posts</li>
+    <li><a href="/pulse.demo/followers/"><span title="1,234">1,234</span> followers</a></li>
+    <li><a href="/pulse.demo/following/"><span>567</span> following</a></li>
+  </ul>
+  <div class="bio"><strong>Pulse Demo</strong> Small-team launch diary. Coffee, code, sunrise runs.</div>
+</header>
+<div role="tablist"><a href="/pulse.demo/">Posts</a> <a href="/pulse.demo/reels/">Reels</a> <a href="/pulse.demo/tagged/">Tagged</a></div>
+<div class="grid">
+  <!-- 1: photo, alt carries caption + overlay stats -->
+  <a href="/pulse.demo/p/C8xKq2LpA01/" role="link"><div><img alt="Sunrise run along the harbour bridge. Early starts, big skies. 1,204 likes, 31 comments" src="https://cdn.example.invalid/a01.jpg"></div></a>
+  <!-- 2: reel with plays overlay -->
+  <a href="/pulse.demo/reel/C8xKq2LpB02/" role="link"><div><img alt="Behind the scenes of the Pulse launch" src="https://cdn.example.invalid/b02.jpg"></div><div class="overlay"><svg aria-label="Clip" viewBox="0 0 24 24"><title>Clip</title><path d="M0 0h24v24H0z"/></svg><span>12.3K plays</span></div></a>
+  <!-- 3: Instagram auto-generated description only -> no usable caption -->
+  <a href="/pulse.demo/p/C8xKq2LpC03/" role="link"><div><img alt="Photo by Pulse Demo on November 12, 2026. May be an image of 2 people and text." src="https://cdn.example.invalid/c03.jpg"></div></a>
+  <!-- 4: very long caption in the alt text -->
+  <a href="/pulse.demo/p/C8xKq2LpD04/" role="link"><div><img alt="Week one of building Pulse in public: we planned the whole social dashboard on a whiteboard, argued about whether trends should come from RSS or from scraping, settled on recorded fixtures for the demo, wrote the first ingest endpoint at midnight, broke the funnel chart twice, fixed it once, and finally watched the first real numbers from a logged-in browser land on the phone. Thank you to everyone who tested early builds and sent screenshots, you made the long nights worth it. More soon. 45 likes, 2 comments" src="https://cdn.example.invalid/d04.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpE05/" role="link"><div><img alt="Coffee, code and a very small team. 87 likes, 4 comments" src="https://cdn.example.invalid/e05.jpg"></div></a>
+  <!-- duplicate anchor of post 1 (pinned copy): must not take a second slot -->
+  <a href="/pulse.demo/p/C8xKq2LpA01/" role="link"><div><img alt="" src="https://cdn.example.invalid/a01-pinned.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpF06/" role="link"><div><img alt="Standup on the balcony" src="https://cdn.example.invalid/f06.jpg"></div></a>
+  <!-- 7: no img alt, caption + stats in the anchor's aria-label -->
+  <a href="/pulse.demo/p/C8xKq2LpG07/" aria-label="Launch day recap 245 likes, 12 comments" role="link"><div><img alt="" src="https://cdn.example.invalid/g07.jpg"></div></a>
+  <!-- 8: reel whose overlay is a bare count next to the Clip icon -->
+  <a href="/pulse.demo/reel/C8xKq2LpH08/" role="link"><div><img alt="Team lunch" src="https://cdn.example.invalid/h08.jpg"></div><div class="overlay"><svg aria-label="Clip" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg><span>8,904</span></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpI09/" role="link"><div><img alt="Whiteboard sketch of the funnel" src="https://cdn.example.invalid/i09.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpJ10/" role="link"><div><img alt="Demo day rehearsal" src="https://cdn.example.invalid/j10.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpK11/" role="link"><div><img alt="Pizza for the sprint" src="https://cdn.example.invalid/k11.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpL12/" role="link"><div><img alt="Last post inside the 12 cap" src="https://cdn.example.invalid/l12.jpg"></div></a>
+  <!-- everything below is beyond the cap of 12 -->
+  <a href="/pulse.demo/p/C8xKq2LpM13/" role="link"><div><img alt="Thirteenth" src="https://cdn.example.invalid/m13.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpN14/" role="link"><div><img alt="Fourteenth" src="https://cdn.example.invalid/n14.jpg"></div></a>
+  <a href="/pulse.demo/p/C8xKq2LpO15/" role="link"><div><img alt="Fifteenth" src="https://cdn.example.invalid/o15.jpg"></div></a>
+</div>
+</main>
+<footer><a href="/about/">About</a> <a href="/legal/privacy/">Privacy</a></footer>
+</div>
+</body>
+</html>

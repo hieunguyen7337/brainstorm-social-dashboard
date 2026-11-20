@@ -5,7 +5,8 @@ Auth is your workspace token, copied from the app's **Settings** screen. Send it
 `Authorization: Bearer <token>` or, for clients that cannot set headers, as `?token=<token>`.
 
 Tools: `get_dashboard`, `list_posts`, `create_post`, `publish_post`, `generate_posts`, `list_trends`,
-`list_themes`, `get_ai_usage`, `set_autopilot`, `run_autopilot`.
+`list_themes`, `get_ai_usage`, `set_autopilot`, `run_autopilot`, `set_profile_url`, `record_metrics`,
+`harvest_status`, `harvest_instructions`.
 
 ## Claude Code
 ```
