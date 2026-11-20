@@ -4,6 +4,7 @@ import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { api, ApiError, type Trend, type TrendSource } from '@/src/api';
 import { SourceHeader } from '@/src/components/trends/SourceBadge';
+import { TrendGrid } from '@/src/components/trends/TrendGrid';
 import { TrendRow } from '@/src/components/trends/TrendRow';
 import { TrendsIntro } from '@/src/components/trends/TrendsIntro';
 import { TrendsSkeleton } from '@/src/components/trends/TrendsSkeleton';
@@ -17,6 +18,7 @@ import {
   type TrendGroup,
 } from '@/src/components/trends/trendUtils';
 import { useAsync } from '@/src/hooks';
+import { useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { space, trendSourceMeta } from '@/src/theme';
 import { Button, Chip, ChipStrip, EmptyState, ErrorState, Screen, haptic, useToast } from '@/src/ui';
@@ -47,6 +49,7 @@ async function openSource(url: string): Promise<boolean> {
 }
 
 export default function TrendsScreen() {
+  const wide = useWide();
   const { workspace } = useSession();
   const { show } = useToast();
   const {
@@ -182,7 +185,7 @@ export default function TrendsScreen() {
   if (!hasData) {
     body =
       loading || reloading ? (
-        <TrendsSkeleton />
+        <TrendsSkeleton wide={wide} />
       ) : (
         <ErrorState
           title="Couldn't load trends"
@@ -230,6 +233,15 @@ export default function TrendsScreen() {
             message="That feed came back empty. Refresh to try again, or look at every source."
             action={<Button title="Show all trends" variant="secondary" onPress={() => selectFilter('all')} />}
           />
+        ) : wide ? (
+          // Desktop web (>= 1024 px): the same groups and order, as a 3-column grid of cards.
+          <TrendGrid
+            sections={sections}
+            enterDelay={(index) => (playIntro ? Math.min(index, STAGGER_CAP) * STAGGER_MS : null)}
+            animateBars={(index) => index < ANIMATED_ROWS}
+            onCreate={onCreate}
+            onOpen={onOpen}
+          />
         ) : (
           <View style={styles.groups}>
             {sections.map(({ group, start }) => (
@@ -270,6 +282,7 @@ export default function TrendsScreen() {
         refreshing={forcing}
         offline={offline}
         onRefresh={forceRefresh}
+        inline={wide}
       />
       {body}
     </Screen>

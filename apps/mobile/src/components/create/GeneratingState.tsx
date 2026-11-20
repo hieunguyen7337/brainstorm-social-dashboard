@@ -7,12 +7,15 @@ import { colors, platformMeta, radius, space, withAlpha } from '@/src/theme';
 import type { Platform as PlatformKey } from '@/src/types';
 import { PlatformBadge } from '@/src/ui';
 
+import { CardGrid } from './CardGrid';
 import { statusMessages } from './logic';
 
 /** How often the status line moves on. */
 const ROTATE_MS = 1800;
 /** Skeleton cards shown at most (the rest is summarised in a line). */
 const MAX_CARDS = 3;
+/** The wide board lays the skeletons out in a grid, so it has room for two full rows. */
+const MAX_CARDS_GRID = 4;
 
 /** Card with a soft highlight sweeping across it. One looping value, native-driven off the web. */
 function Shimmer({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -61,10 +64,10 @@ function Bar({ width, height = 11 }: { width: DimensionValue; height?: number })
 }
 
 /** A post-shaped placeholder for one platform; it lights up while that platform's line is on screen. */
-function GhostCard({ platform, active }: { platform: PlatformKey; active: boolean }) {
+function GhostCard({ platform, active, tall = false }: { platform: PlatformKey; active: boolean; tall?: boolean }) {
   const color = platformMeta[platform].color;
   return (
-    <Shimmer style={active ? { borderColor: withAlpha(color, 0.65) } : undefined}>
+    <Shimmer style={[tall && styles.tall, active ? { borderColor: withAlpha(color, 0.65) } : undefined]}>
       <View style={styles.cardHead}>
         <PlatformBadge platform={platform} size={30} />
         <View style={styles.cardHeadText}>
@@ -75,6 +78,7 @@ function GhostCard({ platform, active }: { platform: PlatformKey; active: boolea
       <Bar width="100%" />
       <Bar width="94%" />
       <Bar width="68%" />
+      {tall ? <View style={styles.media} /> : null}
     </Shimmer>
   );
 }
@@ -82,15 +86,18 @@ function GhostCard({ platform, active }: { platform: PlatformKey; active: boolea
 /**
  * Shown under the Generate button while Claude writes (10-30 s): a rotating status line, and shimmering
  * platform-card skeletons. Presentational: the screen owns the request.
+ * `layout="grid"` (the wide board) lays the skeletons out in the same card grid the finished posts will use.
  */
 export function GeneratingState({
   platforms,
   hasTrend,
   themeName,
+  layout = 'stack',
 }: {
   platforms: readonly PlatformKey[];
   hasTrend: boolean;
   themeName?: string | null;
+  layout?: 'stack' | 'grid';
 }) {
   const platformKey = platforms.join('|');
   const messages = useMemo(
@@ -132,7 +139,8 @@ export function GeneratingState({
   }, [pulse]);
 
   const current = messages[tick % messages.length];
-  const cards = platforms.slice(0, MAX_CARDS);
+  const grid = layout === 'grid';
+  const cards = platforms.slice(0, grid ? MAX_CARDS_GRID : MAX_CARDS);
   const more = platforms.length - cards.length;
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.18] });
 
@@ -146,9 +154,15 @@ export function GeneratingState({
           {current.text}
         </Animated.Text>
       </View>
-      {cards.map((p) => (
-        <GhostCard key={p} platform={p} active={current.platform === p} />
-      ))}
+      {grid ? (
+        <CardGrid>
+          {cards.map((p) => (
+            <GhostCard key={p} platform={p} active={current.platform === p} tall />
+          ))}
+        </CardGrid>
+      ) : (
+        cards.map((p) => <GhostCard key={p} platform={p} active={current.platform === p} />)
+      )}
       {more > 0 ? <Text style={styles.more}>{`+ ${more} more on the way`}</Text> : null}
     </View>
   );
@@ -167,6 +181,8 @@ const styles = StyleSheet.create({
     gap: 10,
     overflow: 'hidden',
   },
+  tall: { minHeight: 260 },
+  media: { flex: 1, minHeight: 110, borderRadius: radius.sm, backgroundColor: colors.cardHi, marginTop: 4 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: 4 },
   cardHeadText: { flex: 1, gap: 6 },
   band: { position: 'absolute', top: 0, bottom: 0, left: 0 },

@@ -88,6 +88,11 @@ export interface PostCardProps {
   /** Resolves true when the edit was saved (the card then leaves edit mode). */
   onSave: (post: Post, patch: { content: string; hashtags: string[] }) => Promise<boolean>;
   onOpenLink: (post: Post) => void;
+  /**
+   * A narrow kanban column (wide layout): the status badge is left to the column header (failed posts keep
+   * theirs), the link row wraps and the live counters go 2 x 2. Phones never set it.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -107,6 +112,7 @@ function PostCardImpl({
   onSchedule,
   onSave,
   onOpenLink,
+  compact = false,
 }: PostCardProps) {
   const toast = useToast();
   const [expanded, setExpanded] = useState(false);
@@ -163,7 +169,9 @@ function PostCardImpl({
             </Text>
           </View>
         </View>
-        <Badge label={status.label} tone={status.tone} icon={status.icon} style={styles.badge} />
+        {!compact || post.status === 'failed' ? (
+          <Badge label={status.label} tone={status.tone} icon={status.icon} style={styles.badge} />
+        ) : null}
       </View>
 
       <View style={styles.timeRow}>
@@ -210,10 +218,13 @@ function PostCardImpl({
             clicks: post.clicks,
             conversions: post.conversions,
           }}
+          compact={compact}
         />
       ) : null}
 
-      {mode !== 'edit' && post.link_url ? <LinkRow url={post.link_url} onCopy={copyLink} onOpen={openLink} /> : null}
+      {mode !== 'edit' && post.link_url ? (
+        <LinkRow url={post.link_url} onCopy={copyLink} onOpen={openLink} compact={compact} />
+      ) : null}
 
       {mode !== 'edit' ? (
         published ? (

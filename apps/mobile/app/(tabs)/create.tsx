@@ -4,20 +4,23 @@ import { Keyboard, StyleSheet, Text, View } from 'react-native';
 
 import { api } from '@/src/api';
 import { BriefFields } from '@/src/components/create/BriefFields';
+import { CreateBoard } from '@/src/components/create/CreateBoard';
 import { errorMessage } from '@/src/components/create/errors';
 import { GeneratingState } from '@/src/components/create/GeneratingState';
 import { TREND_FETCH, firstParam, orderLike, type Batch, type TrendChoice } from '@/src/components/create/logic';
 import { PlatformPicker } from '@/src/components/create/PlatformPicker';
+import { ResultPane } from '@/src/components/create/ResultPane';
 import { ResultView } from '@/src/components/create/ResultView';
 import { ThemePicker } from '@/src/components/create/ThemePicker';
 import { TrendPicker } from '@/src/components/create/TrendPicker';
 import { UsageLine } from '@/src/components/create/UsageLine';
 import { APP_NAME, MAX_CONTENT_WIDTH } from '@/src/config';
 import { useAsync } from '@/src/hooks';
+import { useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { colors, space } from '@/src/theme';
 import { PLATFORMS, type Platform, type Trend } from '@/src/types';
-import { Button, Card, ErrorState, Screen, haptic } from '@/src/ui';
+import { Button, Card, ErrorState, Screen, confirm, haptic } from '@/src/ui';
 
 type Phase = 'form' | 'generating' | 'result';
 
@@ -26,6 +29,7 @@ type Phase = 'form' | 'generating' | 'result';
  * per platform. All state lives here, so the form survives switching tabs and the result survives too.
  */
 export default function CreateScreen() {
+  const wide = useWide();
   const { workspace } = useSession();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ trendId?: string; trendTitle?: string }>();
@@ -54,6 +58,8 @@ export default function CreateScreen() {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   const requesting = useRef(false);
+  /** Wide board only: the result on screen has edits that were never saved (set by `ResultGrid`). */
+  const unsavedRef = useRef(false);
 
   // ---- derived ---------------------------------------------------------------------------------------------------
   const connected = useMemo(
@@ -156,19 +162,117 @@ export default function CreateScreen() {
   const count = platforms.length;
   const refreshing = connections.refreshing || themes.refreshing || usage.refreshing;
 
+  const generateButton = (onPress: () => void) => (
+    <Button
+      title={generating ? 'Generating...' : count > 0 ? `Generate ${count} ${count === 1 ? 'post' : 'posts'}` : 'Generate posts'}
+      icon="sparkles"
+      full
+      loading={generating}
+      disabled={!canGenerate}
+      onPress={onPress}
+    />
+  );
+
+  // The same form pieces serve the phone's stacked cards and the wide board's single form card.
+  const platformPicker = <PlatformPicker selected={platforms} onChange={setPicked} />;
+  const themePicker = (
+    <ThemePicker
+      themes={activeThemes}
+      loading={themes.loading && !themes.data}
+      failed={!!themes.error && !themes.data}
+      selectedId={theme?.id ?? null}
+      onSelect={setThemeId}
+      onRetry={() => void themes.reload()}
+    />
+  );
+  const trendPicker = (
+    <TrendPicker
+      choice={trendView}
+      open={trendOpen}
+      onToggle={toggleTrend}
+      list={trends.data}
+      loading={trendsLoading}
+      failed={trendsFailed}
+      retrying={trends.fetching}
+      onRetry={() => void trends.reload()}
+      onPick={pickTrend}
+      onClear={() => setTrend(null)}
+    />
+  );
+  const briefFields = <BriefFields brief={brief} onBrief={setBrief} tone={tone} onTone={setTone} disabled={generating} />;
+  const usageLine = <UsageLine usage={usage.data} loading={usage.loading} />;
+  const noPlatformHint = count === 0 ? <Text style={styles.hint}>Select at least one platform to generate.</Text> : null;
+  const errorCard =
+    genError && !generating ? (
+      <Card padded={false}>
+        <ErrorState title="Couldn't generate" message={genError} onRetry={() => void generate()} />
+      </Card>
+    ) : null;
+
+  // ---- wide (>= 1024 px): the form on the left, the generated cards in a grid on the right ---------------------------
+  if (wide) {
+    // The form stays on screen next to the result, so a new generation can replace posts with unsaved edits: ask first.
+    const generateFromBoard = async () => {
+      if (showResult && unsavedRef.current) {
+        const ok = await confirm(
+          'Replace these posts?',
+          'Some edits have not been saved. The drafts themselves are already in your queue.',
+          'Generate',
+          true,
+        );
+        if (!ok) return;
+      }
+      await generate();
+    };
+
+    return (
+      <Screen
+        key="board"
+        title="Create"
+        subtitle="One idea, six platform-native posts"
+        onRefresh={refreshAll}
+        refreshing={refreshing}
+      >
+        <CreateBoard
+          stickyForm={!trendOpen}
+          form={
+            <Card style={styles.formCard}>
+              <View style={[styles.sections, generating && styles.locked]}>
+                {briefFields}
+                {themePicker}
+                {trendPicker}
+                {platformPicker}
+              </View>
+              <View style={styles.generate}>
+                {usageLine}
+                {noPlatformHint}
+                {generateButton(() => void generateFromBoard())}
+                {errorCard}
+              </View>
+            </Card>
+          }
+          result={
+            <ResultPane
+              batch={showResult ? batch : null}
+              generating={generating}
+              platforms={platforms}
+              hasTrend={!!trendView}
+              themeName={theme?.name}
+              connections={connections.data}
+              brandName={workspace?.brand_name || APP_NAME}
+              onBack={backToForm}
+              unsavedRef={unsavedRef}
+            />
+          }
+        />
+      </Screen>
+    );
+  }
+
   // The Generate button stays pinned above the tab bar, so it is one tap away however long the form gets.
   const generateBar = (
     <View style={styles.bar}>
-      <View style={styles.barInner}>
-        <Button
-          title={generating ? 'Generating...' : count > 0 ? `Generate ${count} ${count === 1 ? 'post' : 'posts'}` : 'Generate posts'}
-          icon="sparkles"
-          full
-          loading={generating}
-          disabled={!canGenerate}
-          onPress={() => void generate()}
-        />
-      </View>
+      <View style={styles.barInner}>{generateButton(() => void generate())}</View>
     </View>
   );
 
@@ -194,41 +298,17 @@ export default function CreateScreen() {
         <>
           <View style={[styles.stack, generating && styles.locked]}>
             <Card style={styles.sections}>
-              <PlatformPicker selected={platforms} onChange={setPicked} />
-              <ThemePicker
-                themes={activeThemes}
-                loading={themes.loading && !themes.data}
-                failed={!!themes.error && !themes.data}
-                selectedId={theme?.id ?? null}
-                onSelect={setThemeId}
-                onRetry={() => void themes.reload()}
-              />
-              <TrendPicker
-                choice={trendView}
-                open={trendOpen}
-                onToggle={toggleTrend}
-                list={trends.data}
-                loading={trendsLoading}
-                failed={trendsFailed}
-                retrying={trends.fetching}
-                onRetry={() => void trends.reload()}
-                onPick={pickTrend}
-                onClear={() => setTrend(null)}
-              />
+              {platformPicker}
+              {themePicker}
+              {trendPicker}
             </Card>
-            <Card>
-              <BriefFields brief={brief} onBrief={setBrief} tone={tone} onTone={setTone} disabled={generating} />
-            </Card>
+            <Card>{briefFields}</Card>
           </View>
 
           <View style={styles.generate}>
-            <UsageLine usage={usage.data} loading={usage.loading} />
-            {count === 0 ? <Text style={styles.hint}>Select at least one platform to generate.</Text> : null}
-            {genError && !generating ? (
-              <Card padded={false}>
-                <ErrorState title="Couldn't generate" message={genError} onRetry={() => void generate()} />
-              </Card>
-            ) : null}
+            {usageLine}
+            {noPlatformHint}
+            {errorCard}
             {generating ? <GeneratingState platforms={platforms} hasTrend={!!trendView} themeName={theme?.name} /> : null}
           </View>
         </>
@@ -242,6 +322,8 @@ const styles = StyleSheet.create({
   // While Claude writes the form is read-only and dimmed.
   locked: { opacity: 0.55, pointerEvents: 'none' },
   sections: { gap: space.xl },
+  // Wide board: the one form card (fields, then usage + Generate).
+  formCard: { gap: space.xl },
   generate: { gap: space.md },
   bar: {
     alignItems: 'center',

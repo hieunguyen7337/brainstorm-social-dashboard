@@ -28,11 +28,21 @@ const fmtStat = (n: number): string => (n >= 100_000 ? fmtCompact(n) : fmtInt(n)
  * grows (AnimatedNumber), and a small "+N" chip replaces the icon for ~3 s whenever it rose since the previous
  * poll. The previous value is tracked in a ref inside each column, so a card that just mounted never shows a chip.
  */
-export function LiveStats({ counters }: { counters: Counters }) {
+export function LiveStats({ counters, compact = false }: { counters: Counters; compact?: boolean }) {
   return (
-    <View style={styles.panel}>
+    <View style={[styles.panel, compact && styles.panelCompact]}>
       {STATS.map((s, i) => (
-        <Stat key={s.key} label={s.label} icon={s.icon} color={s.color} value={counters[s.key]} divider={i > 0} />
+        <Stat
+          key={s.key}
+          label={s.label}
+          icon={s.icon}
+          color={s.color}
+          value={counters[s.key]}
+          // Compact (a narrow kanban column): 2 x 2 instead of 4 across.
+          divider={compact ? i % 2 === 1 : i > 0}
+          topRule={compact && i >= 2}
+          compact={compact}
+        />
       ))}
     </View>
   );
@@ -44,12 +54,16 @@ function Stat({
   color,
   value,
   divider,
+  topRule = false,
+  compact = false,
 }: {
   label: string;
   icon: IconName;
   color: string;
   value: number;
   divider: boolean;
+  topRule?: boolean;
+  compact?: boolean;
 }) {
   const previous = useRef(value);
   const chipShown = useRef(false);
@@ -85,7 +99,12 @@ function Stat({
 
   return (
     <View
-      style={[styles.cell, divider && styles.divider]}
+      style={[
+        styles.cell,
+        compact && styles.cellCompact,
+        divider && styles.divider,
+        topRule && styles.topRule,
+      ]}
       accessible
       accessibilityLabel={`${label}: ${fmtInt(value)}`}
     >
@@ -121,8 +140,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingVertical: 10,
   },
+  panelCompact: { flexWrap: 'wrap', paddingVertical: 0 },
   cell: { flex: 1, minWidth: 0, alignItems: 'center', gap: 3, paddingHorizontal: 2 },
+  cellCompact: { flexGrow: 0, flexShrink: 0, flexBasis: '50%', paddingVertical: 10 },
   divider: { borderLeftWidth: 1, borderLeftColor: colors.border },
+  topRule: { borderTopWidth: 1, borderTopColor: colors.border },
   top: { height: 16, alignItems: 'center', justifyContent: 'center' },
   value: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, color: colors.text },
   label: { fontSize: 10.5, fontWeight: '600', color: colors.textMute },

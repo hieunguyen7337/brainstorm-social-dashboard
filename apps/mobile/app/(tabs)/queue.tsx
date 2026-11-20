@@ -7,6 +7,7 @@ import { EmptyQueue } from '@/src/components/queue/EmptyQueue';
 import { FadeIn } from '@/src/components/queue/FadeIn';
 import { PostCard } from '@/src/components/queue/PostCard';
 import { PostCardSkeleton } from '@/src/components/queue/PostCardSkeleton';
+import { QueueBoard } from '@/src/components/queue/QueueBoard';
 import {
   applyOverlay,
   parseQueueTab,
@@ -25,6 +26,7 @@ import { QueueStatusRow, type BulkProgress } from '@/src/components/queue/QueueS
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { fmtDateTime } from '@/src/format';
 import { useAsync } from '@/src/hooks';
+import { useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
 import { Screen, Segmented, ErrorState, confirm, haptic, useToast, type SegmentedOption } from '@/src/ui';
@@ -46,6 +48,7 @@ interface TabNavigation {
  * card back for a moment.
  */
 export default function QueueScreen() {
+  const wide = useWide();
   const toast = useToast();
   const { workspace } = useSession();
   const focused = useIsFocused();
@@ -403,6 +406,36 @@ export default function QueueScreen() {
   const brandName = workspace?.brand_name || APP_NAME;
   const items = lists ? lists[tab] : [];
   const locked = bulk !== null;
+
+  // Desktop web (>= 1024 px): the three statuses side by side. Same data, overlay, polling and handlers as below.
+  if (wide) {
+    return (
+      <Screen
+        title="Queue"
+        subtitle="Review, schedule and publish. Numbers update live."
+        onRefresh={onRefresh}
+        refreshing={pulling}
+      >
+        <QueueBoard
+          lists={lists}
+          loadError={error && !retrying ? messageOf(error) : null}
+          onRetry={onRetry}
+          reconnecting={!!lists && !!error}
+          focused={focused}
+          bulk={bulk}
+          onPublishAll={publishAll}
+          busy={busy}
+          accounts={accounts}
+          intro={intro}
+          card={{ now, locked, brandName, onPublish, onDelete, onUnschedule, onSchedule, onSave, onOpenLink }}
+          activeTab={tab}
+          scrollEpoch={scrollEpoch}
+          onCreate={onCreate}
+          onGoDrafts={() => goTab('drafts')}
+        />
+      </Screen>
+    );
+  }
 
   let body: ReactNode;
   if (!lists) {

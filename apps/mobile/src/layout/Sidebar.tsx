@@ -39,6 +39,7 @@ function SidebarItem({ label, focused, testID, accessibilityLabel, icon, onPress
       accessibilityRole="tab"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected: focused }}
+      aria-selected={focused}
       onPress={onPress}
       onLongPress={onLongPress}
       onHoverIn={() => setHovered(true)}

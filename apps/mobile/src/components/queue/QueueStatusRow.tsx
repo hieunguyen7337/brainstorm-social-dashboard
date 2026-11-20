@@ -26,6 +26,7 @@ export function QueueStatusRow({
   draftCount,
   bulk,
   onPublishAll,
+  compact = false,
 }: {
   tab: QueueTab;
   hasItems: boolean;
@@ -34,9 +35,37 @@ export function QueueStatusRow({
   draftCount: number;
   bulk: BulkProgress | null;
   onPublishAll: () => void;
+  /**
+   * Wide kanban column header: just the inline control (a short "Publish all" button, or the "Live" dot), no
+   * row and no sentence. `reconnecting` is the board's own line there.
+   */
+  compact?: boolean;
 }) {
   const showLive = tab === 'published' && hasItems;
   const showBulk = tab === 'drafts' && (draftCount >= 2 || bulk !== null);
+  if (compact) {
+    if (showBulk) {
+      return (
+        <Button
+          title={bulk ? `Publishing ${bulk.current}/${bulk.total}` : 'Publish all'}
+          accessibilityLabel={bulk ? undefined : 'Publish all drafts'}
+          icon="rocket-outline"
+          small
+          loading={bulk !== null}
+          onPress={onPublishAll}
+        />
+      );
+    }
+    if (showLive && !reconnecting) {
+      return (
+        <View style={styles.left}>
+          <LiveDot live={focused} />
+          <Text style={styles.live}>Live</Text>
+        </View>
+      );
+    }
+    return null;
+  }
   if (!showLive && !showBulk && !reconnecting) return null;
 
   let left: ReactNode = null;

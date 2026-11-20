@@ -13,13 +13,14 @@ import { APP_NAME } from './config';
 import { ApiError, getToken, publicBaseUrl, raiseUnauthorized } from './http';
 import {
   COPY, DEFAULT_BRAND, DEFAULT_PROFILE, FACTS, GENERIC_FACTS, LABEL, MEDIA, MODEL, SEED_NOTES, SEED_POSTS,
-  SEED_THEMES, SHOTS, TAGS, TREND_SEEDS,
+  SEED_THEMES, SHOTS, TAGS, THEME_CLASSIFIERS, THEME_EDGE, TREND_SEEDS,
 } from './mockData';
 import type { Mode } from './mockData';
 import { PLATFORMS } from './types';
 import type {
-  ActivityItem, AutopilotConfig, AutopilotRun, Connection, DashboardSummary, Platform, Post, PostStatus, PulseApi,
-  Theme, Totals, Trend, Workspace,
+  ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
+  InsightMetrics, InsightsResponse, LiftBy, Platform, PlatformInsight, Post, PostStatus, PulseApi, Theme,
+  ThemeInsight, Totals, Trend, Workspace,
 } from './types';
 
 // ---- small helpers ------------------------------------------------------------------------------
@@ -173,6 +174,12 @@ let state: State | null = null;
 let aiAvailable = process.env.EXPO_PUBLIC_MOCK_AI === '1';
 
 const conn = (s: State, p: Platform): Connection => s.conns[PLATFORMS.indexOf(p)];
+
+/** Public profile page of the two platforms the mock pretends to read for real. */
+const profileUrl = (p: Platform, handle: string): string => {
+  const name = handle.replace(/^@/, '');
+  return p === 'linkedin' ? `https://www.linkedin.com/company/${name}` : `https://www.instagram.com/${name}/`;
+};
 
 /** Add to the four funnel counters (works on a daily row or a post). */
 function add(t: Totals, v: number, e: number, c: number, q: number): void {
@@ -329,6 +336,12 @@ function tick(s: State): void {
     r.sim.age = age;
     grow(s, r, dv, now);
   }
+  for (const c of s.conns) {
+    // Real-data connectors re-read their profile every few minutes.
+    if (c.real_data && c.status === 'connected' && now - parseIso(c.last_harvested_at ?? c.connected_at) >= HARVEST_EVERY) {
+      c.last_harvested_at = iso(now);
+    }
+  }
   if (s.autopilot.enabled && s.nextAutoAt !== null && now >= s.nextAutoAt) {
     try {
       autopilotCycle(s, now);
@@ -394,6 +407,142 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
   };
 }
 
+// ---- insights ---------------------------------------------------------------------------------------
+
+/** The mock keeps lifts in a believable band: tiny seed samples would otherwise swing to -100% or +400%. */
+const LIFT_MIN = -0.3;
+const LIFT_MAX = 0.8;
+const HARVEST_EVERY = 10 * MIN;
+const REAL_DATA_PLATFORMS: readonly Platform[] = ['linkedin', 'instagram'];
+
+interface InsightAcc { posts: number; views: number; engagements: number; clicks: number; onboard: number }
+
+const newAcc = (): InsightAcc => ({ posts: 0, views: 0, engagements: 0, clicks: 0, onboard: 0 });
+const addToAcc = (a: InsightAcc, p: Post): void => {
+  a.posts += 1;
+  a.views += p.views;
+  a.engagements += p.engagements;
+  a.clicks += p.clicks;
+  a.onboard += p.conversions;
+};
+const per = (n: number, views: number): number => (views > 0 ? n / views : 0);
+const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+const round5 = (n: number): number => Math.round(n * 100000) / 100000;
+
+const metricsOf = (a: InsightAcc): InsightMetrics => ({
+  ...a,
+  engagement_rate: round5(per(a.engagements, a.views)),
+  click_rate: round5(per(a.clicks, a.views)),
+  onboard_rate: round5(per(a.onboard, a.views)),
+});
+
+/** Lift of a group against the workspace baseline: the primary one is onboard, else click, else engagement rate. */
+function liftsOf(a: InsightAcc, base: InsightAcc): { lift: number; lift_by: LiftBy } {
+  if (a.posts === 0) return { lift: 0, lift_by: { engagement_rate: 0, click_rate: 0, onboard_rate: 0 } };
+  const by = (n: number, baseN: number): number => {
+    const b = per(baseN, base.views);
+    return b > 0 ? round3(clamp(per(n, a.views) / b - 1, LIFT_MIN, LIFT_MAX)) + 0 : 0;
+  };
+  const lift_by: LiftBy = {
+    engagement_rate: by(a.engagements, base.engagements),
+    click_rate: by(a.clicks, base.clicks),
+    onboard_rate: by(a.onboard, base.onboard),
+  };
+  const primary = base.onboard > 0 ? lift_by.onboard_rate : base.clicks > 0 ? lift_by.click_rate : lift_by.engagement_rate;
+  return { lift: primary, lift_by };
+}
+
+/**
+ * Who sorted this post into its theme. Seed themes follow THEME_CLASSIFIERS by the post's position among the
+ * theme's published posts (oldest first, so a classifier never changes once assigned); a theme the person created
+ * is theirs, so "manual".
+ */
+function classifierOf(s: State, post: Post): ClassifierName {
+  const idx = s.themes.findIndex((t) => t.id === post.theme_id);
+  const pattern = idx >= 0 && idx < SEED_THEMES.length ? THEME_CLASSIFIERS[idx] : undefined;
+  if (!pattern) return 'manual';
+  const rank = s.posts
+    .map((r) => r.post)
+    .filter((p) => p.status === 'published' && p.theme_id === post.theme_id)
+    .sort((a, b) => parseIso(a.published_at ?? a.created_at) - parseIso(b.published_at ?? b.created_at))
+    .findIndex((p) => p.id === post.id);
+  return pattern[Math.max(0, rank) % pattern.length];
+}
+
+const addClassifier = (counts: ClassifierCounts, name: ClassifierName): void => {
+  counts[name] = (counts[name] ?? 0) + 1;
+};
+
+const strongest = (list: { lift: number; views: number }[]): number =>
+  list.reduce((best, x, i) => (x.views > 0 && (best < 0 || x.lift > list[best].lift) ? i : best), -1);
+
+const pctOf = (n: number): string => `${(n * 100).toFixed(n >= 0.01 ? 1 : 2)}%`;
+const vsAverage = (lift: number): string => {
+  const p = Math.round(Math.abs(lift) * 100);
+  return p === 0 ? 'in line with your average' : `${p}% ${lift > 0 ? 'above' : 'below'} your average`;
+};
+
+function insights(s: State, days: number): InsightsResponse {
+  const since = Date.now() - days * DAY;
+  const published = s.posts
+    .map((r) => r.post)
+    .filter((p) => p.status === 'published' && p.published_at && parseIso(p.published_at) >= since);
+
+  const base = newAcc();
+  const byTheme = new Map<string, { acc: InsightAcc; classifiers: ClassifierCounts }>();
+  const byPlatform = new Map<Platform, InsightAcc>();
+  const total: ClassifierCounts = {};
+  let real = 0;
+  for (const p of published) {
+    addToAcc(base, p);
+    const pa = byPlatform.get(p.platform) ?? newAcc();
+    byPlatform.set(p.platform, pa);
+    addToAcc(pa, p);
+    if (REAL_DATA_PLATFORMS.includes(p.platform) && conn(s, p.platform).real_data) real += 1;
+    if (!p.theme_id || !s.themes.some((t) => t.id === p.theme_id)) continue;
+    const g = byTheme.get(p.theme_id) ?? { acc: newAcc(), classifiers: {} };
+    byTheme.set(p.theme_id, g);
+    addToAcc(g.acc, p);
+    const who = classifierOf(s, p);
+    addClassifier(g.classifiers, who);
+    addClassifier(total, who);
+  }
+
+  const themes: ThemeInsight[] = s.themes
+    .filter((t) => t.active || byTheme.has(t.id))
+    .map((t) => {
+      const g = byTheme.get(t.id);
+      const acc = g?.acc ?? newAcc();
+      return {
+        theme_id: t.id, name: t.name, color: t.color, ...metricsOf(acc), ...liftsOf(acc, base),
+        classifiers: g?.classifiers ?? {},
+      };
+    })
+    .sort((a, b) => b.lift - a.lift || b.views - a.views || a.name.localeCompare(b.name));
+  const platforms: PlatformInsight[] = [...byPlatform.entries()]
+    .map(([platform, acc]) => ({ platform, ...metricsOf(acc), ...liftsOf(acc, base) }))
+    .sort((a, b) => b.views - a.views || a.platform.localeCompare(b.platform));
+  const top_themes = themes.filter((t) => t.posts >= 2 && t.views > 0).slice(0, 3);
+
+  const b = metricsOf(base);
+  const sources = { real, simulated: published.length - real };
+  const parts: string[] = [];
+  if (b.posts === 0) {
+    parts.push(`There are no published posts in the last ${days} days yet, so there is nothing to learn from. Publish a few posts across your themes and platforms, then refresh to see what works.`);
+  } else {
+    parts.push(`In the last ${days} days, ${b.posts} published ${b.posts === 1 ? 'post' : 'posts'} earned ${b.views.toLocaleString('en-AU')} views, with a ${pctOf(b.engagement_rate)} engagement rate, a ${pctOf(b.click_rate)} click rate and a ${pctOf(b.onboard_rate)} onboard rate.`);
+    if (top_themes.length) parts.push(`'${top_themes[0].name}' is the strongest theme: its onboard rate is ${vsAverage(top_themes[0].lift)} (${top_themes[0].posts} posts).`);
+    const best = strongest(platforms);
+    if (platforms.length >= 2 && best >= 0) parts.push(`${LABEL[platforms[best].platform]} is the strongest platform: its onboard rate is ${vsAverage(platforms[best].lift)} (${platforms[best].posts} posts).`);
+    parts.push(sources.real > 0 ? `${sources.real} of these ${b.posts} posts have real metrics; the rest are simulated.` : 'All of these numbers come from simulated sandbox audiences, not real people.');
+  }
+
+  return {
+    days, baseline: b, themes, platforms, top_themes, sources, summary: parts.join(' '), cached_summary: null,
+    classifiers: total,
+  };
+}
+
 // ---- seeding ----------------------------------------------------------------------------------------
 
 /** 120 days of per-platform daily metrics: drift, weekly seasonality, noise, spikes and the funnel ratios. */
@@ -441,6 +590,12 @@ function seedPosts(s: State, now: number, rng: Rng): void {
     );
     if (sp.status !== 'published') continue;
     const { post: p, sim } = rec;
+    const edge = THEME_EDGE[sp.theme];
+    if (edge) {
+      sim.eng *= edge[0]; // some themes simply convert better (shows up in the insights lift)
+      sim.clk *= edge[1];
+      sim.cvr *= edge[2];
+    }
     p.published_at = iso(at);
     sim.age = sp.hours; // counters sit on the same curve `tick` continues along
     p.views = Math.round(sim.vmax * reached(sp.hours));
@@ -494,6 +649,9 @@ function seed(brandInput: string | null | undefined): State {
         platform: p, handle: p === 'reddit' ? `u/${slug}` : `@${slug}`, status: 'connected', mode: 'sandbox',
         followers: Math.round(MODEL[p].followers * (0.985 + 0.03 * rng())),
         connected_at: iso(now - (58 - i * 6 - Math.floor(rng() * 4)) * DAY),
+        ...(p === 'linkedin' || p === 'instagram'
+          ? { profile_url: profileUrl(p, slug), last_harvested_at: iso(now - (p === 'linkedin' ? 4 : 7) * MIN), real_data: true }
+          : {}),
       }),
     ),
     themes: SEED_THEMES.map((t): Theme => ({ id: rid(rng), ...t, active: true, created_at: created })),
@@ -754,6 +912,7 @@ export const mockApi: PulseApi = {
         handle, status: 'connected', mode: 'sandbox', connected_at: iso(Date.now()),
         followers: c.followers > 0 ? c.followers : 800 + Math.floor(s.rng() * 3200),
       });
+      if (c.real_data) Object.assign(c, { profile_url: profileUrl(p, handle), last_harvested_at: iso(Date.now()) });
       note(s, 'connection', `Connected ${LABEL[p]} (${handle})`, { platform: p });
       return c;
     }),
@@ -773,6 +932,12 @@ export const mockApi: PulseApi = {
       return dashboard(s, days, q?.platform ? platformOf(q.platform) : null);
     }),
   getActivity: (limit = 30) => live((s) => s.activity.slice(0, int(limit, 30, 1, 200))),
+  getInsights: (q) =>
+    live((s) => {
+      const days = q?.days ?? 30;
+      if (!Number.isInteger(days) || days < 1 || days > 365) unprocessable('days: Input should be between 1 and 365');
+      return insights(s, days);
+    }),
 
   listPosts: (q) =>
     live((s) => {
