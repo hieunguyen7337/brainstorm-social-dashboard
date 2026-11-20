@@ -234,7 +234,8 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   const copy = async (): Promise<void> => {
     const { post: shown, edited } = current();
     // Right inside the press (before any awaited request) so Safari still counts it as a user gesture.
-    const copied = await copyCaption(captionFor(shown));
+    const caption = captionFor(shown);
+    const copied = await copyCaption(caption);
     const info = loadShare(shown, edited);
     if (!copied) {
       toast.show("Couldn't copy the caption", 'error');
@@ -242,7 +243,11 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
     }
     haptic.success();
     toast.show('Caption copied');
-    void info.then((i) => setRemoteNote(i.instagram_note));
+    void info.then((i) => {
+      setRemoteNote(i.instagram_note);
+      // The server's caption is the source of truth: should it differ, it replaces the copy (best effort, silent).
+      if (!edited && i.caption.trim() !== caption.trim()) void copyCaption(i.caption);
+    });
     await markPublished('Caption copied');
   };
 
