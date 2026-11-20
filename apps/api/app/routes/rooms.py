@@ -1,7 +1,6 @@
 """Room mode: JSON API for the presenter and the crowd, plus the phone page, the big-screen page and the
 no-JS form fallbacks. The logic lives in `app.services.rooms`; this module only maps it onto HTTP."""
 
-import importlib
 import secrets
 import sqlite3
 import urllib.parse
@@ -12,6 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
+from app import templates_room
 from app.auth import get_workspace
 from app.config import settings
 from app.db import get_db
@@ -33,11 +33,6 @@ class RoomCreate(BaseModel):
 
 class VoteBody(BaseModel):
     choice: Literal["a", "b"]
-
-
-def _templates():
-    # Imported on first use so the API still starts (and the JSON endpoints work) without the HTML renderers.
-    return importlib.import_module("app.templates_room")
 
 
 def _http(exc: RoomError) -> HTTPException:
@@ -130,7 +125,7 @@ def close(
 
 
 def _not_found_page(code: str) -> HTMLResponse:
-    html = _templates().render_not_found(app_name=settings.app_name, code=rooms.normalise_code(code)[:32])
+    html = templates_room.render_not_found(app_name=settings.app_name, code=rooms.normalise_code(code)[:32])
     return HTMLResponse(html, status_code=404, headers=NO_STORE)
 
 
@@ -142,7 +137,7 @@ def phone_page(code: str, request: Request, conn: sqlite3.Connection = Depends(g
     voter, is_new = rooms.voter_from_request(request)
     rooms.record_scan(conn, room["id"], voter)
     voted, onboarded = (None, False) if is_new else rooms.voter_state(conn, room["id"], voter)
-    html = _templates().render_phone_page(
+    html = templates_room.render_phone_page(
         app_name=settings.app_name,
         code=room["code"],
         title=room["title"],
@@ -224,7 +219,7 @@ def screen_page(
         if owner is not None and secrets.compare_digest(owner["token"].encode(), token.encode()):
             shown_token = token
     url = rooms.join_url(room["code"])
-    html = _templates().render_screen_page(
+    html = templates_room.render_screen_page(
         app_name=settings.app_name,
         code=room["code"],
         title=room["title"],

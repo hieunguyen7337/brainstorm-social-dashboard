@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import settings
-from app.db import connect, new_id, now_iso
+from app.db import connect, now_iso
 from app.services import ai, rooms
 
 CODE_RE = re.compile(r"^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$")
@@ -62,9 +62,8 @@ def new_room(client, headers, **body) -> dict:
 def room_with_posts(setup, **body) -> tuple:
     """A room over two fresh drafts with different themes; returns (client, headers, ws, room, post a, post b)."""
     client, headers, ws, themes = setup
-    first, second = list(themes.values())[:2]
-    a = make_post(client, headers, first, "Post A about beans.")
-    b = make_post(client, headers, second, "Post B about plants.")
+    a = make_post(client, headers, themes["Behind the beans"], "Post A about beans.")
+    b = make_post(client, headers, themes["Plant care tips"], "Post B about plants.")
     room = new_room(client, headers, post_a=a["id"], post_b=b["id"], **body)
     return client, headers, ws, room, a, b
 
@@ -173,7 +172,7 @@ def test_create_room_without_posts_generates_two_themed_drafts(setup):
 
 
 def test_create_room_keeps_the_single_seeded_draft_and_generates_the_other(setup):
-    client, headers, ws, themes = setup
+    client, headers, _ws, _themes = setup
     seeded = client.get("/api/posts?status=draft&platform=linkedin", headers=headers).json()
     assert len(seeded) == 1
 
@@ -189,7 +188,7 @@ def test_create_room_keeps_the_single_seeded_draft_and_generates_the_other(setup
 
 
 def test_create_room_reuses_two_newest_drafts_with_different_themes(setup, monkeypatch):
-    client, headers, ws, themes = setup
+    client, headers, _ws, themes = setup
     t1, t2 = themes["Behind the beans"], themes["Plant care tips"]
     make_post(client, headers, t1, "oldest, theme 1")
     d2 = make_post(client, headers, t1, "newer, theme 1")
@@ -210,7 +209,7 @@ def test_create_room_reuses_two_newest_drafts_with_different_themes(setup, monke
 
 
 def test_create_room_rejects_bad_posts(setup):
-    client, headers, ws, themes = setup
+    client, headers, _ws, themes = setup
     mine = make_post(client, headers, themes["Behind the beans"])
     other = client.post("/api/workspaces", json={}).json()
     other_headers = {"Authorization": f"Bearer {other['token']}"}
@@ -233,7 +232,7 @@ def test_create_room_rejects_bad_posts(setup):
 
 
 def test_create_room_retries_a_code_collision(setup, monkeypatch):
-    client, headers, ws, themes = setup
+    client, headers, _ws, _themes = setup
     codes = iter(["AAAAAA", "AAAAAA", "BBBBBB"])
     monkeypatch.setattr(rooms, "new_code", lambda: next(codes))
     first = new_room(client, headers)
@@ -242,7 +241,7 @@ def test_create_room_retries_a_code_collision(setup, monkeypatch):
 
 
 def test_create_room_uses_the_ai_when_allowed(setup, monkeypatch):
-    client, headers, ws, themes = setup
+    client, headers, ws, _themes = setup
     drop_seeded_drafts(ws["id"])
     calls = fake_model(monkeypatch)
 
@@ -261,7 +260,7 @@ def test_create_room_uses_the_ai_when_allowed(setup, monkeypatch):
 
 
 def test_create_room_falls_back_to_templates_when_the_ai_cap_is_reached(setup, monkeypatch):
-    client, headers, ws, themes = setup
+    client, headers, ws, _themes = setup
     drop_seeded_drafts(ws["id"])
     calls = fake_model(monkeypatch, limit=0)  # key present, workspace limit exhausted
 
@@ -302,7 +301,7 @@ def test_public_room_clips_content_and_leaks_nothing(setup):
 
 
 def test_public_room_survives_a_deleted_post_and_a_missing_theme(setup):
-    client, headers, ws, themes = setup
+    client, headers, _ws, themes = setup
     a = make_post(client, headers, None, "No theme here.")
     b = make_post(client, headers, themes["Customer stories"], "Theme here.")
     room = new_room(client, headers, post_a=a["id"], post_b=b["id"])
@@ -345,7 +344,7 @@ def test_qr_svg_is_inline_and_memoised():
 
 
 def test_vote_sets_cookie_and_records_a_real_click(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, a, b = room_with_posts(setup)
     clicks_before = real_counts(client, headers)[0]
     a_before, b_before = post_counts(a["id"])[0], post_counts(b["id"])[0]
 
@@ -365,7 +364,7 @@ def test_vote_sets_cookie_and_records_a_real_click(setup):
 
 
 def test_revote_changes_choice_without_adding_a_voter(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, a, b = room_with_posts(setup)
     code = room["code"]
     assert vote(client, code, "a").json()["votes"] == {"a": 1, "b": 0}
 
@@ -380,7 +379,7 @@ def test_revote_changes_choice_without_adding_a_voter(setup):
 
 
 def test_same_choice_double_tap_records_one_click(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, a, b = room_with_posts(setup)
     for _ in range(3):
         r = vote(client, room["code"], "b")
         assert r.json()["votes"] == {"a": 0, "b": 1}
@@ -389,7 +388,7 @@ def test_same_choice_double_tap_records_one_click(setup):
 
 
 def test_two_voters_on_different_choices(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     assert vote(client, code, "a").json()["votes"] == {"a": 1, "b": 0}
     first = client.cookies["pv"]
@@ -404,7 +403,7 @@ def test_two_voters_on_different_choices(setup):
 
 
 def test_vote_errors(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     assert vote(client, code, "c").status_code == 422
     assert client.post(f"/api/rooms/{code}/vote", json={}).status_code == 422
@@ -424,7 +423,7 @@ def test_vote_errors(setup):
 
 
 def test_onboard_needs_a_vote_and_is_idempotent(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, a, b = room_with_posts(setup)
     code = room["code"]
     no_cookie = client.post(f"/api/rooms/{code}/onboard")
     assert (no_cookie.status_code, no_cookie.json()) == (400, {"detail": "vote first"})
@@ -448,7 +447,7 @@ def test_onboard_needs_a_vote_and_is_idempotent(setup):
 
 
 def test_onboard_is_allowed_after_the_room_closes(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, a, _b = room_with_posts(setup)
     code = room["code"]
     vote(client, code, "a")
     assert client.post(f"/api/rooms/{code}/close", headers=headers).status_code == 200
@@ -463,7 +462,7 @@ def test_onboard_is_allowed_after_the_room_closes(setup):
 
 
 def test_stats_shape_and_values(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, _headers, _ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     empty = client.get(f"/api/rooms/{code}/stats").json()
     assert empty == {
@@ -475,7 +474,8 @@ def test_stats_shape_and_values(setup):
     add_votes(room["id"], [("scan-only-0001", "", now_iso()), ("scan-only-0002", "", now_iso())])
     for choice in ("a", "a", "b"):
         vote(client, code, choice)
-        client.post(f"/api/rooms/{code}/onboard") if choice == "b" else None
+        if choice == "b":
+            assert client.post(f"/api/rooms/{code}/onboard").status_code == 200
         new_voter(client)
     stats = client.get(f"/api/rooms/{code}/stats").json()
 
@@ -490,7 +490,7 @@ def test_stats_shape_and_values(setup):
 
 
 def test_stats_recent_is_limited_to_eight_newest_first(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, _headers, _ws, room, _a, _b = room_with_posts(setup)
     start = datetime.now(UTC).replace(microsecond=0) - timedelta(seconds=60)
     add_votes(room["id"], [
         (f"voter-{i:04d}-abc", "ab"[i % 2], (start + timedelta(seconds=i)).isoformat(timespec="seconds"))
@@ -509,7 +509,7 @@ def test_stats_recent_is_limited_to_eight_newest_first(setup):
 
 
 def test_stats_recent_breaks_ties_by_newest_row(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, _headers, _ws, room, _a, _b = room_with_posts(setup)
     same = now_iso()
     add_votes(room["id"], [("tie-voter-0001", "a", same), ("tie-voter-0002", "b", same), ("tie-voter-0003", "a", same)])
     stats = client.get(f"/api/rooms/{room['code']}/stats").json()
@@ -519,7 +519,7 @@ def test_stats_recent_breaks_ties_by_newest_row(setup):
 
 
 def test_stats_winner_for_a_tie_and_for_a_theme_less_leader(setup):
-    client, headers, ws, themes = setup
+    client, headers, _ws, themes = setup
     a = make_post(client, headers, None, "No theme.")
     b = make_post(client, headers, themes["Customer stories"], "Themed.")
     room = new_room(client, headers, post_a=a["id"], post_b=b["id"])
@@ -539,7 +539,7 @@ def test_stats_winner_for_a_tie_and_for_a_theme_less_leader(setup):
 
 def test_stats_cache_serves_the_same_result_until_close(setup, monkeypatch):
     monkeypatch.setattr(rooms, "STATS_TTL", 5)
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     first = client.get(f"/api/rooms/{code}/stats").json()
     assert first["votes"] == {"a": 0, "b": 0}
@@ -557,7 +557,7 @@ def test_stats_cache_serves_the_same_result_until_close(setup, monkeypatch):
 
 def test_stats_cache_returns_copies_and_expires(setup, monkeypatch):
     monkeypatch.setattr(rooms, "STATS_TTL", 5)
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    _client, _headers, _ws, room, _a, _b = room_with_posts(setup)
     conn = connect()
     try:
         one = rooms.stats_for_code(conn, room["code"])
@@ -576,7 +576,7 @@ def test_stats_cache_returns_copies_and_expires(setup, monkeypatch):
 
 
 def test_close_needs_the_owners_token(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     other = client.post("/api/workspaces", json={}).json()
     other_headers = {"Authorization": f"Bearer {other['token']}"}
@@ -617,7 +617,7 @@ def test_close_records_the_winning_theme_and_an_insight(setup):
 
 
 def test_close_is_idempotent_and_writes_only_once(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     vote(client, code, "a")
     first = client.post(f"/api/rooms/{code}/close", headers=headers)
@@ -633,7 +633,7 @@ def test_close_is_idempotent_and_writes_only_once(setup):
 
 
 def test_close_keeps_an_existing_insight_and_upserts_the_post_theme(setup):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, ws, room, a, _b = room_with_posts(setup)
     code = room["code"]
     execute("INSERT INTO insights (workspace_id, body, created_at) VALUES (?, 'keep me', ?)", (ws["id"], now_iso()))
     execute(
@@ -653,7 +653,7 @@ def test_close_keeps_an_existing_insight_and_upserts_the_post_theme(setup):
 
 @pytest.mark.parametrize("votes", [[], ["a", "b"]], ids=["no-votes", "tie"])
 def test_close_without_a_winner_writes_nothing(setup, votes):
-    client, headers, ws, room, a, b = room_with_posts(setup)
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
     code = room["code"]
     for choice in votes:
         vote(client, code, choice)
@@ -666,7 +666,7 @@ def test_close_without_a_winner_writes_nothing(setup, votes):
 
 
 def test_close_skips_a_winner_without_a_theme(setup):
-    client, headers, ws, themes = setup
+    client, headers, _ws, themes = setup
     a = make_post(client, headers, None, "No theme.")
     b = make_post(client, headers, themes["Customer stories"], "Themed.")
     room = new_room(client, headers, post_a=a["id"], post_b=b["id"])
@@ -676,3 +676,143 @@ def test_close_skips_a_winner_without_a_theme(setup):
 
     assert stats["status"] == "closed" and stats["winner"] == {"choice": "a", "theme": None, "share": 1.0}
     assert query("SELECT * FROM post_themes") == [] and query("SELECT * FROM insights") == []
+
+
+# ---------------------------------------------------------------- pages
+
+
+def scans(room_id: str) -> int:
+    return query("SELECT COUNT(*) AS n FROM room_votes WHERE room_id = ?", (room_id,))[0]["n"]
+
+
+def test_phone_page_renders_and_counts_one_scan_per_cookie(setup):
+    client, _headers, _ws, room, _a, _b = room_with_posts(setup)
+    code = room["code"]
+
+    first = client.get(f"/v/{code}")
+
+    assert first.status_code == 200 and first.headers["content-type"].startswith("text/html")
+    assert first.headers["cache-control"] == "no-store"
+    assert code in first.text and "Post A about beans." in first.text and "Post B about plants." in first.text
+    assert re.fullmatch(r"[A-Za-z0-9_-]{16}", client.cookies["pv"])
+    assert "HttpOnly" in first.headers["set-cookie"] and "SameSite=lax" in first.headers["set-cookie"]
+    assert len(first.content) < 40_000
+    assert scans(room["id"]) == 1
+
+    again = client.get(f"/v/{code.lower()}")  # same cookie, other letter case
+    assert again.status_code == 200 and "set-cookie" not in again.headers
+    assert scans(room["id"]) == 1
+
+    new_voter(client)
+    assert client.get(f"/v/{code}").status_code == 200
+    assert scans(room["id"]) == 2
+    stats = client.get(f"/api/rooms/{code}/stats").json()
+    assert stats["scans"] == 2 and stats["votes"] == {"a": 0, "b": 0}
+    rows = query("SELECT choice, onboarded FROM room_votes WHERE room_id = ?", (room["id"],))
+    assert {(r["choice"], r["onboarded"]) for r in rows} == {("", 0)}
+
+
+def test_phone_page_shows_this_voters_state(setup):
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
+    code = room["code"]
+    fresh = client.get(f"/v/{code}").text
+    assert 'data-voted=""' in fresh and 'data-onb="0"' in fresh and 'data-closed="0"' in fresh
+
+    vote(client, code, "b")
+    voted = client.get(f"/v/{code}").text
+    assert 'data-voted="b"' in voted and 'data-onb="0"' in voted
+    assert scans(room["id"]) == 1  # the scan row and the vote are the same voter row
+
+    assert client.post(f"/api/rooms/{code}/onboard").status_code == 200
+    assert 'data-voted="b"' in client.get(f"/v/{code}").text
+    assert 'data-onb="1"' in client.get(f"/v/{code}").text
+
+    assert client.post(f"/api/rooms/{code}/close", headers=headers).status_code == 200
+    closed = client.get(f"/v/{code}")
+    assert closed.status_code == 200 and closed.headers["cache-control"] == "no-store"
+    assert 'data-closed="1"' in closed.text and 'data-voted="b"' in closed.text
+
+    new_voter(client)
+    assert 'data-voted=""' in client.get(f"/v/{code}").text  # another phone sees no vote of its own
+
+
+def test_screen_page_shows_the_qr_and_close_control_only_with_the_owners_token(setup):
+    client, _headers, ws, room, _a, _b = room_with_posts(setup)
+    code = room["code"]
+    before = scans(room["id"])
+
+    anon = client.get(f"/room/{code}")
+    wrong = client.get(f"/room/{code}?token=not-the-token")
+    other = client.post("/api/workspaces", json={}).json()
+    foreign = client.get(f"/room/{code}?token={other['token']}")
+    owner = client.get(f"/room/{code}", params={"token": ws["token"]})
+
+    for page in (anon, wrong, foreign, owner):
+        assert page.status_code == 200 and page.headers["content-type"].startswith("text/html")
+        assert "<svg" in page.text and code in page.text and len(page.content) < 40_000
+        assert page.headers["cache-control"] == "no-store"
+    assert "localhost:8000/v/" + code in anon.text
+    for page in (anon, wrong, foreign):  # the script always knows the confirm text; the button is the control
+        assert ">Close voting</button>" not in page.text and 'id="close"' not in page.text
+        assert ws["token"] not in page.text and other["token"] not in page.text
+    assert ">Close voting</button>" in owner.text and 'id="close"' in owner.text
+    assert owner.headers["referrer-policy"] == "no-referrer"
+    assert scans(room["id"]) == before and "pv" not in client.cookies  # the big screen is not a scan
+    assert client.get(f"/room/{code.lower()}").status_code == 200
+
+
+def test_unknown_room_pages_are_404(setup):
+    client, _headers, _ws, _room, _a, _b = room_with_posts(setup)
+    for path in ("/v/ZZZZZZ", "/room/ZZZZZZ", "/room/ZZZZZZ?token=x"):
+        r = client.get(path)
+        assert r.status_code == 404 and r.headers["content-type"].startswith("text/html")
+        assert "ZZZZZZ" in r.text
+    evil = client.get("/v/%3Cscript%3Ealert(1)%3C%2Fscript%3E")
+    assert evil.status_code == 404 and "<script>alert(1)</script>" not in evil.text
+    assert query("SELECT COUNT(*) AS n FROM room_votes")[0]["n"] == 0
+
+
+def test_form_fallback_vote_and_onboard(setup):
+    client, headers, _ws, room, _a, b = room_with_posts(setup)
+    code = room["code"]
+
+    r = client.post(f"/v/{code}/vote", content="choice=b", headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    follow_redirects=False)
+
+    assert r.status_code == 303 and r.headers["location"] == f"/v/{code}"
+    assert re.fullmatch(r"[A-Za-z0-9_-]{16}", client.cookies["pv"])  # the cookie rides on the redirect
+    stats = client.get(f"/api/rooms/{code}/stats").json()
+    assert stats["votes"] == {"a": 0, "b": 1}
+    assert post_counts(b["id"])[0] == 1 and real_counts(client, headers)[0] == 1
+
+    form = {"Content-Type": "application/x-www-form-urlencoded"}
+    done = client.post(f"/v/{code}/onboard", content="", headers=form, follow_redirects=False)
+    assert done.status_code == 303 and done.headers["location"] == f"/v/{code}"
+    client.post(f"/v/{code}/onboard", content="", headers=form, follow_redirects=False)
+    assert client.get(f"/api/rooms/{code}/stats").json()["onboarded"] == 1
+    assert post_counts(b["id"])[1] == 1 and real_counts(client, headers)[1] == 1
+    assert client.get(f"/v/{code}", follow_redirects=False).status_code == 200  # the page follows the cookie
+
+
+def test_form_fallback_ignores_bad_input_and_closed_rooms(setup):
+    client, headers, _ws, room, _a, _b = room_with_posts(setup)
+    code = room["code"]
+    form = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    for body in ("choice=c", "", "other=a", "choice="):
+        r = client.post(f"/v/{code}/vote", content=body, headers=form, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == f"/v/{code}"
+    assert client.get(f"/api/rooms/{code}/stats").json()["votes"] == {"a": 0, "b": 0}
+    no_vote = client.post(f"/v/{code}/onboard", content="", headers=form, follow_redirects=False)
+    assert no_vote.status_code == 303 and client.get(f"/api/rooms/{code}/stats").json()["onboarded"] == 0
+
+    new_voter(client)
+    client.post(f"/v/{code}/vote", content="choice=a", headers=form)
+    client.post(f"/api/rooms/{code}/close", headers=headers)
+    late = client.post(f"/v/{code}/vote", content="choice=b", headers=form, follow_redirects=False)
+    assert late.status_code == 303
+    assert client.get(f"/api/rooms/{code}/stats").json()["votes"] == {"a": 1, "b": 0}
+
+    missing = client.post("/v/ZZZZZZ/vote", content="choice=a", headers=form, follow_redirects=False)
+    assert missing.status_code == 303 and missing.headers["location"] == "/v/ZZZZZZ"
+    assert client.get("/v/ZZZZZZ").status_code == 404
