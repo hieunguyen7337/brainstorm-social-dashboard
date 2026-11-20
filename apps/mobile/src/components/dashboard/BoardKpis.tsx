@@ -13,8 +13,8 @@ import { METRICS, type MetricDef } from './model';
 /** Below this tile width the label shrinks and loses its dot, so "ENGAGEMENTS" still fits on the ~800px board. */
 const TIGHT_AT = 150;
 const SPARK_MIN = 40;
-const SPARK_MAX = 180;
-const MAX_HEIGHT = 280;
+const SPARK_MAX = 140;
+const MAX_HEIGHT = 250;
 
 /** The four KPI tiles in one row (the phone layout wraps them 2x2). Tiles share the row equally. */
 export function BoardKpis({

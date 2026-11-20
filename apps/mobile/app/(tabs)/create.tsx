@@ -234,7 +234,6 @@ export default function CreateScreen() {
         refreshing={refreshing}
       >
         <CreateBoard
-          stickyForm={!trendOpen}
           form={
             <Card style={styles.formCard}>
               <View style={[styles.sections, generating && styles.locked]}>
