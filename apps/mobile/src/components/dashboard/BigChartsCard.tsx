@@ -49,7 +49,7 @@ export function BigChartsCard({
           </View>
         </View>
         <View style={styles.divider} />
-        <TrendCard bare timeseries={days} totals={summary.totals} context={context} chartHeight={roomy ? 300 : 220} />
+        <TrendCard bare timeseries={days} totals={summary.totals} context={context} chartHeight={roomy ? 330 : 220} />
       </View>
     </Card>
   );

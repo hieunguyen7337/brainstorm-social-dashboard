@@ -77,9 +77,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 360,
     alignItems: 'center',
-    justifyContent: 'center',
+    // Top-aligned (not centred): beside a tall form the message must stay in view.
+    justifyContent: 'flex-start',
     gap: space.lg,
     padding: space.xl,
+    paddingTop: 96,
     borderRadius: radius.md,
     borderWidth: 1,
     borderStyle: 'dashed',

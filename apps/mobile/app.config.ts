@@ -47,7 +47,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     backgroundColor: BG,
   },
   plugins: [
-    'expo-router',
+    // Web: one lazy chunk per route (first load fetches the shell + the route it lands on, not all five tabs).
+    // 'production' leaves `expo start` and native builds on the normal synchronous route table.
+    ['expo-router', { asyncRoutes: { web: 'production', default: false } }],
     'expo-font',
     'expo-asset',
     [
