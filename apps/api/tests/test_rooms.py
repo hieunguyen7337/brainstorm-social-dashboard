@@ -752,8 +752,8 @@ def test_screen_page_shows_the_qr_and_close_control_only_with_the_owners_token(s
         assert "<svg" in page.text and code in page.text and len(page.content) < 40_000
         assert page.headers["cache-control"] == "no-store"
     assert "localhost:8000/v/" + code in anon.text
-    for page in (anon, wrong, foreign):  # the script always knows the confirm text; the button is the control
-        assert ">Close voting</button>" not in page.text and 'id="close"' not in page.text
+    for page in (anon, wrong, foreign):  # no button and no close script without a valid token
+        assert "Close voting" not in page.text and 'id="close"' not in page.text
         assert ws["token"] not in page.text and other["token"] not in page.text
     assert ">Close voting</button>" in owner.text and 'id="close"' in owner.text
     assert owner.headers["referrer-policy"] == "no-referrer"

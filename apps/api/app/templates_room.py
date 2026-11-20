@@ -170,6 +170,7 @@ font-size:13px;color:var(--mute);user-select:none}
 .foot{margin-top:28px;text-align:center;font-size:14px;color:var(--mute)}
 #app:not([data-voted=""]) .result{display:block}
 #app:not([data-voted=""]) h1{margin-bottom:22px}
+#app[data-closed="1"][data-voted=""] h1{margin-bottom:16px}
 #app:not([data-voted=""]) .sub,#app[data-closed="1"] .sub,
 #app:not([data-voted=""]) .vote-form,#app[data-closed="1"] .vote-form{display:none}
 #app[data-closed="1"] .banner{display:block}
@@ -671,17 +672,19 @@ fetch(api("stats"),{cache:"no-store",signal:ctl?ctl.signal:undefined})
 timer=setTimeout(poll,fails?Math.min(8000,1000*Math.pow(2,fails)):1000)})}
 document.addEventListener("visibilitychange",function(){if(!document.hidden){poll();tick()}});
 (function loopTick(){tick();setTimeout(loopTick,1000)})();
-var btn=$("close");
+__CLOSEJS__
+render();poll();
+})();
+</script></body></html>"""
+
+_CLOSEJS = r"""var btn=$("close");
 if(btn){btn.addEventListener("click",function(){
 if(!window.confirm("Close voting for everyone? This cannot be undone."))return;
 var err=$("close-err");err.textContent="";btn.disabled=true;
 fetch(api("close"),{method:"POST",headers:{Authorization:"Bearer "+TOKEN}})
 .then(function(r){if(!r.ok)throw 0;return r.json()})
 .then(function(d){d.status="closed";apply(d)})
-.catch(function(){btn.disabled=false;err.textContent="Could not close voting. Try again."})})}
-render();poll();
-})();
-</script></body></html>"""
+.catch(function(){btn.disabled=false;err.textContent="Could not close voting. Try again."})})}"""
 
 _CLOSEBOX = (
     '<div class="closebox" id="closebox"><span id="close-err" role="alert"></span>'
@@ -717,6 +720,7 @@ def render_screen_page(*, app_name: str, code: str, title: str, variants: list[d
         NAMEB=_e(f" · {names['b']}" if names["b"] else ""),
         WINTEXT="Voting closed" if closed else "No votes yet",
         CLOSEBOX=_CLOSEBOX if has_close else "",
+        CLOSEJS=_CLOSEJS if has_close else "",
         CODE_JS=_js(code),
         TOKEN_JS=_js(token if has_close else None),
         NAMES_JS=_js(names),
