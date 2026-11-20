@@ -24,6 +24,9 @@ ROUTERS = [
     ("app.routes.generate", "router"),
     ("app.routes.autopilot", "router"),
     ("app.routes.trends", "router"),
+    ("app.routes.insights", "router"),
+    ("app.routes.metrics", "router"),
+    ("app.routes.billing", "router"),
 ]
 
 
