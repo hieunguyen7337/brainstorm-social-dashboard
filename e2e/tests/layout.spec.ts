@@ -54,10 +54,12 @@ async function tabButton(page: Page, name: Tab): Promise<Locator> {
     page.getByTestId(`tab-${name.toLowerCase()}`),
     page.getByRole('tab', { name: label }),
     page.getByRole('link', { name: label }),
-  ];
-  for (const c of candidates) {
-    const visible = c.filter({ visible: true });
-    if ((await visible.count()) > 0) return visible.first();
+  ].map((c) => c.filter({ visible: true }));
+  const deadline = Date.now() + 10_000; // the bar/sidebar mounts a beat after the first screen
+  for (;;) {
+    for (const c of candidates) if ((await c.count()) > 0) return c.first();
+    if (Date.now() > deadline) break;
+    await page.waitForTimeout(200);
   }
   throw new Error(`No visible tab button for "${name}" (tried testID tab-${name.toLowerCase()}, role tab, role link)`);
 }
@@ -115,9 +117,13 @@ function measureLayout(): OverflowReport {
       right: Math.round(r.right),
     };
   };
-  // react-navigation keeps inactive tab scenes mounted under the active one (aria-hidden, z-index -1): not on screen.
+  // react-navigation keeps inactive tab scenes mounted under the active one: an aria-hidden scene whose wrapper (or
+  // itself) has a negative z-index. They are covered by the active scene, so they are not on screen.
   const inactiveRoots = Array.from(document.querySelectorAll('[aria-hidden="true"], [inert]')).filter(
-    (n) => n.hasAttribute('inert') || Number(getComputedStyle(n).zIndex) < 0,
+    (n) =>
+      n.hasAttribute('inert') ||
+      Number(getComputedStyle(n).zIndex) < 0 ||
+      (n.parentElement !== null && Number(getComputedStyle(n.parentElement).zIndex) < 0),
   );
   const inInactive = (el: Element) => inactiveRoots.some((n) => n.contains(el));
   // Position fixed/absolute and entirely right of the viewport: off-screen decoration (parked drawers, toasts, glows).
@@ -177,7 +183,10 @@ function findBottomBar(labels: string[]): Offender | null {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const inactiveRoots = Array.from(document.querySelectorAll('[aria-hidden="true"], [inert]')).filter(
-    (n) => n.hasAttribute('inert') || Number(getComputedStyle(n).zIndex) < 0,
+    (n) =>
+      n.hasAttribute('inert') ||
+      Number(getComputedStyle(n).zIndex) < 0 ||
+      (n.parentElement !== null && Number(getComputedStyle(n.parentElement).zIndex) < 0),
   );
   for (const el of Array.from(document.body.querySelectorAll('*'))) {
     if (inactiveRoots.some((n) => n.contains(el))) continue;
