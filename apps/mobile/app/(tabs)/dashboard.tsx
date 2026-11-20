@@ -16,6 +16,8 @@ import {
   pickLinkPost,
   sortedDays,
 } from '@/src/components/dashboard';
+import { TopBanners } from '@/src/components/dashboard/TopBanners';
+import { StartRoom } from '@/src/components/room/StartRoom';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
@@ -80,6 +82,7 @@ export default function DashboardScreen() {
   if (wide) {
     return (
       <Screen bare title="Dashboard" onRefresh={reloadAll} refreshing={dash.refreshing || activity.refreshing}>
+        <TopBanners />
         <DashboardBoard
           brand={brand}
           dash={dash}
@@ -104,6 +107,7 @@ export default function DashboardScreen() {
       onRefresh={reloadAll}
       refreshing={dash.refreshing || activity.refreshing}
     >
+      <TopBanners />
       {!summary ? (
         // First load: skeleton. If it failed, a retry (the skeleton shows again while the retry is in flight).
         dash.error && !dash.refreshing ? (
@@ -136,6 +140,10 @@ export default function DashboardScreen() {
 
           <Reveal index={1}>
             <KpiGrid totals={summary.totals} change={summary.change_pct} timeseries={days} context={dataContext} />
+          </Reveal>
+
+          <Reveal index={2}>
+            <StartRoom />
           </Reveal>
 
           <Reveal index={2}>

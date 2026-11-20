@@ -175,6 +175,23 @@ export function useResultState({ batch, connections, brandName, onBack }: Result
       { quiet },
     );
 
+  /**
+   * "Post it for real" opened the composer (or copied the caption): mark the card published like the Publish button
+   * does (unsaved edits are saved first), but without its toast or error line, because the share buttons have their own
+   * feedback. The card's Publish button spins meanwhile. Throws on failure.
+   */
+  const publishShared = async (post: Post): Promise<Post> => {
+    setBusyFor(post.id, 'publishing');
+    try {
+      const ready = isDirty(post, editsRef.current[post.id]) ? await persist(post) : post;
+      const out = await api.publishPost(ready.id);
+      if (out.status !== 'published') replacePost(out); // e.g. failed: the card shows it
+      return out;
+    } finally {
+      setBusyFor(post.id, undefined);
+    }
+  };
+
   const scheduleOne = (post: Post, whenIso: string) =>
     work(post, 'scheduling', async () => {
       const next = await persist(post, { status: 'scheduled', scheduled_at: whenIso });
@@ -289,6 +306,7 @@ export function useResultState({ batch, connections, brandName, onBack }: Result
     busy: busy[p.id],
     locked: bulk !== null,
     error: errors[p.id],
+    share: { draft: draftOf(p, edits[p.id]), publish: publishShared, onPublished: replacePost },
     onPublish: () => void publishOne(p),
     onSchedule: (iso) => void scheduleOne(p, iso),
     onSaveEdits: () => void saveOne(p),

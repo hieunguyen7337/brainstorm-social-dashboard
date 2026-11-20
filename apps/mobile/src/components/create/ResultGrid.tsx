@@ -4,9 +4,10 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { colors, space, type as t } from '@/src/theme';
 import type { Connection } from '@/src/types';
-import { Badge, Button } from '@/src/ui';
+import { Button } from '@/src/ui';
 
 import { CardGrid } from './CardGrid';
+import { AiBadge } from './AiBadge';
 import type { Batch } from './logic';
 import { PostCard } from './PostCard';
 import { useEaseIn, useResultState } from './useResultState';
@@ -48,11 +49,7 @@ export function ResultGrid({ batch, connections, brandName, onBack, unsavedRef }
           <Text style={t.h2} accessibilityRole="header">
             {r.title}
           </Text>
-          {batch.aiUsed ? (
-            <Badge label="Written by Claude" tone="accent" icon="sparkles" />
-          ) : (
-            <Badge label="Template mode" tone="warn" />
-          )}
+          <AiBadge aiUsed={batch.aiUsed} />
         </View>
         <View style={styles.headerActions}>
           {r.openCount > 1 ? (
@@ -77,11 +74,6 @@ export function ResultGrid({ batch, connections, brandName, onBack, unsavedRef }
           />
         </View>
       </View>
-      {batch.aiUsed ? null : (
-        <Text style={[t.small, styles.explain]}>
-          {"Claude wasn't available for this batch, so these are smart templates. Edit them freely."}
-        </Text>
-      )}
 
       <CardGrid>
         {posts.map((p) => (
@@ -102,7 +94,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   headerText: { flexGrow: 1, flexBasis: 180, minWidth: 0, gap: space.sm },
   headerActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: space.sm },
-  explain: { color: colors.textMute, marginTop: -space.sm },
   note: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: space.md },
   noteText: { color: colors.textMute, textAlign: 'center', flexShrink: 1 },
 });

@@ -4,6 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { fmtDateTime, inHours, tomorrowMorning } from '@/src/format';
 import { colors, platformMeta, space, type as t, withAlpha } from '@/src/theme';
+import { ShareButtons } from '@/src/components/share/ShareButtons';
+import type { ShareWiring } from '@/src/components/share/useShare';
 import type { Post } from '@/src/types';
 import { Button, Card, Chip, ChipRow, IconButton } from '@/src/ui';
 
@@ -23,6 +25,8 @@ export interface PostActionsProps {
   wide: boolean;
   /** Very little room (a card in the wide board's 2-column grid): the buttons stack instead of sharing a row. */
   compact?: boolean;
+  /** "Post it for real": the unsaved text on screen and how the share buttons mark this post published. */
+  share?: ShareWiring;
   onPublish: () => void;
   onSchedule: (iso: string) => void;
   onSaveEdits: () => void;
@@ -52,6 +56,7 @@ function DraftActions({
   error,
   wide,
   compact = false,
+  share,
   onPublish,
   onSchedule,
   onSaveEdits,
@@ -147,6 +152,7 @@ function DraftActions({
           </View>
         </>
       )}
+      <ShareButtons post={post} compact={compact || !wide} disabled={blocked} {...share} />
       {scheduleOpen ? (
         <View style={styles.choices}>
           <Text style={t.label}>Schedule for</Text>
@@ -162,7 +168,17 @@ function DraftActions({
 }
 
 /** After publishing: the tracked link, "Open link" (lands a real click in the funnel) and a way to the queue. */
-function PublishedCard({ post, compact = false, onOpenLink, onCopyLink, onViewQueue }: PostActionsProps) {
+function PublishedCard({
+  post,
+  busy,
+  locked,
+  wide,
+  compact = false,
+  share,
+  onOpenLink,
+  onCopyLink,
+  onViewQueue,
+}: PostActionsProps) {
   const label = platformMeta[post.platform].label;
   return (
     <Card tone="raised" style={[styles.stateCard, { borderColor: withAlpha(colors.success, 0.4) }]}>
@@ -182,6 +198,7 @@ function PublishedCard({ post, compact = false, onOpenLink, onCopyLink, onViewQu
           <IconButton icon="copy-outline" label="Copy tracked link" size={18} onPress={onCopyLink} />
         </View>
       ) : null}
+      <ShareButtons post={post} compact={compact || !wide} disabled={locked || busy !== undefined} {...share} />
       <View style={compact ? styles.stack : styles.row}>
         {post.link_url ? (
           <Button title="Open link" icon="open-outline" full={compact} style={compact ? undefined : styles.grow} onPress={onOpenLink} />
@@ -201,7 +218,7 @@ function PublishedCard({ post, compact = false, onOpenLink, onCopyLink, onViewQu
 }
 
 /** After scheduling: when it goes out, and a way to the queue. */
-function ScheduledCard({ post, compact = false, onCopyLink, onViewQueue }: PostActionsProps) {
+function ScheduledCard({ post, busy, locked, wide, compact = false, share, onCopyLink, onViewQueue }: PostActionsProps) {
   const label = platformMeta[post.platform].label;
   return (
     <Card tone="raised" style={[styles.stateCard, { borderColor: withAlpha(colors.info, 0.4) }]}>
@@ -214,6 +231,7 @@ function ScheduledCard({ post, compact = false, onCopyLink, onViewQueue }: PostA
           <Text style={t.small}>{`Your ${label} post waits in the queue until then.`}</Text>
         </View>
       </View>
+      <ShareButtons post={post} compact={compact || !wide} disabled={locked || busy !== undefined} {...share} />
       <View style={compact ? styles.stack : styles.row}>
         <Button
           title="View in Queue"

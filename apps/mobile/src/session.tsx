@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   api,
   ApiError,
+  getToken,
   isMock,
   loadStorage,
   setMockMode,
@@ -15,6 +16,7 @@ import {
   setUnauthorizedHandler,
   type Workspace,
 } from './api';
+import { clearRoomWelcome, markRoomJoined, ROOM_GUEST_BRAND } from './components/room/roomStore';
 
 export type SessionStatus =
   /** Reading storage / validating the saved token. */
@@ -42,6 +44,11 @@ export interface Session {
   start: (brandName?: string) => Promise<boolean>;
   /** Same, but against the in-memory fake (used when the server is unreachable). */
   startOfflineDemo: (brandName?: string) => Promise<boolean>;
+  /**
+   * Room link (`/?room=CODE`): remember the room and, when there is no session yet, create the guest workspace with no
+   * form. An existing session is never replaced. Resolves true when a workspace is (or already was) ready.
+   */
+  joinRoom: (code: string) => Promise<boolean>;
   /** Re-validate the saved token (offline screen "Try again"). */
   retry: () => Promise<void>;
   /** Forget this workspace on this device and return to onboarding. */
@@ -144,7 +151,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [start],
   );
 
+  const joinRoom = useCallback(
+    async (code: string) => {
+      // A session exists: keep it (never clobber a workspace), just remember the room and queue the welcome once.
+      if (getToken()) {
+        void markRoomJoined(code);
+        return true;
+      }
+      // Pending flag first (synchronous in memory): the Dashboard shows the welcome the moment it mounts.
+      void markRoomJoined(code, true);
+      // A leftover offline-demo flag (its in-memory data died with the last page load) must not hijack the room join:
+      // try the real server first; if it is unreachable, onboarding offers the offline demo again.
+      if (isMock()) {
+        await setMockMode(false);
+        if (alive.current) setMock(isMock());
+      }
+      return start(ROOM_GUEST_BRAND);
+    },
+    [start],
+  );
+
   const signOut = useCallback(async () => {
+    clearRoomWelcome();
     await setToken(null);
     await setMockMode(false);
     if (!alive.current) return;
@@ -167,11 +195,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       starting,
       start,
       startOfflineDemo,
+      joinRoom,
       retry: boot,
       signOut,
       setWorkspace: setWorkspaceState,
     }),
-    [status, workspace, token, mock, error, networkError, starting, start, startOfflineDemo, boot, signOut],
+    [status, workspace, token, mock, error, networkError, starting, start, startOfflineDemo, joinRoom, boot, signOut],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

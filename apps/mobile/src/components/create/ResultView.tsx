@@ -4,8 +4,9 @@ import { Animated, StyleSheet, Text, View, useWindowDimensions } from 'react-nat
 import { MAX_CONTENT_WIDTH } from '@/src/config';
 import { colors, space, type as t } from '@/src/theme';
 import type { Connection } from '@/src/types';
-import { Badge, Button } from '@/src/ui';
+import { Button } from '@/src/ui';
 
+import { AiBadge } from './AiBadge';
 import type { Batch } from './logic';
 import { PostActions } from './PostActions';
 import { PostPage } from './PostPage';
@@ -41,11 +42,7 @@ export function ResultView({ batch, connections, brandName, onBack }: ResultView
           <Text style={t.h2} accessibilityRole="header">
             {r.title}
           </Text>
-          {batch.aiUsed ? (
-            <Badge label="Written by Claude" tone="accent" icon="sparkles" />
-          ) : (
-            <Badge label="Template mode" tone="warn" />
-          )}
+          <AiBadge aiUsed={batch.aiUsed} />
         </View>
         <Button
           title="Edit brief"
@@ -56,11 +53,6 @@ export function ResultView({ batch, connections, brandName, onBack }: ResultView
           onPress={() => void r.leave()}
         />
       </View>
-      {batch.aiUsed ? null : (
-        <Text style={[t.small, styles.explain]}>
-          {"Claude wasn't available for this batch, so these are smart templates. Edit them freely."}
-        </Text>
-      )}
 
       <ResultPager
         posts={posts}
@@ -98,7 +90,6 @@ const styles = StyleSheet.create({
   root: { gap: space.lg },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md },
   headerText: { flex: 1, minWidth: 0, gap: space.sm },
-  explain: { color: colors.textMute, marginTop: -space.sm },
   note: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: space.md },
   noteText: { color: colors.textMute, textAlign: 'center', flexShrink: 1 },
 });

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { api, ApiError, PLATFORMS, type Platform, type Post } from '@/src/api';
+import { StartRoom } from '@/src/components/room/StartRoom';
 import { timeAgo, truncate } from '@/src/format';
 import { colors, platformMeta, radius, space, type as t } from '@/src/theme';
 import { Button, Card, Chip, ChipRow, PlatformBadge, PlatformIcon, SectionHeader, Skeleton, TextField, haptic, useToast } from '@/src/ui';
@@ -14,6 +15,8 @@ import { firstLine } from './model';
 const DEFAULT_PLATFORMS: readonly Platform[] = ['linkedin', 'instagram'];
 const MAX_BRIEF = 1000;
 const MAX_DRAFTS = 3;
+/** Shown (neutral, not an error) when the API answered with the template fallback instead of Claude. */
+const AI_BUSY_TEXT = 'AI busy, using a template';
 
 const openQueue = (tab: 'drafts' | 'scheduled' | 'published' = 'drafts') =>
   router.push({ pathname: '/queue', params: { tab } });
@@ -22,8 +25,8 @@ const messageOf = (e: unknown): string =>
   e instanceof ApiError && e.message ? e.message : 'Something went wrong. Please try again.';
 
 /**
- * The "Generate" column of the wide board: a quick-generate box (brief + platform chips + Generate), the newest
- * drafts, and the five channel lanes with their draft / published counts.
+ * The "Generate" column of the wide board: "Start a room" on top, a quick-generate box (brief + platform chips +
+ * Generate), the newest drafts, and the five channel lanes with their draft / published counts.
  */
 export function GenerateCard({
   posts,
@@ -43,6 +46,8 @@ export function GenerateCard({
   const [platforms, setPlatforms] = useState<Platform[]>([...DEFAULT_PLATFORMS]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The last batch came from the template fallback (no AI available): a neutral line, never an error.
+  const [template, setTemplate] = useState(false);
   const requesting = useRef(false);
 
   const toggle = (p: Platform) =>
@@ -53,14 +58,16 @@ export function GenerateCard({
     requesting.current = true;
     setBusy(true);
     setError(null);
+    setTemplate(false);
     try {
       const res = await api.generate({ platforms, brief: brief.trim() || undefined });
       if (!Array.isArray(res.posts) || res.posts.length === 0) throw new Error('No posts came back');
       onGenerated(res.posts);
       setBrief('');
+      setTemplate(res.ai_used === false);
       haptic.success();
       const n = res.posts.length;
-      toast.show(`Drafted ${n} ${n === 1 ? 'post' : 'posts'}${res.ai_used ? '' : ' (template mode)'}`);
+      toast.show(`Drafted ${n} ${n === 1 ? 'post' : 'posts'}`);
     } catch (e) {
       setError(messageOf(e));
       haptic.warn();
@@ -76,6 +83,9 @@ export function GenerateCard({
 
   return (
     <Card style={[styles.card, style]}>
+      <StartRoom compact />
+      <View style={styles.divider} />
+
       <SectionHeader title="Generate" subtitle="Draft posts in one tap" />
 
       <TextField
@@ -102,6 +112,11 @@ export function GenerateCard({
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {error}
+        </Text>
+      ) : null}
+      {template && !error ? (
+        <Text testID="generate-template-note" style={styles.templateNote}>
+          {AI_BUSY_TEXT}
         </Text>
       ) : null}
       <Button
@@ -211,6 +226,7 @@ const styles = StyleSheet.create({
   card: { gap: space.md },
   chips: { gap: 6 },
   error: { color: colors.danger, fontSize: 12.5, fontWeight: '600' },
+  templateNote: { color: colors.textDim, fontSize: 12.5, fontWeight: '500' },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
   empty: { paddingVertical: space.xs },
   pressed: { opacity: 0.85 },
