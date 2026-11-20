@@ -22,6 +22,7 @@ import {
   formFromRead,
   isConnected,
   latestIso,
+  platformMismatch,
   postsToIngest,
   readFailure,
   saveFailure,
@@ -174,11 +175,17 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
         return;
       }
       const id = ++seq.current;
-      const prev = byPlatform.get(platform) ?? null;
       setFlow({ platform, step: 'reading', thumb: res.image.uri });
       try {
         const read = await api.readScreenshot(platform, { image_base64: res.image.base64, media_type: res.image.mediaType });
         if (!alive.current || id !== seq.current) return;
+        // A screenshot of another platform is not saved on this card (it would show the wrong numbers here).
+        const mismatch = platformMismatch(read);
+        if (mismatch) {
+          setFlow(null);
+          setNote(platform, { tone: 'error', text: mismatch });
+          return;
+        }
         await persist(platform, read, 'screenshot', id);
       } catch (e) {
         if (!alive.current || id !== seq.current) return;

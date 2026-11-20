@@ -211,7 +211,7 @@ export function postsToIngest(posts: readonly ScreenshotPost[] | null | undefine
 export function platformMismatch(read: ScreenshotRead): string | null {
   const seen = read.detected_platform;
   if (!seen || seen === read.platform) return null;
-  return `This looks like a ${platformMeta[seen].label} screenshot, not ${platformMeta[read.platform].label}. Check the numbers, or upload it on the ${platformMeta[seen].label} card.`;
+  return `This looks like a ${platformMeta[seen].label} screenshot, not ${platformMeta[read.platform].label}. Upload it on the ${platformMeta[seen].label} card instead.`;
 }
 
 /** "Read by Claude" confidence as a short caution, or null when it is high. */
