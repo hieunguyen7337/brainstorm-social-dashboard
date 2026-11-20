@@ -5,14 +5,18 @@
  *
  *   screenshot -> Claude reads it (POST /api/connections/{platform}/screenshot, nothing saved) -> the person checks and
  *   edits the numbers -> Save = POST /api/metrics/ingest with source "screenshot".
+ *   Android with the in-app reader (`src/autoRead`): "Connect with <Platform>" opens a sign-in sheet that reads the numbers
+ *   on the phone -> the same check-and-save form -> ingest with source "device". Its failure note on the card points to
+ *   the screenshot upload.
  *   A failed read (503: AI off or capped, too large, offline) shows why on the card; nothing is typed by hand.
  *
  * Feedback is inline, never a toast: inside the sheet a native modal would hide it.
  */
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
-import { ActivityIndicator, Image, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Platform as RNPlatform, StyleSheet, Text, View } from 'react-native';
 
 import { api, getToken, publicBaseUrl } from '@/src/api';
+import { AutoReadSheet, autoReadAvailable, type DeviceRead } from '@/src/autoRead';
 import {
   checkForm,
   formFromRead,
@@ -62,6 +66,8 @@ type Flow =
       /** Recent posts from the screenshot, ready for the ingest call. */
       posts: IngestPost[];
       thumb: string | null;
+      /** An uploaded screenshot Claude read, or a page read on the phone after an in-app sign-in (the ingest `source`). */
+      source: 'screenshot' | 'device';
       /** Why we fell back to typing. */
       notice: string | null;
       errors: FormErrors;
@@ -207,6 +213,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
           form,
           posts: postsToIngest(read.posts),
           thumb: res.image.uri,
+          source: 'screenshot',
           notice: null,
           errors: {},
           saving: false,
@@ -221,6 +228,47 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     })();
   };
 
+  /** The platform whose in-app sign-in sheet is open (`src/autoRead`). */
+  const [auto, setAuto] = useState<Platform | null>(null);
+  // Android only, and only when this build has both native modules (an older APK does not): web and iOS keep the upload.
+  const canAutoRead = RNPlatform.OS === 'android' && autoReadAvailable();
+
+  const connect = (platform: Platform) => {
+    if (busy) return;
+    setNote(platform, null);
+    setAuto(platform);
+  };
+
+  /** Numbers read on the phone: the same check-and-save form as a screenshot read, saved with source "device". */
+  const autoResult = (platform: Platform, read: DeviceRead) => {
+    if (!alive.current) return;
+    setAuto(null);
+    seq.current += 1;
+    const form = formFromRead(read);
+    const prev = byPlatform.get(platform) ?? null;
+    if (!form.handle && isConnected(prev)) form.handle = prev.handle;
+    setFlow({
+      platform,
+      step: 'form',
+      read,
+      form,
+      posts: postsToIngest(read.posts),
+      thumb: null,
+      source: 'device',
+      notice: null,
+      errors: {},
+      saving: false,
+      saveError: null,
+    });
+  };
+
+  /** The sheet ended without numbers: `reason` (set when reading gave up) goes on the card; the screenshot upload stays. */
+  const autoClose = (platform: Platform, reason?: string) => {
+    if (!alive.current) return;
+    setAuto(null);
+    if (reason) setNote(platform, { tone: 'error', text: reason });
+  };
+
   const cancel = () => {
     seq.current += 1; // a read still in flight is ignored
     setFlow(null);
@@ -229,7 +277,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
   const save = async () => {
     if (!flow || flow.step !== 'form' || flow.saving) return;
     const { platform } = flow;
-    const check = checkForm(platform, flow.form, flow.read ? 'screenshot' : 'manual', flow.read ? flow.posts : []);
+    const check = checkForm(platform, flow.form, flow.read ? flow.source : 'manual', flow.read ? flow.posts : []);
     if (!check.ok) {
       patchForm({ errors: check.errors, saveError: null });
       return;
@@ -286,6 +334,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
             note={notes[platform] ?? null}
             onUpdate={() => setExpanded((cur) => (cur === platform ? null : platform))}
             onUpload={() => upload(platform)}
+            onConnect={canAutoRead ? () => connect(platform) : undefined}
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}
             {mine?.step === 'form' ? (
@@ -309,6 +358,16 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
       })}
       {connections.error ? (
         <Text style={[t.small, styles.stale]}>{"Couldn't refresh your accounts. Showing the last known status."}</Text>
+      ) : null}
+      {auto ? (
+        <AutoReadSheet
+          platform={auto}
+          visible
+          handle={byPlatform.get(auto)?.handle ?? null}
+          onResult={(read) => autoResult(auto, read)}
+          onClose={(reason) => autoClose(auto, reason)}
+          readScreenshot={(base64, mediaType) => api.readScreenshot(auto, { image_base64: base64, media_type: mediaType })}
+        />
       ) : null}
     </View>
   );

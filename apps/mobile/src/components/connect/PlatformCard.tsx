@@ -1,7 +1,8 @@
 /**
- * One platform in "Connect your real accounts": name, where to take the screenshot, "Upload a screenshot" and "Type
- * numbers"; once connected: handle, followers, a "Real" badge, "Updated <time>" and "Update". The numbers form (or the
- * "Claude is reading" state) opens inside the card as `children`.
+ * One platform in "Connect your real accounts": name, where to take the screenshot, "Upload a screenshot"; on Android
+ * with the in-app reader available, "Connect with <Platform>" (sign in inside Pulse, `src/autoRead`) is the primary action
+ * and the screenshot upload the fallback. Once connected: handle, followers, a "Real" badge, "Updated <time>" and
+ * "Update". The numbers form (or the "Claude is reading" state) opens inside the card as `children`.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ReactNode } from 'react';
@@ -34,6 +35,8 @@ export interface PlatformCardProps {
   note: CardNote | null;
   onUpdate: () => void;
   onUpload: () => void;
+  /** Sign in inside Pulse and read the numbers on the phone. Absent where that is not available (web, iOS, an older APK). */
+  onConnect?: () => void;
   children?: ReactNode;
 }
 
@@ -48,6 +51,7 @@ export function PlatformCard({
   note,
   onUpdate,
   onUpload,
+  onConnect,
   children,
 }: PlatformCardProps) {
   const meta = platformMeta[platform];
@@ -102,10 +106,25 @@ export function PlatformCard({
 
         {showActions ? (
           <>
-            <Text style={t.small}>{`Screenshot: ${PLATFORM_HELP[platform]}.`}</Text>
+            <Text style={t.small}>
+              {onConnect
+                ? `Sign in to ${meta.label} here and Pulse reads your numbers. Or upload a screenshot: ${PLATFORM_HELP[platform]}.`
+                : `Screenshot: ${PLATFORM_HELP[platform]}.`}
+            </Text>
             <View style={styles.actions}>
+              {onConnect ? (
+                <Button
+                  small
+                  title={`Connect with ${meta.label}`}
+                  icon="log-in-outline"
+                  accessibilityLabel={`Connect with ${meta.label}`}
+                  disabled={busy}
+                  onPress={onConnect}
+                />
+              ) : null}
               <Button
                 small
+                variant={onConnect ? 'secondary' : 'primary'}
                 title="Upload a screenshot"
                 icon="image-outline"
                 accessibilityLabel={`Upload ${meta.label} screenshot`}
