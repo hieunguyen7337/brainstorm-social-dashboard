@@ -74,7 +74,7 @@ export default function DashboardScreen() {
   return (
     <Screen
       title="Dashboard"
-      subtitle={`${brand} · Last 30 days`}
+      subtitle={brand.toLowerCase() === (workspace?.name ?? '').trim().toLowerCase() ? 'Last 30 days' : `${brand} · last 30 days`}
       right={reconnecting ? <ReconnectingChip /> : undefined}
       onRefresh={reloadAll}
       refreshing={dash.refreshing || activity.refreshing}

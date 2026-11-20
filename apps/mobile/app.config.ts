@@ -25,12 +25,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     : {}),
   assetBundlePatterns: ['**/*'],
   ios: {
-    bundleIdentifier: 'app.pulse.hackathon',
+    bundleIdentifier: 'com.pulsehackathon.app',
+    buildNumber: '1',
     supportsTablet: true,
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    package: 'app.pulse.hackathon',
+    package: 'com.pulsehackathon.app',
+    versionCode: 1,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: BG,

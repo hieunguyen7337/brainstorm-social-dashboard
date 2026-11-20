@@ -11,7 +11,7 @@ import {
 } from '@/src/charts';
 import { fmtCompact } from '@/src/format';
 import { platformMeta, space, type as t } from '@/src/theme';
-import type { DayStats, FunnelStage, PlatformStats, Totals } from '@/src/types';
+import { PLATFORMS, type DayStats, type FunnelStage, type PlatformStats, type Totals } from '@/src/types';
 import { Card, Chip, ChipRow, SectionHeader } from '@/src/ui';
 import { LiveNumber, useStable } from './live';
 import { FUNNEL_LABELS, FUNNEL_ORDER, METRIC_BY_KEY, METRICS, isPlatform, type MetricKey } from './model';
@@ -24,7 +24,8 @@ function NoData({ text }: { text: string }) {
 export function PlatformDonutCard({ byPlatform, totalViews }: { byPlatform: PlatformStats[]; totalViews: number }) {
   const slices: DonutDatum[] = byPlatform
     .filter((p) => isPlatform(p.platform) && p.views > 0)
-    .sort((a, b) => b.views - a.views)
+    // Channel order (LinkedIn, Instagram, TikTok, X, Reddit, Facebook), the same as every chip row in the app.
+    .sort((a, b) => PLATFORMS.indexOf(a.platform) - PLATFORMS.indexOf(b.platform))
     .map((p) => ({
       key: p.platform,
       label: platformMeta[p.platform].label,

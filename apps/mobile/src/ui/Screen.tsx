@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MAX_CONTENT_WIDTH } from '@/src/config';
+import { useSession } from '@/src/session';
 import { colors, space, type as t } from '@/src/theme';
 
 export interface ScreenProps {
@@ -51,12 +52,18 @@ export function Screen({
   footer,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const { workspace } = useSession();
   const webRefresh = Platform.OS === 'web' && onRefresh;
 
   const header =
     title || right || webRefresh ? (
       <View style={styles.header}>
         <View style={styles.headerText}>
+          {title && workspace?.name ? (
+            <Text style={styles.workspace} numberOfLines={1} testID="workspace-name">
+              {workspace.name}
+            </Text>
+          ) : null}
           {title ? (
             <Text style={t.h1} accessibilityRole="header">
               {title}
@@ -134,6 +141,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md },
   headerText: { flex: 1, minWidth: 0 },
   subtitle: { marginTop: 2 },
+  workspace: { ...t.label, color: colors.textMute, marginBottom: 2 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   refreshBtn: {
     width: 38,
