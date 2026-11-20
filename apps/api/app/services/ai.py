@@ -336,7 +336,7 @@ def save_variants(
     published_at = now_iso() if status == "published" else None
     ids: list[str] = []
     for v in variants:
-        row = posts_svc.create_post(
+        post = posts_svc.create_post(
             conn,
             ws["id"],
             platform=v.platform,
@@ -349,15 +349,16 @@ def save_variants(
             source=source,
             quality=v.quality,
             status=status,
+            commit=False,
         )
-        link_url = posts_svc.row_to_post(row).link_url or ""
+        link_url = post.link_url or ""
         conn.execute(
             "UPDATE posts SET content = ?, scheduled_at = ?, published_at = ?, last_tick_at = ? WHERE id = ?",
-            (v.content.replace(LINK, link_url), scheduled_at, published_at, published_at, row["id"]),
+            (v.content.replace(LINK, link_url), scheduled_at, published_at, published_at, post.id),
         )
-        ids.append(row["id"])
+        ids.append(post.id)
     conn.commit()
     return [
-        posts_svc.row_to_post(conn.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone())
+        posts_svc.row_to_post(conn, conn.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone())
         for post_id in ids
     ]
