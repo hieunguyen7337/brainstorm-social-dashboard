@@ -69,7 +69,9 @@ export function NumbersFormView({
           <View style={styles.readText}>
             <View style={styles.readLine}>
               <Ionicons name="sparkles" size={14} color={colors.accent} />
-              <Text style={styles.readTitle}>Read by Claude, check before saving</Text>
+              <Text style={styles.readTitle}>
+                {read.ai_used ? 'Read by Claude, check before saving' : `Read from your ${label} page, check before saving`}
+              </Text>
             </View>
             {read.notes ? <Text style={t.small}>{read.notes}</Text> : null}
             {caution ? <Text style={[t.small, { color: colors.warn }]}>{caution}</Text> : null}

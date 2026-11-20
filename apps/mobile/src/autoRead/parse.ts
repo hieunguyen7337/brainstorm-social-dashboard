@@ -64,7 +64,7 @@ function guard(read: () => ParsedRead): ParsedRead {
   }
 }
 
-type NumberKey = 'followers' | 'following' | 'posts_count' | 'views' | 'engagements' | 'profile_views' | 'period_days';
+type NumberKey = 'followers' | 'following' | 'posts_count' | 'views' | 'engagements' | 'profile_views';
 
 /** Sets `out[key]` only when a number was found, so "absent on the page" stays an absent key. */
 function setNum(out: ParsedRead, key: NumberKey, value: number | null): void {

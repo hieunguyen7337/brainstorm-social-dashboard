@@ -127,14 +127,15 @@ const NUMBER_FIELDS: readonly { field: Exclude<FormField, 'handle'>; key: keyof 
 ];
 
 /**
- * Validate the form and build the ingest body. `source` is "screenshot" for numbers Claude read and the person checked,
- * "manual" for typed ones. A window (`period_days`) is only sent when a windowed number (views, engagements, profile
+ * Validate the form and build the ingest body. `source` is "screenshot" for numbers Claude read from an uploaded image and
+ * the person checked, "device" for numbers read on the phone after an in-app sign-in (`src/autoRead`), "manual" for typed
+ * ones. A window (`period_days`) is only sent when a windowed number (views, engagements, profile
  * views) is present: followers are a total, not a window.
  */
 export function checkForm(
   platform: Platform,
   form: NumbersForm,
-  source: 'screenshot' | 'manual',
+  source: 'screenshot' | 'manual' | 'device',
   posts: IngestPost[] = [],
 ): FormCheck {
   const errors: FormErrors = {};
@@ -215,6 +216,8 @@ export function platformMismatch(read: ScreenshotRead): string | null {
 
 /** "Read by Claude" confidence as a short caution, or null when it is high. */
 export function confidenceNote(read: ScreenshotRead): string | null {
+  // Numbers read straight from the page (no AI): 'medium' means the page layout is only assumed.
+  if (!read.ai_used) return read.confidence === 'high' ? null : 'Read from your page. Check the numbers.';
   if (read.confidence === 'low') return 'Claude was not sure about this screenshot. Check every number.';
   if (read.confidence === 'medium') return 'Claude was fairly sure. Check the numbers.';
   return null;

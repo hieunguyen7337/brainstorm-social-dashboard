@@ -3,48 +3,12 @@
  *
  * Pure types and constants only: no react-native import, so the parsers and the runner can run under plain Node.
  */
-import type { Platform } from '@/src/types';
+import type { Platform, ScreenshotPost, ScreenshotRead } from '@/src/types';
 
-export type { Platform };
+export type { Platform, ScreenshotRead };
 
 /** One recent post, as in the contract's `ScreenshotRead.posts[i]`. Anything not seen is `null`, never a guess. */
-export interface ReadPost {
-  /** First 200 characters of the caption/text. */
-  content: string | null;
-  views: number | null;
-  likes: number | null;
-  comments: number | null;
-  shares: number | null;
-  /** `YYYY-MM-DD` (UTC). */
-  posted_at: string | null;
-}
-
-/**
- * The contract's `ScreenshotRead` (docs/REAL.md, "Reading a screenshot"). Local copy so this folder is self-contained;
- * the lead points it at `src/types.ts` when wiring the module in.
- */
-export interface ScreenshotRead {
-  /** The platform the read was asked for. */
-  platform: Platform;
-  /** What the page/image looks like; the card warns when it differs from `platform`. */
-  detected_platform: Platform | null;
-  handle: string | null;
-  followers: number | null;
-  following: number | null;
-  posts_count: number | null;
-  /** Views/impressions in the window `period_days` (or lifetime when `period_days` is null). */
-  views: number | null;
-  engagements: number | null;
-  profile_views: number | null;
-  /** The window views/engagements/profile_views cover, if shown (7, 30 or 90). */
-  period_days: number | null;
-  /** At most 20. */
-  posts: ReadPost[];
-  confidence: 'high' | 'medium' | 'low';
-  /** One short line for the person. */
-  notes: string | null;
-  ai_used: boolean;
-}
+export type ReadPost = ScreenshotPost;
 
 /** What `onResult` receives: a `ScreenshotRead` plus where it came from (the ingest `source` value). */
 export type DeviceRead = ScreenshotRead & { source: 'device' };
@@ -61,7 +25,7 @@ export interface ParsedRead {
   views?: number | null;
   engagements?: number | null;
   profile_views?: number | null;
-  period_days?: number | null;
+  period_days?: 7 | 30 | 90 | null;
   posts?: ReadPost[];
   notes?: string | null;
 }
@@ -108,8 +72,8 @@ export interface StepCtx {
   handle?: string | null;
 }
 
-/** Shown to the person (via the card) whenever the automatic read gives up. */
-export const AUTO_READ_FAILED = "Couldn't read it automatically. Upload a screenshot or type the numbers.";
+/** Shown to the person (as a note on the card) whenever the automatic read gives up. Nothing is typed by hand any more. */
+export const AUTO_READ_FAILED = "Couldn't read it automatically. Upload a screenshot instead.";
 
 /** Props of `AutoReadSheet` (`src/autoRead/index.tsx`). */
 export interface AutoReadSheetProps {
