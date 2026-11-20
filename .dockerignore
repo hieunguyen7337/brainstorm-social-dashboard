@@ -1,0 +1,14 @@
+.git
+.github
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.expo
+**/dist
+apps/api/data
+*.db
+.env*
+audio
+docs
