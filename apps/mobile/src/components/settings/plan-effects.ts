@@ -43,6 +43,23 @@ export function useCheckoutReturn(reload: () => Promise<void>): void {
     } catch {
       // The router is not ready: the param stays, which is harmless (the flag above only reacts to a change).
     }
+    // On the web the address bar keeps `?billing=...` after setParams: strip it so a refresh does not repeat the toast.
+    // (Delayed: the router writes the URL itself a moment after setParams and would put the param back.)
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const strip = () => {
+        try {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has('billing')) {
+            url.searchParams.delete('billing');
+            window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+          }
+        } catch {
+          // ignore
+        }
+      };
+      setTimeout(strip, 400);
+      setTimeout(strip, 1500);
+    }
   }, [flag]);
 
   useEffect(() => {

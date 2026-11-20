@@ -161,9 +161,21 @@ export function useSide(): [number, (e: LayoutChangeEvent) => void] {
 /** Height of the label / counter pills. */
 export const PILL_H = 26;
 
-/** Translucent dark pill that stays legible on any part of the gradient. */
-export function Pill({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.pill, style]}>{children}</View>;
+/** Translucent dark pill that stays legible on any part of the gradient. `decorative` hides it from screen readers. */
+export function Pill({
+  children,
+  style,
+  decorative,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  decorative?: boolean;
+}) {
+  return (
+    <View style={[styles.pill, style]} aria-hidden={decorative ? true : undefined}>
+      {children}
+    </View>
+  );
 }
 
 /** "VISUAL PLAN" label with an image icon; a pencil joins it while the plan can be edited (the edit hint). */

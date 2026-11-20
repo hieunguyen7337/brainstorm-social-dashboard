@@ -18,6 +18,7 @@ import {
   withoutTrackedLink,
 } from './parts';
 import type { PreviewProps } from './types';
+import { InstagramVisual } from './visual-frames';
 
 /** Instagram dark palette. */
 const IG = {
@@ -30,10 +31,10 @@ const IG = {
   pill: '#1a1a1a',
 } as const;
 
-const PINK = '#ff4f8b';
-const ORANGE = '#ff9a3c';
-
-/** Instagram post: gradient-ring avatar, 1:1 gradient media with the visual plan (media_prompt), actions, likes, caption. */
+/**
+ * Instagram post: gradient-ring avatar, a true 1:1 square whose content is the visual plan (media_prompt, editable in
+ * place), actions, likes, caption with handle and hashtags, "Link in bio" chip.
+ */
 export function InstagramPreview({
   content,
   hashtags,
@@ -56,8 +57,6 @@ export function InstagramPreview({
   const text = withoutTrackedLink(content, link);
   const tags = cleanTags(hashtags);
   const inline = tagsNotIn(tags, text);
-  const brief = mediaPrompt ?? '';
-  const showBrief = editable || brief.trim().length > 0;
 
   return (
     <PreviewShell background={IG.bg} borderColor={IG.border}>
@@ -78,40 +77,13 @@ export function InstagramPreview({
         <Ionicons name="ellipsis-horizontal" size={20} color={IG.text} />
       </View>
 
-      <LinearGradient
-        colors={[accentColor, PINK, ORANGE]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.media, small && styles.mediaCompact]}
-      >
-        <View style={[styles.circle, styles.circleA]} />
-        <View style={[styles.circle, styles.circleB]} />
-        <View style={[styles.circle, styles.circleC]} />
-        {small ? null : (
-          <View style={styles.mediaIcon}>
-            <Ionicons name="sparkles" size={46} color="rgba(255, 255, 255, 0.72)" />
-          </View>
-        )}
-        {showBrief ? (
-          <View style={styles.brief}>
-            <View style={styles.briefHead}>
-              <Ionicons name="image-outline" size={13} color={colors.white} />
-              <Text style={styles.briefLabel}>Visual plan</Text>
-            </View>
-            <PreviewText
-              value={brief}
-              editable={editable}
-              onChangeText={onChangeMediaPrompt}
-              placeholder="Describe the image you want"
-              style={styles.briefText}
-              mutedColor="rgba(255, 255, 255, 0.6)"
-              accent={colors.white}
-              label="Visual plan"
-              maxLines={small ? 2 : 4}
-            />
-          </View>
-        ) : null}
-      </LinearGradient>
+      <InstagramVisual
+        plan={mediaPrompt ?? ''}
+        accentColor={accentColor}
+        editable={editable}
+        compact={small}
+        onChangePlan={onChangeMediaPrompt}
+      />
 
       <View style={styles.actions} aria-hidden>
         <View style={styles.actionsLeft}>
@@ -191,28 +163,6 @@ const styles = StyleSheet.create({
   ring: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   ringGap: { width: 34, height: 34, borderRadius: 17, backgroundColor: IG.bg, alignItems: 'center', justifyContent: 'center' },
   handle: { flex: 1, minWidth: 0, color: IG.text, fontSize: 14, lineHeight: 18, fontWeight: '700' },
-
-  media: { width: '100%', aspectRatio: 1, maxHeight: 520, overflow: 'hidden', alignItems: 'center', justifyContent: 'flex-end' },
-  mediaCompact: { aspectRatio: 16 / 9, maxHeight: 220 },
-  circle: { position: 'absolute', aspectRatio: 1, borderRadius: 999 },
-  circleA: { width: '64%', top: '-16%', right: '-18%', backgroundColor: 'rgba(255, 255, 255, 0.15)' },
-  circleB: { width: '50%', bottom: '-20%', left: '-14%', backgroundColor: 'rgba(255, 255, 255, 0.11)' },
-  circleC: { width: '20%', top: '20%', left: '10%', backgroundColor: 'rgba(255, 255, 255, 0.13)' },
-  mediaIcon: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
-  brief: {
-    alignSelf: 'stretch',
-    margin: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    backgroundColor: 'rgba(12, 10, 26, 0.56)',
-  },
-  briefHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  briefLabel: { color: colors.white, fontSize: 10.5, lineHeight: 14, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
-  briefText: { color: 'rgba(255, 255, 255, 0.95)', fontSize: 13, lineHeight: 18 },
 
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
   actionsLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
