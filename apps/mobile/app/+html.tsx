@@ -25,10 +25,6 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
     'Apple Color Emoji', 'Segoe UI Emoji';
 }
-/* iOS Safari zooms the page when a focused field is under 16px; keep every touch-device field at 16px. */
-@media (pointer: coarse) {
-  input, textarea, select { font-size: 16px !important; }
-}
 `;
 
 export default function Root({ children }: { children: ReactNode }) {
