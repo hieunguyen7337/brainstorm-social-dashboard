@@ -3,12 +3,12 @@
  * One component used in onboarding, in the connect sheet and in Settings > Accounts. It renders a plain `View` (no scroll
  * view, no section header): the parent scrolls and titles it.
  *
- *   screenshot -> Claude reads it (POST /api/connections/{platform}/screenshot, nothing saved) -> the person checks and
- *   edits the numbers -> Save = POST /api/metrics/ingest with source "screenshot".
- *   Android with the in-app reader (`src/autoRead`): "Connect with <Platform>" opens a sign-in sheet that reads the numbers
- *   on the phone -> the same check-and-save form -> ingest with source "device". Its failure note on the card points to
- *   the screenshot upload.
- *   A failed read (503: AI off or capped, too large, offline) shows why on the card; nothing is typed by hand.
+ *   screenshot -> Claude reads it (POST /api/connections/{platform}/screenshot) -> saved at once = POST /api/metrics/ingest
+ *   with source "screenshot". There is no confirm form.
+ *   Android with the in-app reader (`src/autoRead`): "Connect with <Platform>" (or "Update" on a connected card) opens a
+ *   sign-in sheet that reads the numbers on the phone -> saved at once with source "device". Its failure note on the card
+ *   points to the screenshot upload.
+ *   A failed read or save (503: AI off or capped, too large, offline, no numbers) shows why on the card; nothing is typed by hand.
  *
  * Feedback is inline, never a toast: inside the sheet a native modal would hide it.
  */
@@ -27,14 +27,11 @@ import {
   saveFailure,
   savedSummary,
   updatedLabel,
-  type FormErrors,
-  type NumbersForm,
 } from '@/src/connect';
 import { pickScreenshot } from '@/src/pickImage';
 import { colors, space, type as t } from '@/src/theme';
-import type { Connection, HarvestStatus, IngestPost, IngestRequest, IngestResult, Platform, ScreenshotRead } from '@/src/types';
+import type { Connection, HarvestStatus, IngestRequest, IngestResult, Platform, ScreenshotRead } from '@/src/types';
 import { Button, Card, ErrorState, Skeleton } from '@/src/ui';
-import { NumbersFormView } from './NumbersFormView';
 import { PlatformCard, type CardNote } from './PlatformCard';
 import { useConnectSheet } from './sheetContext';
 import { useLoader } from './useLoader';
@@ -57,25 +54,8 @@ const ORDER: readonly Platform[] = ['instagram', 'linkedin', 'tiktok', 'x', 'red
 
 type Flow =
   | { platform: Platform; step: 'reading'; thumb: string }
-  | {
-      platform: Platform;
-      step: 'form';
-      /** What Claude read; null while typing. */
-      read: ScreenshotRead | null;
-      form: NumbersForm;
-      /** Recent posts from the screenshot, ready for the ingest call. */
-      posts: IngestPost[];
-      thumb: string | null;
-      /** An uploaded screenshot Claude read, or a page read on the phone after an in-app sign-in (the ingest `source`). */
-      source: 'screenshot' | 'device';
-      /** Why we fell back to typing. */
-      notice: string | null;
-      errors: FormErrors;
-      saving: boolean;
-      saveError: string | null;
-    };
-
-type FormFlow = Extract<Flow, { step: 'form' }>;
+  /** Numbers in hand (a screenshot Claude read, or a page read on the phone): being saved. */
+  | { platform: Platform; step: 'saving' };
 
 const upsert = (list: Connection[] | undefined, conn: Connection): Connection[] => [
   ...(list ?? []).filter((c) => c.platform !== conn.platform),
@@ -162,11 +142,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     });
   }, []);
 
-  const patchForm = useCallback((patch: Partial<FormFlow>) => {
-    setFlow((cur) => (cur && cur.step === 'form' ? { ...cur, ...patch } : cur));
-  }, []);
-
-  const busy = flow?.step === 'reading' || (flow?.step === 'form' && flow.saving);
+  const busy = flow !== null;
 
   /** A phone app without the image picker: the web app does the upload, in the same workspace (`#ws=` link). */
   const openUploadPage = (platform: Platform) => {
@@ -203,22 +179,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
       try {
         const read = await api.readScreenshot(platform, { image_base64: res.image.base64, media_type: res.image.mediaType });
         if (!alive.current || id !== seq.current) return;
-        const form = formFromRead(read);
-        // Updating an account: keep the saved handle when the image did not show one.
-        if (!form.handle && isConnected(prev)) form.handle = prev.handle;
-        setFlow({
-          platform,
-          step: 'form',
-          read,
-          form,
-          posts: postsToIngest(read.posts),
-          thumb: res.image.uri,
-          source: 'screenshot',
-          notice: null,
-          errors: {},
-          saving: false,
-          saveError: null,
-        });
+        await persist(platform, read, 'screenshot', id);
       } catch (e) {
         if (!alive.current || id !== seq.current) return;
         // 503 (AI off or capped) and every other failure: say why on the card; the person tries another screenshot.
@@ -239,27 +200,12 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     setAuto(platform);
   };
 
-  /** Numbers read on the phone: the same check-and-save form as a screenshot read, saved with source "device". */
+  /** Numbers read on the phone: saved at once with source "device". */
   const autoResult = (platform: Platform, read: DeviceRead) => {
     if (!alive.current) return;
     setAuto(null);
-    seq.current += 1;
-    const form = formFromRead(read);
-    const prev = byPlatform.get(platform) ?? null;
-    if (!form.handle && isConnected(prev)) form.handle = prev.handle;
-    setFlow({
-      platform,
-      step: 'form',
-      read,
-      form,
-      posts: postsToIngest(read.posts),
-      thumb: null,
-      source: 'device',
-      notice: null,
-      errors: {},
-      saving: false,
-      saveError: null,
-    });
+    const id = ++seq.current;
+    void persist(platform, read, 'device', id);
   };
 
   /** The sheet ended without numbers: `reason` (set when reading gave up) goes on the card; the screenshot upload stays. */
@@ -274,31 +220,39 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     setFlow(null);
   };
 
-  const save = async () => {
-    if (!flow || flow.step !== 'form' || flow.saving) return;
-    const { platform } = flow;
-    const check = checkForm(platform, flow.form, flow.read ? flow.source : 'manual', flow.read ? flow.posts : []);
+  /**
+   * Saves what was read, with the same `checkForm` + ingest call the old form's Save button made. No form is shown: a read
+   * with no usable number, or a failed check or save, ends as an error note on the card (the card's buttons try again).
+   */
+  async function persist(platform: Platform, read: ScreenshotRead, source: 'screenshot' | 'device', id: number) {
+    const form = formFromRead(read);
+    const prev = byPlatform.get(platform) ?? null;
+    // Updating an account: keep the saved handle when the read did not show one.
+    if (!form.handle && isConnected(prev)) form.handle = prev.handle;
+    const check = checkForm(platform, form, source, postsToIngest(read.posts));
     if (!check.ok) {
-      patchForm({ errors: check.errors, saveError: null });
+      setFlow(null);
+      setNote(platform, { tone: 'error', text: "Couldn't read any numbers. Try again." });
       return;
     }
-    patchForm({ saving: true, errors: {}, saveError: null });
+    setFlow({ platform, step: 'saving' });
     try {
       const result = await api.ingestMetrics(check.request);
-      if (!alive.current) return;
-      connections.setData((list) => upsert(list, connectedFrom(byPlatform.get(platform) ?? null, check.request, result)));
-      setSavedAt((prev) => ({ ...prev, [platform]: result.captured_at }));
+      if (!alive.current || id !== seq.current) return;
+      connections.setData((list) => upsert(list, connectedFrom(prev, check.request, result)));
+      setSavedAt((cur) => ({ ...cur, [platform]: result.captured_at }));
       setNote(platform, { tone: 'success', text: savedSummary(platform, check.request) });
       setFlow(null);
       setExpanded(null);
-      markSaved();
+      markSaved(); // the dashboard (and every other list) refetches by itself
       void reload(); // the server's copy replaces the instant one
       onSaved?.(platform, result);
     } catch (e) {
-      if (!alive.current) return;
-      patchForm({ saving: false, saveError: saveFailure(e) });
+      if (!alive.current || id !== seq.current) return;
+      setFlow(null);
+      setNote(platform, { tone: 'error', text: saveFailure(e) });
     }
-  };
+  }
 
   if (connections.loading && !connections.data) return <ConnectSkeleton />;
   if (connections.error && !connections.data) {
@@ -332,27 +286,16 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
             busy={busy}
             open={mine !== null}
             note={notes[platform] ?? null}
-            onUpdate={() => setExpanded((cur) => (cur === platform ? null : platform))}
+            onUpdate={() => {
+              // Android with the in-app reader: "Update" signs in and reads at once; elsewhere it opens the card's buttons.
+              if (canAutoRead) connect(platform);
+              else setExpanded((cur) => (cur === platform ? null : platform));
+            }}
             onUpload={() => upload(platform)}
             onConnect={canAutoRead ? () => connect(platform) : undefined}
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}
-            {mine?.step === 'form' ? (
-              <NumbersFormView
-                platform={platform}
-                form={mine.form}
-                errors={mine.errors}
-                read={mine.read}
-                postsCount={mine.read ? mine.posts.length : 0}
-                thumb={mine.thumb}
-                notice={mine.notice}
-                saving={mine.saving}
-                saveError={mine.saveError}
-                onChange={(patch) => patchForm({ form: { ...mine.form, ...patch }, errors: {}, saveError: null })}
-                onSave={() => void save()}
-                onCancel={cancel}
-              />
-            ) : null}
+            {mine?.step === 'saving' ? <Saving /> : null}
           </PlatformCard>
         );
       })}
@@ -382,9 +325,18 @@ function Reading({ thumb, onCancel }: { thumb: string; onCancel: () => void }) {
           <ActivityIndicator size="small" color={colors.accent} />
           <Text style={styles.readingTitle}>Claude is reading your screenshot</Text>
         </View>
-        <Text style={t.small}>This takes a few seconds. Nothing is saved until you check the numbers.</Text>
+        <Text style={t.small}>This takes a few seconds. Your numbers are saved when it is done.</Text>
       </View>
       <Button small variant="ghost" title="Cancel" onPress={onCancel} />
+    </View>
+  );
+}
+
+function Saving() {
+  return (
+    <View style={styles.readingLine} accessibilityLiveRegion="polite" testID="connect-saving">
+      <ActivityIndicator size="small" color={colors.accent} />
+      <Text style={styles.readingTitle}>Saving your numbers</Text>
     </View>
   );
 }
