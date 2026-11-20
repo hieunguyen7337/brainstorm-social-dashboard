@@ -386,12 +386,12 @@ _SCREEN_CSS = """
 --mute:#8E97B8;--ac:#7C5CFF;--act:#B9A9FF;--b:#FF5C8A;--bt:#FF8FB0;--ok:#2FE0A3;--warn:#FFB648;--bad:#FF5D73;
 --info:#4CC3FF}
 html{font-size:clamp(8px,min(1.0417vw,1.852vh),40px);background:#0B0F1A}
-body{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;padding:1.5rem 2.4rem 1.6rem;
+body{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;padding:1.2rem 2.4rem 1.4rem;
 color:var(--tx);font:1rem/1.35 __FONT__;background-color:#0B0F1A;
 background-image:radial-gradient(60rem 40rem at 88% -8%,rgba(124,92,255,.2),transparent 62%),
 radial-gradient(50rem 36rem at 0% 108%,rgba(255,92,138,.1),transparent 62%)}
 [hidden]{display:none!important}
-.hd{flex:none;display:flex;justify-content:space-between;align-items:center;height:3rem}
+.hd{flex:none;display:flex;justify-content:space-between;align-items:center;height:2.8rem}
 .brand{display:flex;align-items:center;gap:.9rem;font-size:1.6rem;font-weight:600;color:var(--dim)}
 .brand b{color:var(--tx)}
 .logo{width:2.2rem;height:2.2rem;border-radius:.7rem;background:linear-gradient(135deg,var(--ac),var(--b))}
@@ -401,7 +401,7 @@ radial-gradient(50rem 36rem at 0% 108%,rgba(255,92,138,.1),transparent 62%)}
 .conn{display:flex;align-items:center;gap:.6rem;color:var(--dim)}
 .dot{width:1rem;height:1rem;border-radius:50%;background:var(--ok);animation:pulse 2s infinite}
 .conn.bad{color:var(--warn)}.conn.bad .dot{background:var(--warn);animation:none}
-.grid{flex:1;min-height:0;display:grid;grid-template-columns:30rem minmax(0,1fr);gap:2.4rem;margin-top:1.2rem}
+.grid{flex:1;min-height:0;display:grid;grid-template-columns:30rem minmax(0,1fr);gap:2.4rem;margin-top:.8rem}
 .left{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem}
 .qr{width:100%;aspect-ratio:1;padding:1.1rem;border-radius:2rem;background:#fff;
 box-shadow:0 1rem 4rem rgba(124,92,255,.35)}
@@ -409,25 +409,26 @@ box-shadow:0 1rem 4rem rgba(124,92,255,.35)}
 .url{max-width:100%;margin-top:.8rem;font-family:__MONO__;font-weight:800;white-space:nowrap;text-align:center;
 font-size:min(3.2rem,calc(30rem/(var(--n)*.66)))}
 .cap{font-size:1.7rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
-.right{min-width:0;min-height:0;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);gap:1.2rem}
-.title{font-size:2.8rem;line-height:1.1;font-weight:800;letter-spacing:-.03em;display:-webkit-box;
--webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.counters{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem}
-.ctr{position:relative;padding:1.1rem 1.6rem 1rem;border-radius:1.4rem;background:var(--card);
+.right{min-width:0;min-height:0;display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);gap:1rem}
+.title{font-size:max(1.5rem,min(2.6rem,calc(56rem/(var(--tn)*.56))));line-height:1.15;font-weight:800;
+letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.counters{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.ctr{position:relative;padding:.9rem 1.6rem .8rem;border-radius:1.4rem;background:var(--card);
 border:1px solid var(--line)}
 .ctr::before{content:"";position:absolute;left:1.6rem;top:0;width:3.4rem;height:.3rem;border-radius:0 0 .3rem .3rem;
 background:var(--c)}
-.ctr b{display:block;font-size:5rem;line-height:1;font-weight:800;letter-spacing:-.03em;
+.ctr b{display:block;font-size:4.2rem;line-height:1;font-weight:800;letter-spacing:-.03em;
 font-variant-numeric:tabular-nums}
-.ctr span{display:block;margin-top:.5rem;font-size:1.3rem;font-weight:700;letter-spacing:.14em;
+.ctr span{display:block;margin-top:.35rem;font-size:1.25rem;font-weight:700;letter-spacing:.14em;
 text-transform:uppercase;color:var(--dim)}
 .panel{min-height:0;position:relative;display:flex;flex-direction:column;padding:1rem 1.6rem 1.1rem;
 border-radius:1.4rem;background:var(--card);border:1px solid var(--line)}
 .ph2{flex:none;margin-bottom:.7rem;font-size:1.15rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
 color:var(--mute)}
-.race{display:grid;gap:1rem;padding:1.2rem 1.6rem}
-.rw{display:grid;gap:.55rem}
-.rt{display:flex;justify-content:space-between;align-items:center;gap:1rem;font-size:1.9rem;font-weight:800}
+.race{display:grid;gap:.8rem;padding:1rem 1.6rem}
+.rw{display:grid;gap:.4rem}
+.rt{display:flex;justify-content:space-between;align-items:center;gap:1rem;font-size:1.8rem;line-height:1.2;
+font-weight:800}
 .rn{min-width:0;display:flex;align-items:center;gap:.8rem;white-space:nowrap}
 .rn span{overflow:hidden;text-overflow:ellipsis}
 .td{flex:none;width:1.1rem;height:1.1rem;border-radius:50%}
@@ -435,40 +436,41 @@ color:var(--mute)}
 .rw.lead .cr{display:block}
 .rv{white-space:nowrap;font-variant-numeric:tabular-nums}
 .rv small{margin-left:.8rem;font-size:1.5rem;font-weight:700;color:var(--dim)}
-.trk{height:2.1rem;border-radius:999px;background:var(--hi)}
+.trk{height:1.7rem;border-radius:999px;background:var(--hi)}
 .fl{height:100%;width:0;border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .fa{background:linear-gradient(90deg,#5B3FE0,var(--ac) 60%,#A592FF)}
 .fb{background:linear-gradient(90deg,#E63E74,var(--b) 60%,#FF9DBA)}
 .rw.lead .fa{box-shadow:0 0 1.8rem rgba(124,92,255,.75)}.rw.lead .fb{box-shadow:0 0 1.8rem rgba(255,92,138,.7)}
-.win{display:flex;align-items:center;gap:1rem;padding:1rem 1.8rem;border-radius:1.4rem;background:var(--card);
-border:1px solid var(--line);color:var(--dim);font-size:2.1rem;font-weight:800;
+.win{display:flex;align-items:center;gap:1rem;padding:.8rem 1.8rem;border-radius:1.4rem;background:var(--card);
+border:1px solid var(--line);color:var(--dim);font-size:1.9rem;font-weight:800;
 transition:background .4s,border-color .4s,box-shadow .4s,color .4s}
-.win svg{flex:none;display:none;width:2.4rem;height:2.4rem;fill:#FFD27A}
+.win svg{flex:none;display:none;width:2.2rem;height:2.2rem;fill:#FFD27A}
 .win.lead{color:var(--tx);border-color:var(--line2)}
 .win.done{color:#fff;border-color:var(--ac);background:linear-gradient(100deg,rgba(124,92,255,.38),
 rgba(255,92,138,.2)),var(--card);box-shadow:0 0 3rem rgba(124,92,255,.35)}
 .win.done svg{display:block}
-.low{min-height:0;display:grid;grid-template-columns:1.1fr .9fr;gap:1.2rem}
-.fun{flex:1;min-height:0;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:.6rem}
-.fr{display:grid;grid-template-columns:6rem minmax(0,1fr) 4.8rem;align-items:center;gap:1rem;font-size:1.4rem;
+.low{min-height:0;display:grid;grid-template-columns:1.1fr .9fr;gap:1rem}
+.fun{flex:1;min-height:0;container-type:size;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:.6rem}
+.fr{display:grid;grid-template-columns:6rem minmax(0,1fr) 4.8rem;align-items:center;gap:1rem;
+font-size:1.4rem;font-size:min(1.4rem,17cqh);
 font-weight:600;color:var(--dim)}
 .fr b{text-align:right;color:var(--tx);font-variant-numeric:tabular-nums}
 .ft{height:min(100%,2.2rem);border-radius:.6rem;background:var(--hi)}
 .ff{height:100%;width:4%;border-radius:.6rem;transition:width .6s ease;background:var(--c)}
-#feed{flex:1;min-height:0;list-style:none;padding:0;display:grid;grid-template-rows:repeat(8,minmax(0,1fr))}
+#feed{flex:1;min-height:0;container-type:size;list-style:none;padding:0;display:grid;grid-template-rows:repeat(8,minmax(0,1fr))}
 #feed li{min-height:0;display:flex;align-items:center;gap:.9rem;overflow:hidden;white-space:nowrap;
-font-size:1.35rem;color:var(--dim);animation:slide .5s ease both}
+font-size:1.3rem;font-size:min(1.3rem,10.4cqh);color:var(--dim);animation:slide .5s ease both}
 #feed li b{color:var(--tx)}
 .tag{flex:none;width:1rem;height:1rem;border-radius:.3rem}.tag.a{background:var(--ac)}.tag.b{background:var(--b)}
 .empty{position:absolute;left:1.6rem;top:3.6rem;font-size:1.4rem;color:var(--mute)}
-.closebox{position:fixed;right:2.4rem;bottom:1rem;display:flex;align-items:center;gap:1rem;font-size:1.2rem}
+.closebox{position:fixed;right:2.4rem;bottom:.6rem;display:flex;align-items:center;gap:1rem;font-size:1.2rem}
 .closebox span{color:#FF9AA8}
-.closebox button{padding:.6rem 1.5rem;border-radius:999px;border:2px solid var(--bad);background:rgba(255,93,115,.08);
+.closebox button{padding:.45rem 1.5rem;border-radius:999px;border:2px solid var(--bad);background:rgba(255,93,115,.08);
 color:#FF9AA8;font:inherit;font-size:1.25rem;font-weight:700;cursor:pointer}
 .closebox button:hover{background:rgba(255,93,115,.2)}
 .closebox button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .closebox button[disabled]{opacity:.5;cursor:default}
-.has-close .low{margin-bottom:2.6rem}
+.has-close .low{margin-bottom:2.2rem}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,224,163,.6)}70%,100%{box-shadow:0 0 0 .8rem rgba(47,224,163,0)}}
 @keyframes slide{from{opacity:0;transform:translateY(-.9rem)}to{opacity:1;transform:none}}
 @media (max-width:899px),(max-height:480px){
@@ -495,7 +497,7 @@ d="M3 19h18l1.2-12.5-5.2 4.3L12 3.5 7 10.8 1.8 6.5z"/></symbol></svg>
 <p class="cap">Scan to play</p>
 </aside>
 <section class="right">
-<h1 class="title">__HEADING__</h1>
+<h1 class="title" style="--tn:__TITLELEN__">__HEADING__</h1>
 <div class="counters">
 <div class="ctr" style="--c:var(--info)"><b id="n-scans">0</b><span>Scans</span></div>
 <div class="ctr" style="--c:var(--act)"><b id="n-votes">0</b><span>Votes</span></div>
@@ -558,7 +560,7 @@ $("f-a").style.width=(t?a/t*100:0)+"%";$("f-b").style.width=(t?b/t*100:0)+"%";
 $("rw-a").className="rw"+(a>b?" lead":"");$("rw-b").className="rw"+(b>a?" lead":"")}
 function renderWin(){
 var a=S.votes.a,b=S.votes.b,t=a+b,closed=S.status==="closed",w=$("win"),x=$("win-t"),cls="win",txt;
-if(!t){txt=closed?"Voting closed \\u00b7 no votes were cast":"No votes yet"}
+if(!t){txt=closed?(seeded?"Voting closed \\u00b7 no votes were cast":"Voting closed"):"No votes yet"}
 else if(a===b){txt="It\\u2019s a tie \\u00b7 "+Math.round(a/t*100)+"% each";if(closed)cls+=" done"}
 else{
 var c=a>b?"a":"b",pct=Math.round(Math.max(a,b)/t*100),th=name(c);
@@ -669,6 +671,7 @@ def render_screen_page(*, app_name: str, code: str, title: str, variants: list[d
         URLLEN=str(max(len(join_url_display), 8)),
         JOINDISPLAY=_e(join_url_display),
         HEADING=_e(heading),
+        TITLELEN=str(max(len(heading), 1)),
         COLORA=_color(by["a"].get("theme_color")),
         COLORB=_color(by["b"].get("theme_color")),
         NAMEA=_e(f" · {names['a']}" if names["a"] else ""),
