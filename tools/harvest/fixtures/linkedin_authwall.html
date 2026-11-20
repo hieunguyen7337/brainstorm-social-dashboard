@@ -1,0 +1,25 @@
+<!-- HAND-WRITTEN APPROXIMATION of LinkedIn's logged-out "authwall" interstitial (what a Chrome without a LinkedIn
+     session gets for a profile / activity URL). NOT a capture: there was no live access, the markup is a guess
+     modelled on the public guest pages. -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sign Up | LinkedIn</title></head>
+<body class="authwall guest-nav">
+<header class="header"><a class="header__logo" href="https://www.linkedin.com/"><span class="visually-hidden">LinkedIn</span></a>
+  <nav class="nav"><a class="nav__button-tertiary" href="https://www.linkedin.com/signup/cold-join">Join now</a>
+    <a class="nav__button-secondary" href="https://www.linkedin.com/login?fromSignIn=true">Sign in</a></nav></header>
+<main class="authwall-join-form__container">
+  <section class="authwall-join-form">
+    <h1>Join LinkedIn to see more</h1>
+    <p>Stay up to date on your professional world.</p>
+    <form class="join-form" action="/uas/login-submit" method="post">
+      <label for="session_key">Email or phone</label><input id="session_key" name="session_key" type="text">
+      <label for="session_password">Password</label><input id="session_password" name="session_password" type="password">
+      <button type="submit" data-tracking-control-name="auth_wall_desktop_profile-login-toggle">Sign in</button>
+      <button type="button">Agree &amp; Join</button>
+    </form>
+    <p>New to LinkedIn? <a href="https://www.linkedin.com/signup">Join now</a></p>
+  </section>
+</main>
+</body>
+</html>

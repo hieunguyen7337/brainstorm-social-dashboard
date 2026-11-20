@@ -1,0 +1,99 @@
+<!-- HAND-WRITTEN APPROXIMATION of LinkedIn's /in/<slug>/recent-activity/all/ markup. NOT a capture: there was no
+     live access, class names / structure are modelled on LinkedIn's feed-shared-update-v2 family from memory.
+     Names, ids and numbers are invented. Cards, in page order (newest first):
+       B 5h   data-urn, reactions only via the class-based count, no comments row, "1,204 impressions"
+       A 2d   data-urn, K-abbreviated counts (12.4K impressions, 1.2K reactions), "...see more" toggle, hashtags
+       (skip) promo card whose data-urn is an aggregate urn, no activity link
+       C 3w   no data-urn: id only from the /feed/update/ link in the header, singular "1 repost"
+       (skip) "Jane Doe likes this": somebody else's post the user reacted to
+       D 1mo  entity-encoded text + emoji, counts only in aria-labels
+       G 1yr  no data-urn: id only from a /posts/...-activity-<id>-... link, no impressions row -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Alex Rivera | LinkedIn</title>
+<script>window.__bpr = {"followers": "9,999 followers", "x": "123 impressions"};</script></head>
+<body class="render-mode-BIGPIPE nav-v2">
+<header id="global-nav" class="global-nav"><nav><a href="/feed/">Home</a><a href="/m/logout/">Sign out</a></nav></header>
+<main class="scaffold-layout__main">
+<div class="scaffold-finite-scroll__content">
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 artdeco-card" data-urn="urn:li:activity:7263400000000000002" role="article">
+  <div class="update-components-actor"><a class="update-components-actor__meta-link" href="https://www.linkedin.com/in/alex-rivera-demo">
+    <span class="update-components-actor__title"><span aria-hidden="true">Alex Rivera</span><span class="visually-hidden">Alex Rivera</span></span>
+    <span class="update-components-actor__description">Founder at Pulse Labs</span></a>
+    <span class="update-components-actor__sub-description">5h &bull; <span class="visually-hidden">5 hours ago</span></span></div>
+  <div class="update-components-text relative update-components-update-v2__commentary"><span dir="ltr">Quick poll: do you schedule posts or publish live? I keep going back and forth.</span></div>
+  <div class="social-details-social-counts"><ul class="social-details-social-counts__item-group">
+    <li class="social-details-social-counts__reactions"><button><img alt="like" src="x.svg"><img alt="celebrate" src="y.svg"><span class="social-details-social-counts__reactions-count">9</span></button></li>
+    <li class="social-details-social-counts__item"><button aria-label="2 reposts"><span>2 reposts</span></button></li>
+  </ul></div>
+  <div class="ca-entry-point"><span class="ca-entry-point__num-views"><strong>1,204 impressions</strong></span> <span>View analytics</span></div>
+  <div class="feed-shared-social-actions"><button aria-label="React Like"><span>Like</span></button><button><span>Comment</span></button><button><span>Repost</span></button><button><span>Send</span></button></div>
+</div></div>
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 artdeco-card" data-urn="urn:li:activity:7263100000000000001" role="article">
+  <div class="update-components-actor"><a class="update-components-actor__meta-link" href="https://www.linkedin.com/in/alex-rivera-demo">
+    <span class="update-components-actor__title"><span aria-hidden="true">Alex Rivera</span><span class="visually-hidden">Alex Rivera</span></span>
+    <span class="update-components-actor__description">Founder at Pulse Labs</span></a>
+    <span class="update-components-actor__sub-description"><span aria-hidden="true">2d &bull; Edited &bull; </span><span class="visually-hidden">2 days ago &bull; Edited</span></span></div>
+  <div class="feed-shared-update-v2__description-wrapper"><div class="update-components-text relative update-components-update-v2__commentary" dir="ltr">
+    <span dir="ltr">Shipped our Pulse demo this week. Three days, four people, one dashboard that pulls real post stats from LinkedIn and Instagram without any API keys. Here is what we learned about scope, sleep and shipping.
+      <a href="/feed/hashtag/?keywords=hackathon"><span class="visually-hidden">hashtag</span><span aria-hidden="true">#</span>hackathon</a>
+      <a href="/feed/hashtag/?keywords=buildinpublic"><span class="visually-hidden">hashtag</span><span aria-hidden="true">#</span>buildinpublic</a></span>
+    <button class="feed-shared-inline-show-more-text__see-more-less-toggle see-more t-14 t-black--light">&hellip;see more</button></div></div>
+  <div class="social-details-social-counts"><ul class="social-details-social-counts__item-group">
+    <li class="social-details-social-counts__reactions"><button aria-label="1.2K reactions" class="social-details-social-counts__count-value"><img alt="like" src="x.svg"><span class="social-details-social-counts__reactions-count">1.2K</span></button></li>
+    <li class="social-details-social-counts__comments"><button aria-label="86 comments"><span aria-hidden="true">86 comments</span></button></li>
+    <li class="social-details-social-counts__item"><button aria-label="14 reposts"><span>14 reposts</span></button></li>
+  </ul></div>
+  <div class="ca-entry-point"><span class="ca-entry-point__num-views"><strong>12.4K impressions</strong></span> <span>View analytics</span></div>
+</div></div>
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 feed-shared-update-v2--promo" data-urn="urn:li:aggregate:(urn:li:activity:7262999999999999001,urn:li:activity:7262999999999999002)">
+  <div class="update-components-text"><span dir="ltr">Try Premium for free and see who viewed your profile</span></div>
+  <a href="/premium/products/?family=career">Try for free</a>
+</div></div>
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 artdeco-card" role="article">
+  <div class="update-components-actor"><span class="update-components-actor__title"><span aria-hidden="true">Alex Rivera</span></span>
+    <a class="update-components-actor__sub-description-link" href="/feed/update/urn:li:activity:7261200000000000003/"><span>3w &bull; </span></a></div>
+  <div class="update-components-text"><span dir="ltr">Our retro doc is public now. Honest notes on what slipped, what shipped and what we would cut next time.</span></div>
+  <div class="social-details-social-counts"><ul>
+    <li class="social-details-social-counts__reactions"><button aria-label="23 reactions"><span class="social-details-social-counts__reactions-count">23</span></button></li>
+    <li class="social-details-social-counts__comments"><button aria-label="4 comments"><span>4 comments</span></button></li>
+    <li class="social-details-social-counts__item"><button aria-label="1 repost"><span>1 repost</span></button></li>
+  </ul></div>
+  <div class="ca-entry-point"><span class="ca-entry-point__num-views"><span class="t-bold">867</span> impressions</span></div>
+</div></div>
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 artdeco-card" data-urn="urn:li:activity:7262900000000000099" role="article">
+  <div class="update-components-header"><span class="update-components-header__text-view">Alex Rivera likes this</span></div>
+  <div class="update-components-actor"><span class="update-components-actor__title"><span aria-hidden="true">Jane Doe</span></span>
+    <span class="update-components-actor__sub-description">1w &bull; </span></div>
+  <div class="update-components-text"><span dir="ltr">Someone else's post that the user reacted to. It must never be harvested.</span></div>
+  <div class="social-details-social-counts"><button aria-label="340 reactions"><span class="social-details-social-counts__reactions-count">340</span></button></div>
+</div></div>
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 artdeco-card" data-urn="urn:li:activity:7259900000000000004" role="article">
+  <div class="update-components-actor"><span class="update-components-actor__title"><span aria-hidden="true">Alex Rivera</span></span>
+    <span class="update-components-actor__sub-description">1mo &bull; </span></div>
+  <div class="update-components-text relative update-components-update-v2__commentary"><span dir="ltr">Lessons from our first 100 users &amp; what we got wrong &#x1F680; &quot;Ship it&quot; isn&#8217;t a strategy.&nbsp;&nbsp;Thread   below.</span></div>
+  <div class="social-details-social-counts"><ul>
+    <li><button aria-label="87 reactions"><img alt="like" src="x.svg"></button></li>
+    <li><button aria-label="12 comments"></button></li>
+    <li><button aria-label="3 reposts"></button></li>
+  </ul></div>
+  <div class="ca-entry-point"><span class="ca-entry-point__num-views"><strong>2.3K impressions</strong></span></div>
+</div></div>
+
+<div class="occludable-update ember-view"><div class="feed-shared-update-v2 artdeco-card" role="article">
+  <div class="update-components-actor"><span class="update-components-actor__title"><span aria-hidden="true">Alex Rivera</span></span>
+    <a href="https://www.linkedin.com/posts/alex-rivera-demo_old-lessons-activity-7213300000000000005-AbCd?utm_source=share&amp;utm_medium=member_desktop">1yr &bull; </a></div>
+  <div class="update-components-text"><span dir="ltr">Reflecting on a year of building in public. Thank you all.</span></div>
+  <div class="social-details-social-counts"><button aria-label="7 reactions"><span class="social-details-social-counts__reactions-count">7</span></button></div>
+</div></div>
+
+</div>
+</main>
+</body>
+</html>
