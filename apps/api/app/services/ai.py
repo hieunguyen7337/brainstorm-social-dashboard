@@ -61,11 +61,15 @@ def _global_spent(conn: sqlite3.Connection) -> float:
     return float(conn.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM ai_usage").fetchone()[0])
 
 
-def ai_allowed(conn: sqlite3.Connection, workspace_id: str) -> bool:
+def ai_allowed(conn: sqlite3.Connection, workspace_id: str, purpose: str = "generate") -> bool:
+    """True when a Claude call for `purpose` ('generate' | 'classify' | 'insights') may be made.
+
+    Each purpose has its own per-workspace budget of `AI_WORKSPACE_LIMIT` calls; the global dollar cap is shared.
+    """
     if not settings.anthropic_api_key:
         return False
     used = conn.execute(
-        "SELECT COUNT(*) FROM ai_usage WHERE workspace_id = ? AND purpose = 'generate'", (workspace_id,)
+        "SELECT COUNT(*) FROM ai_usage WHERE workspace_id = ? AND purpose = ?", (workspace_id, purpose)
     ).fetchone()[0]
     if used >= settings.ai_workspace_limit:
         return False
@@ -239,14 +243,15 @@ def build_prompt(
     return "\n".join(lines)
 
 
-def _record_usage(conn: sqlite3.Connection, workspace_id: str, usage) -> None:
+def _record_usage(conn: sqlite3.Connection, workspace_id: str, usage, purpose: str = "generate") -> None:
     cost = usage.input_tokens * INPUT_USD_PER_MTOK / 1e6 + usage.output_tokens * OUTPUT_USD_PER_MTOK / 1e6
     conn.execute(
         "INSERT INTO ai_usage (id, workspace_id, purpose, model, input_tokens, output_tokens, cost_usd, ts) "
-        "VALUES (?, ?, 'generate', ?, ?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             new_id("u"),
             workspace_id,
+            purpose,
             settings.ai_model,
             usage.input_tokens,
             usage.output_tokens,
