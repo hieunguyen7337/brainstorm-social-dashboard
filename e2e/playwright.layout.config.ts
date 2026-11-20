@@ -45,7 +45,7 @@ export default defineConfig({
   retries: 0,
   workers: 2,
   reporter: [['list']],
-  outputDir: 'test-results-layout',
+  outputDir: 'test-results/layout',
   use: {
     baseURL: BASE_URL,
     browserName: 'chromium',

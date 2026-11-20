@@ -81,7 +81,7 @@ export function GenerateCard({
       <TextField
         value={brief}
         onChangeText={setBrief}
-        placeholder="What should we post about?"
+        placeholder="What should we post?"
         accessibilityLabel="Brief"
         maxLength={MAX_BRIEF}
         returnKeyType="go"
@@ -223,14 +223,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: space.md,
     borderRadius: radius.sm,
     backgroundColor: colors.cardHi,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  laneIcons: { width: 34, alignItems: 'center', gap: 5 },
+  laneIcons: { width: 38, flexDirection: 'row', alignItems: 'center', gap: 5 },
   laneBody: { flex: 1, minWidth: 0, gap: 1 },
   laneName: { color: colors.text, fontSize: 13.5, fontWeight: '700' },
   laneCounts: { color: colors.textDim, fontSize: 12, lineHeight: 16 },

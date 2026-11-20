@@ -76,7 +76,7 @@ function ThemeLine({ theme, last }: { theme: ThemeInsight; last: boolean }) {
     >
       <View style={[styles.swatch, { backgroundColor: theme.color }]} />
       <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text style={styles.name} numberOfLines={2}>
           {theme.name}
         </Text>
         <View style={styles.meta}>

@@ -9,6 +9,8 @@ import { PostPage, type PostPageProps } from './PostPage';
 
 /** Card width from which Publish / Schedule / Copy link / Discard fit on one row. */
 const ONE_ROW_ACTIONS = 440;
+/** Below this the action buttons stack (two buttons side by side would not fit their labels). */
+const STACKED_ACTIONS = 330;
 
 export interface PostCardProps {
   page: PostPageProps;
@@ -32,14 +34,14 @@ export function PostCard({ page, actions }: PostCardProps) {
           </Text>
         </View>
         <PostPage {...page} />
-        <PostActions {...actions} wide={width >= ONE_ROW_ACTIONS} />
+        <PostActions {...actions} wide={width >= ONE_ROW_ACTIONS} compact={width > 0 && width < STACKED_ACTIONS} />
       </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { minWidth: 0 },
+  card: { minWidth: 0, padding: space.md },
   body: { gap: space.md },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   title: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '700', color: colors.textDim },

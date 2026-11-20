@@ -12,7 +12,9 @@ import { METRICS, type MetricDef } from './model';
 
 /** Below this tile width the label shrinks and loses its dot, so "ENGAGEMENTS" still fits on the ~800px board. */
 const TIGHT_AT = 150;
-const SPARK_HEIGHT = 40;
+const SPARK_MIN = 40;
+const SPARK_MAX = 180;
+const MAX_HEIGHT = 280;
 
 /** The four KPI tiles in one row (the phone layout wraps them 2x2). Tiles share the row equally. */
 export function BoardKpis({
@@ -57,11 +59,20 @@ function BoardKpiTile({
   values: number[];
   context: string;
 }) {
-  const [width, setWidth] = useState(0);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  const [topH, setTopH] = useState(0);
   const onLayout = useCallback((e: LayoutChangeEvent) => {
-    const w = Math.round(e.nativeEvent.layout.width);
-    setWidth((prev) => (prev === w ? prev : w));
+    const { width: w, height: h } = e.nativeEvent.layout;
+    setBox((prev) => (prev.width === Math.round(w) && prev.height === Math.round(h) ? prev : { width: Math.round(w), height: Math.round(h) }));
   }, []);
+  const onTopLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = Math.round(e.nativeEvent.layout.height);
+    setTopH((prev) => (prev === h ? prev : h));
+  }, []);
+  const { width } = box;
+  // The tile can be stretched taller than its content (the row shares a height with the trends card): the sparkline
+  // takes the spare room, up to a cap.
+  const spark = Math.round(Math.min(SPARK_MAX, Math.max(SPARK_MIN, box.height - topH)));
 
   const series = useStable(values, values.join(','));
   const pct = Number.isFinite(changePct) ? changePct : 0;
@@ -74,6 +85,7 @@ function BoardKpiTile({
     <Card padded={false} style={styles.tile}>
       <View onLayout={onLayout} style={styles.measure}>
         <View
+          onLayout={onTopLayout}
           style={styles.top}
           accessible
           accessibilityLabel={`${metric.label} ${fmtCompact(value)}, ${spoken} versus the previous period`}
@@ -99,11 +111,11 @@ function BoardKpiTile({
             values={series}
             color={metric.color}
             width={Math.max(40, width - 2)}
-            height={SPARK_HEIGHT}
+            height={spark}
             title={`${metric.label} trend, last 30 days`}
           />
         ) : (
-          <View style={{ height: SPARK_HEIGHT }} />
+          <View style={{ height: SPARK_MIN }} />
         )}
       </View>
     </Card>
@@ -111,7 +123,8 @@ function BoardKpiTile({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: space.md, alignItems: 'stretch', flex: 1 },
+  // Grows with the row (it shares a height with the trends card) but never into tall bars.
+  row: { flexDirection: 'row', gap: space.md, alignItems: 'stretch', flex: 1, maxHeight: MAX_HEIGHT },
   tile: { flex: 1, minWidth: 0 },
   // Fills the tile so the sparkline sits at the bottom when the row is stretched taller than its content.
   measure: { flex: 1, justifyContent: 'space-between' },

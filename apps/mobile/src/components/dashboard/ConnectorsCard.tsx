@@ -114,15 +114,17 @@ function FeaturedConnector({ platform, conn }: { platform: Platform; conn: Conne
           <Text style={t.h3} numberOfLines={1}>
             {meta.label}
           </Text>
-          <StatusDot on={on} />
+          <View style={styles.statusRow}>
+            <StatusDot on={on} />
+            {on ? (
+              conn?.real_data ? (
+                <Badge label="Real data" tone="success" icon="shield-checkmark" />
+              ) : (
+                <Badge label={conn?.mode === 'live' ? 'Live' : 'Sandbox'} />
+              )
+            ) : null}
+          </View>
         </View>
-        {on ? (
-          conn?.real_data ? (
-            <Badge label="Real data" tone="success" icon="shield-checkmark" />
-          ) : (
-            <Badge label={conn?.mode === 'live' ? 'Live' : 'Sandbox'} />
-          )
-        ) : null}
       </View>
 
       {conn && on ? (
@@ -190,7 +192,7 @@ function OtherConnector({
         <Text style={[t.small, styles.flex]} numberOfLines={1}>
           {conn && on ? followersText(conn.followers) : 'Connect in Settings'}
         </Text>
-        {conn && on ? <Badge label={conn.mode === 'live' ? 'Live' : 'Sandbox'} /> : null}
+        {conn && on && conn.mode === 'live' ? <Badge label="Live" tone="success" /> : null}
       </View>
     </View>
   );
@@ -230,6 +232,7 @@ const styles = StyleSheet.create({
   },
   featuredHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   featuredTitle: { flex: 1, minWidth: 0, gap: 2 },
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.sm, rowGap: 4 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 12.5, fontWeight: '700' },

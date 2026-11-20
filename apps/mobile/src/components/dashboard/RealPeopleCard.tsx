@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   compactRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.md, rowGap: space.sm },
   compactHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginRight: 'auto' },
   compactStats: { flexDirection: 'row', gap: space.sm },
-  statCompact: { flex: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, paddingHorizontal: 10 },
+  statCompact: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, paddingHorizontal: 10 },
   statNumberCompact: { color: colors.text, fontSize: 22, lineHeight: 26, fontWeight: '800', letterSpacing: -0.5 },
   flash: { backgroundColor: withAlpha(colors.success, 0.2) },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },

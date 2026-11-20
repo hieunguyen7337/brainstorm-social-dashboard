@@ -103,8 +103,13 @@ interface OverflowReport {
   contentHeight: number;
 }
 
-function measureLayout(): OverflowReport {
-  const vw = window.innerWidth;
+/**
+ * `expectedWidth` is the emulated viewport width. On the mobile project Chromium grows window.innerWidth to fit
+ * overflowing content (innerWidth 600 for a 600px child at 390), so innerWidth alone would hide the very overflow
+ * this check exists for.
+ */
+function measureLayout(expectedWidth: number): OverflowReport {
+  const vw = expectedWidth;
   const vh = window.innerHeight;
   const slack = 1;
   const describe = (el: Element): Offender => {
@@ -168,7 +173,7 @@ function measureLayout(): OverflowReport {
   }
 
   return {
-    innerWidth: vw,
+    innerWidth: window.innerWidth,
     innerHeight: vh,
     docScrollWidth: document.documentElement.scrollWidth,
     bodyScrollWidth: document.body.scrollWidth,
@@ -213,8 +218,8 @@ const fmt = (o: Offender) =>
 async function screenshotAll(page: Page, file: string, contentHeight: number) {
   fs.mkdirSync(SHOTS, { recursive: true });
   const vp = page.viewportSize();
-  const target = Math.min(Math.ceil(contentHeight) + 4, 6_000);
-  if (!vp || target <= vp.height) {
+  const target = Math.min(Math.ceil(contentHeight), 6_000);
+  if (!vp || target <= vp.height + 2) {
     await page.screenshot({ path: file, fullPage: true });
     return;
   }
@@ -243,17 +248,19 @@ test.describe('overflow and console', () => {
         await openTab(page, tab);
         await settle(page, tab);
 
-        const m = await page.evaluate(measureLayout);
         const vp = page.viewportSize();
+        const limit = vp?.width ?? 0;
+        const m = await page.evaluate(measureLayout, limit);
         const where = `${tab} @ ${vp?.width}x${vp?.height} (${project})`;
         await screenshotAll(page, path.join(SHOTS, `layout-${project}-${tab.toLowerCase()}.png`), m.contentHeight);
 
-        expect.soft(m.docScrollWidth, `document scrollWidth exceeds window.innerWidth on ${where}`).toBeLessThanOrEqual(m.innerWidth + 1);
-        expect.soft(m.bodyScrollWidth, `body scrollWidth exceeds window.innerWidth on ${where}`).toBeLessThanOrEqual(m.innerWidth + 1);
+        expect.soft(m.docScrollWidth, `document scrollWidth exceeds the ${limit}px viewport on ${where}`).toBeLessThanOrEqual(limit + 1);
+        expect.soft(m.bodyScrollWidth, `body scrollWidth exceeds the ${limit}px viewport on ${where}`).toBeLessThanOrEqual(limit + 1);
+        expect.soft(m.innerWidth, `window.innerWidth grew past the ${limit}px viewport on ${where} (content wider than the screen)`).toBeLessThanOrEqual(limit + 1);
         expect
           .soft(
             m.offenders.length,
-            `${m.offenders.length} element(s) stick out past the right edge (${m.innerWidth}px) on ${where}; first: ${m.offenders[0] ? fmt(m.offenders[0]) : '-'}`,
+            `${m.offenders.length} element(s) stick out past the right edge (${limit}px) on ${where}; first: ${m.offenders[0] ? fmt(m.offenders[0]) : '-'}`,
           )
           .toBe(0);
         expect
@@ -298,11 +305,10 @@ async function activeBoxes(loc: Locator, limit = 40): Promise<Box[]> {
 }
 
 /** Topmost, then leftmost, rendered element whose text matches (headers sit above the content that repeats their words). */
-async function headerBox(page: Page, text: RegExp | string, what: string): Promise<Box> {
+async function headerBox(page: Page, text: RegExp | string): Promise<Box | null> {
   const boxes = await activeBoxes(page.getByText(text));
-  if (boxes.length === 0) throw new Error(`${what}: no visible element matching ${String(text)}`);
   boxes.sort((a, b) => a.y - b.y || a.x - b.x);
-  return boxes[0];
+  return boxes[0] ?? null;
 }
 
 /** First pair of boxes on (nearly) the same row but in different columns. */
@@ -352,18 +358,22 @@ test.describe('wide arrangement', () => {
       await onboard(page);
       await settle(page, 'Dashboard');
 
-      const views = await headerBox(page, /views by platform/i, '"Views by platform"');
-      const outside = await headerBox(page, /outside trends/i, '"Outside trends"');
-      expect
-        .soft(outside.x, `"Outside trends" card must be to the right of "Views by platform" (x ${Math.round(outside.x)} vs ${Math.round(views.x)})`)
-        .toBeGreaterThan(views.x + 200);
+      const views = await headerBox(page, /views by platform/i);
+      const outside = await headerBox(page, /outside trends/i);
+      expect.soft(views, '"Views by platform" card is visible').not.toBeNull();
+      expect.soft(outside, '"Outside trends" card is visible').not.toBeNull();
+      if (views && outside) {
+        expect
+          .soft(outside.x, `"Outside trends" card must be to the right of "Views by platform" (x ${Math.round(outside.x)} vs ${Math.round(views.x)})`)
+          .toBeGreaterThan(views.x + 200);
+      }
 
       const generate = page.getByRole('heading', { name: /^generate$/i }).or(page.getByText('Generate', { exact: true }));
       expect.soft((await activeBoxes(generate)).length, '"Generate" heading is visible').toBeGreaterThan(0);
       expect.soft((await activeBoxes(page.getByText('Social media connectors'))).length, '"Social media connectors" heading is visible').toBeGreaterThan(0);
       expect.soft((await activeBoxes(page.getByText('Themes (Jev AI)'))).length, '"Themes (Jev AI)" heading is visible').toBeGreaterThan(0);
 
-      const m = await page.evaluate(measureLayout);
+      const m = await page.evaluate(measureLayout, page.viewportSize()?.width ?? 0);
       const screens = m.contentHeight / m.innerHeight;
       expect.soft(screens, `dashboard is ${screens.toFixed(1)} viewport heights tall (${m.contentHeight}px of ${m.innerHeight}px), expected a few at most`).toBeLessThanOrEqual(4);
     });
@@ -373,9 +383,15 @@ test.describe('wide arrangement', () => {
       await openTab(page, 'Queue');
       await settle(page, 'Queue');
 
-      const drafts = await headerBox(page, /^\s*drafts\b/i, 'Queue column "Drafts"');
-      const scheduled = await headerBox(page, /^\s*scheduled\b/i, 'Queue column "Scheduled"');
-      const published = await headerBox(page, /^\s*published\b/i, 'Queue column "Published"');
+      const [drafts, scheduled, published] = [
+        await headerBox(page, /^\s*drafts\b/i),
+        await headerBox(page, /^\s*scheduled\b/i),
+        await headerBox(page, /^\s*published\b/i),
+      ];
+      expect.soft(drafts, 'Queue column header "Drafts" is visible').not.toBeNull();
+      expect.soft(scheduled, 'Queue column header "Scheduled" is visible').not.toBeNull();
+      expect.soft(published, 'Queue column header "Published" is visible').not.toBeNull();
+      if (!drafts || !scheduled || !published) return;
       const at = `Drafts(${Math.round(drafts.x)},${Math.round(drafts.y)}) Scheduled(${Math.round(scheduled.x)},${Math.round(scheduled.y)}) Published(${Math.round(published.x)},${Math.round(published.y)})`;
       expect.soft(Math.abs(drafts.y - scheduled.y), `Drafts and Scheduled headers share a row: ${at}`).toBeLessThanOrEqual(30);
       expect.soft(Math.abs(scheduled.y - published.y), `Scheduled and Published headers share a row: ${at}`).toBeLessThanOrEqual(30);

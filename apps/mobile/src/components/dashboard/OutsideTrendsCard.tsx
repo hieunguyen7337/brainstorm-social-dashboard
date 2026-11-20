@@ -36,12 +36,8 @@ export function OutsideTrendsCard({
 
   return (
     <Card style={[styles.card, style]}>
-      <SectionHeader
-        title="Outside trends"
-        subtitle="What people are talking about, matched to you"
-        // Room for the floating refresh button that Screen draws over the top right corner of the board.
-        style={styles.header}
-      />
+      {/* Right padding leaves room for the floating refresh button that Screen draws over the board's top right corner. */}
+      <SectionHeader title="Outside trends" style={styles.header} />
       {!trends ? (
         error && !loading ? (
           <View style={styles.message}>
