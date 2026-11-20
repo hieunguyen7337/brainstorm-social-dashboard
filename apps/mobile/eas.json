@@ -8,7 +8,7 @@
       "distribution": "internal",
       "channel": "preview",
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://pulse-hackathon.fly.dev" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://pulse-hackathon.fly.dev", "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a" }
     },
     "ios-sim": {
       "distribution": "internal",
