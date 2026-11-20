@@ -147,7 +147,7 @@ def demo_checkout_page(
     action = f"/api/billing/demo-checkout?ws={html.escape(row['id'])}&amp;sig={html.escape(sig or '')}"
     features = "".join(f"<li>{html.escape(f)}</li>" for f in svc.FEATURES["pro"])
     page = _DEMO_PAGE.format(
-        product=html.escape(svc.PRODUCT_NAME),
+        product=html.escape(svc.product_name()),
         brand=html.escape(row["brand_name"]),
         price=html.escape(svc.PRICE_LABEL),
         features=features,

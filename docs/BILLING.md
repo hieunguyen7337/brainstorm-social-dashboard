@@ -72,3 +72,7 @@ curl -s -X POST $API/api/billing/portal -H "Authorization: Bearer $TOKEN"
 # Webhook (Stripe sends this; for manual tests use `stripe trigger checkout.session.completed` instead)
 curl -s -X POST $API/api/billing/webhook -H 'Stripe-Signature: t=...,v1=...' -d @event.json
 ```
+
+## Renaming
+
+The name on Stripe Checkout (its header, through `branding_settings.display_name`, and the "<Name> Pro" product line) is the `APP_NAME` setting, default `Pulse`. To rename without a code change: `flyctl secrets set APP_NAME="New Name" -a pulse-hackathon` (the app restarts in about 30 s; `flyctl secrets unset APP_NAME` goes back to Pulse). The Stripe account's own public name is not used, so a sandbox needs no activation for this.

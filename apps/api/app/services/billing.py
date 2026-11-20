@@ -24,7 +24,16 @@ PLANS = ("free", "pro")
 PRICE_LABEL = "A$5/mo"
 PRICE_CENTS = 500
 PRICE_CURRENCY = "aud"
-PRODUCT_NAME = "Pulse Pro: MCP + autopilot"
+PRODUCT_SUFFIX = "Pro: MCP + autopilot"
+
+
+def brand_name() -> str:
+    """The name shown on Stripe Checkout and the product line. Set APP_NAME (a Fly secret) to rename."""
+    return settings.app_name.strip() or "Pulse"
+
+
+def product_name() -> str:
+    return f"{brand_name()} {PRODUCT_SUFFIX}"
 FEATURES: dict[str, list[str]] = {
     "free": [
         "Dashboard, outside trends and themes",
@@ -121,7 +130,7 @@ def checkout_line_items() -> list[dict[str, Any]]:
                 "currency": PRICE_CURRENCY,
                 "unit_amount": PRICE_CENTS,
                 "recurring": {"interval": "month"},
-                "product_data": {"name": PRODUCT_NAME},
+                "product_data": {"name": product_name()},
             },
         }
     ]
@@ -138,6 +147,7 @@ def create_checkout_url(ws: sqlite3.Row, success_url: str | None, cancel_url: st
         "client_reference_id": ws["id"],
         "success_url": success_url or default_success_url(),
         "cancel_url": cancel_url or default_cancel_url(),
+        "branding_settings": {"display_name": brand_name()},
     }
     if ws["stripe_customer_id"]:
         params["customer"] = ws["stripe_customer_id"]

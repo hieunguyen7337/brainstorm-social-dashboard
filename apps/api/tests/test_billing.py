@@ -132,6 +132,7 @@ def test_test_key_checkout_uses_inline_price(auth, cfg, monkeypatch):
     assert line["price_data"]["unit_amount"] == 500
     assert line["price_data"]["recurring"] == {"interval": "month"}
     assert line["price_data"]["product_data"]["name"] == "Pulse Pro: MCP + autopilot"
+    assert kw["branding_settings"] == {"display_name": "Pulse"}
     assert stripe.api_key == "sk_test_abc"
 
 
@@ -237,3 +238,15 @@ def test_require_plan_helper(auth, cfg):
         assert missing.value.status_code == 404
     finally:
         conn.close()
+
+
+def test_app_name_renames_checkout_and_product(auth, cfg, monkeypatch):
+    client, headers, _ws = auth
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_abc")
+    monkeypatch.setattr(settings, "app_name", "Nova")
+    calls: list[dict] = []
+    monkeypatch.setattr(stripe.checkout.Session, "create", lambda **kw: calls.append(kw) or {"url": "https://x.test/"})
+    assert client.post("/api/billing/checkout", json={}, headers=headers).status_code == 200
+    (kw,) = calls
+    assert kw["branding_settings"] == {"display_name": "Nova"}
+    assert kw["line_items"][0]["price_data"]["product_data"]["name"] == "Nova Pro: MCP + autopilot"
