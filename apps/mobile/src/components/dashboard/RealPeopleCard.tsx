@@ -114,7 +114,7 @@ export function RealPeopleCard({
           </View>
 
           <View style={styles.stats}>
-            <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
+            <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} testID="kpi-real-clicks" />
             <Stat label={STAGE_LABEL.conversions} icon="checkmark-circle" color={colors.success} value={conversions} context={context} />
           </View>
 
@@ -158,15 +158,17 @@ function Stat({
   color,
   value,
   context,
+  testID,
 }: {
   label: string;
   icon: IconName;
   color: string;
   value: number;
   context: string;
+  testID?: string;
 }) {
   return (
-    <View style={styles.stat} accessible accessibilityLabel={`${value} real ${label.toLowerCase()}`}>
+    <View style={styles.stat} testID={testID} accessible accessibilityLabel={`${value} real ${label.toLowerCase()}`}>
       <View style={styles.statHead}>
         <Ionicons name={icon} size={14} color={color} />
         <Text style={t.label} numberOfLines={1}>

@@ -9,6 +9,7 @@ import { BrandSection } from '@/src/components/settings/BrandSection';
 import { ClaudeMcpCard } from '@/src/components/settings/ClaudeMcpCard';
 import { ConnectorsSection, type ConnectorsHandle } from '@/src/components/settings/ConnectorsSection';
 import { GetTheAppCard } from '@/src/components/settings/GetTheAppCard';
+import { PlanBadge, PlanCard } from '@/src/components/settings/PlanCard';
 import { ThemesSection } from '@/src/components/settings/ThemesSection';
 import { APP_NAME } from '@/src/config';
 import { useSession } from '@/src/session';
@@ -41,6 +42,7 @@ export default function SettingsScreen() {
     <Screen
       title="Settings"
       subtitle={workspace ? `${workspace.brand_name} · guest workspace` : undefined}
+      right={<PlanBadge />}
       onRefresh={() => void refresh()}
       refreshing={refreshing}
       contentStyle={styles.column}
@@ -52,6 +54,8 @@ export default function SettingsScreen() {
       <ConnectorsSection handleRef={connectors} />
 
       <AutopilotSection />
+
+      <PlanCard />
 
       <ClaudeMcpCard />
       <GetTheAppCard />

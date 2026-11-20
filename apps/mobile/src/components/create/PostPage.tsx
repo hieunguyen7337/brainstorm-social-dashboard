@@ -88,7 +88,7 @@ export const PostPage = memo(function PostPage({
         : 'Just now';
 
   return (
-    <View style={styles.page}>
+    <View style={styles.page} testID="post-card">
       {post.status !== 'draft' ? <StatusPill key={post.status} post={post} /> : null}
       <PostPreview
         platform={post.platform}

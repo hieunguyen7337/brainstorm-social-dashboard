@@ -43,6 +43,7 @@ export function PlatformPicker({
           <Chip
             key={p}
             platform={p}
+            testID={`platform-${p}`}
             label={platformMeta[p].label}
             selected={selected.includes(p)}
             onPress={() => toggle(p)}

@@ -82,7 +82,7 @@ export const TrendRow = memo(function TrendRow({
 
   return (
     <Animated.View style={{ opacity: appear, transform: [{ translateY: rise }] }}>
-      <Card padded={false} style={expanded ? { borderColor: withAlpha(meta.color, 0.55) } : undefined}>
+      <Card padded={false} testID="trend-item" style={expanded ? { borderColor: withAlpha(meta.color, 0.55) } : undefined}>
         <Pressable
           onPress={() => onToggle(trend.id)}
           accessibilityRole="button"

@@ -24,12 +24,14 @@ export interface ChipProps {
   disabled?: boolean;
   small?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
-export function Chip({ label, selected, onPress, color, platform, icon, count, disabled, small, style }: ChipProps) {
+export function Chip({ label, selected, onPress, color, platform, icon, count, disabled, small, style, testID }: ChipProps) {
   const tint = platform ? platformMeta[platform].color : (color ?? colors.accent);
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected, disabled: !!disabled }}
       accessibilityLabel={label}

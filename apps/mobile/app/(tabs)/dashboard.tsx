@@ -5,6 +5,7 @@ import {
   ActivityCard,
   DashboardSkeleton,
   FunnelCard,
+  InsightsCard,
   KpiGrid,
   PlatformDonutCard,
   RealPeopleCard,
@@ -101,6 +102,7 @@ export default function DashboardScreen() {
                   key={p}
                   label={platformMeta[p].label}
                   platform={p}
+                  testID={`filter-platform-${p}`}
                   selected={platform === p}
                   onPress={() => setPlatform(p)}
                 />
@@ -135,11 +137,13 @@ export default function DashboardScreen() {
             <TrendCard timeseries={days} totals={summary.totals} context={dataContext} />
           </Reveal>
 
-          <Reveal index={6}>
+          <InsightsCard revealIndex={6} />
+
+          <Reveal index={7}>
             <TopPostsCard posts={summary.top_posts} />
           </Reveal>
 
-          <Reveal index={7}>
+          <Reveal index={8}>
             <ActivityCard
               items={activity.data}
               loading={activity.loading}

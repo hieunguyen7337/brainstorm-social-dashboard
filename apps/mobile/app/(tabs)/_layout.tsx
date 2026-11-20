@@ -57,6 +57,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
+          tabBarButtonTestID: 'tab-dashboard',
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" size={size} color={color} />,
         }}
@@ -64,14 +65,23 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="trends"
         options={{
+          tabBarButtonTestID: 'tab-trends',
           title: 'Trends',
           tabBarIcon: ({ color, size }) => <Ionicons name="trending-up" size={size + 2} color={color} />,
         }}
       />
-      <Tabs.Screen name="create" options={{ title: 'Create', tabBarIcon: ({ focused }) => <CreateIcon focused={focused} /> }} />
+      <Tabs.Screen
+        name="create"
+        options={{
+          tabBarButtonTestID: 'tab-create',
+          title: 'Create',
+          tabBarIcon: ({ focused }) => <CreateIcon focused={focused} />,
+        }}
+      />
       <Tabs.Screen
         name="queue"
         options={{
+          tabBarButtonTestID: 'tab-queue',
           title: 'Queue',
           tabBarIcon: ({ color, size }) => <Ionicons name="albums" size={size} color={color} />,
         }}
@@ -79,6 +89,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
+          tabBarButtonTestID: 'tab-settings',
           title: 'Settings',
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
         }}

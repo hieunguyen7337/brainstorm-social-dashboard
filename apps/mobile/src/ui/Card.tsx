@@ -13,9 +13,10 @@ export interface CardProps {
   /** 'raised' uses the lighter surface; 'outline' is transparent with a border. */
   tone?: 'default' | 'raised' | 'outline';
   accessibilityLabel?: string;
+  testID?: string;
 }
 
-export function Card({ children, style, onPress, padded = true, tone = 'default', accessibilityLabel }: CardProps) {
+export function Card({ children, style, onPress, padded = true, tone = 'default', accessibilityLabel, testID }: CardProps) {
   const base = [
     styles.card,
     tone === 'raised' && styles.raised,
@@ -26,6 +27,7 @@ export function Card({ children, style, onPress, padded = true, tone = 'default'
   if (onPress) {
     return (
       <Pressable
+        testID={testID}
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
@@ -35,7 +37,11 @@ export function Card({ children, style, onPress, padded = true, tone = 'default'
       </Pressable>
     );
   }
-  return <View style={base}>{children}</View>;
+  return (
+    <View style={base} testID={testID}>
+      {children}
+    </View>
+  );
 }
 
 /** Small uppercase label with an optional right-hand slot (e.g. a link or a chip). */

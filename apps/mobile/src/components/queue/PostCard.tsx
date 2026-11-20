@@ -150,7 +150,7 @@ function PostCardImpl({
       : timeAgo(post.created_at, now);
 
   return (
-    <Card style={styles.card}>
+    <Card style={styles.card} testID="post-card">
       <View style={styles.header}>
         <PlatformBadge platform={post.platform} size={36} />
         <View style={styles.headerMain}>
