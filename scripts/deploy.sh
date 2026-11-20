@@ -7,7 +7,7 @@ FLY=$(command -v flyctl || command -v fly || true)
 [ -n "$FLY" ] || { echo "flyctl not found" >&2; exit 1; }
 
 if ! "$FLY" apps list 2>/dev/null | awk '{print $1}' | grep -qx "$APP"; then
-  "$FLY" apps create "$APP"
+  "$FLY" apps create "$APP" --org "$ORG"
 fi
 if ! "$FLY" volumes list -a "$APP" 2>/dev/null | grep -q pulse_data; then
   "$FLY" volumes create pulse_data --region syd --size 1 --yes -a "$APP"

@@ -23,7 +23,7 @@ trends=$(curl -fsS "${AUTH[@]}" "$BASE_URL/api/trends?limit=5") || die trends
 ok "trends ($(printf '%s' "$trends" | py 'import sys,json; print(len(json.load(sys.stdin)))') items)"
 
 gen=$(curl -fsS "${AUTH[@]}" -X POST "$BASE_URL/api/generate" -H 'Content-Type: application/json' \
-  -d '{"theme_text":"smoke test"}') || die generate
+  -d '{"platforms":["x","linkedin"],"brief":"smoke test"}') || die generate
 ok generate
 
 # find a tracked link code in the generated posts
