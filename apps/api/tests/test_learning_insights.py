@@ -514,7 +514,7 @@ def test_get_insights_shape_on_the_seeded_workspace(auth):
     assert r.status_code == 200, r.text
     body = r.json()
     assert set(body) == {"days", "baseline", "themes", "platforms", "top_themes", "sources", "summary",
-                         "cached_summary"}
+                         "cached_summary", "classifiers"}
     assert body["days"] == 30
     assert body["baseline"]["posts"] == 18
     assert set(body["baseline"]) == {"posts", "views", "engagements", "clicks", "onboard", "engagement_rate",
@@ -523,7 +523,7 @@ def test_get_insights_shape_on_the_seeded_workspace(auth):
     assert len(body["platforms"]) == 6
     assert [p["views"] for p in body["platforms"]] == sorted((p["views"] for p in body["platforms"]), reverse=True)
     theme_keys = {"theme_id", "name", "color", "lift", "lift_by", "posts", "views", "engagements", "clicks",
-                  "onboard", "engagement_rate", "click_rate", "onboard_rate"}
+                  "onboard", "engagement_rate", "click_rate", "onboard_rate", "classifiers"}
     assert all(set(t) == theme_keys for t in body["themes"])
     assert all(set(t["lift_by"]) == {"engagement_rate", "click_rate", "onboard_rate"} for t in body["themes"])
     # seeded posts only carry posts.theme_id: the fallback makes the insights work before classification
@@ -774,3 +774,38 @@ def test_classify_route_with_nothing_to_do_and_auth(auth, monkeypatch):
                         "classifiers": {"jev": 0, "claude": 0, "keyword": 0}}
     assert log == {"backfill": [60], "unclassified": [60], "classify": []}  # the seeded posts all carry a theme
     assert client.post("/api/themes/classify").status_code == 401
+
+
+def test_classifier_counts_per_theme_and_overall(auth):
+    """`classifiers` says how each theme's posts were assigned (jev / claude / keyword / manual)."""
+    client, headers, _ws = auth
+    themes = client.get("/api/themes", headers=headers).json()
+    target = next(t["id"] for t in themes if t["name"] == "Behind the beans")  # 6 published seed posts
+    conn = connect()
+    try:
+        post_ids = [
+            r["id"]
+            for r in conn.execute(
+                "SELECT id FROM posts WHERE theme_id = ? AND status = 'published' ORDER BY id", (target,)
+            )
+        ]
+        assert len(post_ids) >= 3
+        for post_id, classifier in zip(post_ids[:3], ("jev", "jev", "claude"), strict=True):
+            conn.execute(
+                "INSERT INTO post_themes (post_id, theme_id, confidence, classifier, created_at) "
+                "VALUES (?, ?, 0.9, ?, ?)",
+                (post_id, target, classifier, now_iso()),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    body = client.get("/api/insights", headers=headers).json()
+    by_id = {t["theme_id"]: t for t in body["themes"]}
+    counts = by_id[target]["classifiers"]
+    assert counts["jev"] == 2 and counts["claude"] == 1
+    assert counts["manual"] == len(post_ids) - 3  # the rest fall back to posts.theme_id (manual)
+    assert body["classifiers"]["jev"] == 2
+    assert sum(body["classifiers"].values()) == sum(t["posts"] for t in body["themes"])
+    other = next(t for t in body["themes"] if t["theme_id"] != target and t["posts"])
+    assert set(other["classifiers"]) == {"manual"}

@@ -72,6 +72,8 @@ class ThemeInsight(MetricBlock):
     color: str = "#7c5cff"
     lift: float = 0.0
     lift_by: LiftBy = LiftBy()
+    # How the theme's posts were assigned: {"jev": n, "claude": n, "keyword": n, "manual": n}; zero keys omitted.
+    classifiers: dict[str, int] = {}
 
 
 class PlatformInsight(MetricBlock):
@@ -99,6 +101,7 @@ class InsightsResponse(BaseModel):
     sources: Sources
     summary: str
     cached_summary: CachedSummary | None = None
+    classifiers: dict[str, int] = {}  # the same counts over all themed posts in the window
 
 
 class RefreshResponse(BaseModel):
@@ -143,6 +146,7 @@ class _Data:
     baseline: _Acc = field(default_factory=_Acc)
     themes: dict[str, dict] = field(default_factory=dict)  # theme_id -> {name, color, active}
     by_theme: dict[str, _Acc] = field(default_factory=dict)
+    by_theme_classifier: dict[str, dict[str, int]] = field(default_factory=dict)  # theme_id -> classifier -> posts
     by_platform: dict[str, _Acc] = field(default_factory=dict)
     by_cell: dict[tuple[str, str], _Acc] = field(default_factory=dict)  # (platform, theme_id) -> totals
     real: int = 0
@@ -159,8 +163,8 @@ def _parse(ts: str | None) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
-def _best_assignments(conn: sqlite3.Connection, workspace_id: str) -> dict[str, str]:
-    """post_id -> theme_id of the highest-confidence post_themes row (manual wins ties, then earliest)."""
+def _best_assignments(conn: sqlite3.Connection, workspace_id: str) -> dict[str, tuple[str, str]]:
+    """post_id -> (theme_id, classifier) of the highest-confidence post_themes row (manual wins ties, then earliest)."""
     rows = conn.execute(
         "SELECT pt.post_id, pt.theme_id, pt.confidence, pt.classifier, pt.created_at FROM post_themes pt "
         "JOIN posts p ON p.id = pt.post_id "
@@ -168,14 +172,14 @@ def _best_assignments(conn: sqlite3.Connection, workspace_id: str) -> dict[str, 
         "WHERE p.workspace_id = ?",
         (workspace_id,),
     ).fetchall()
-    best: dict[str, tuple[tuple, str]] = {}
+    best: dict[str, tuple[tuple, str, str]] = {}
     for r in rows:
         key = (-float(r["confidence"] or 0.0), 0 if r["classifier"] == "manual" else 1,
                r["created_at"] or "", r["theme_id"])
         current = best.get(r["post_id"])
         if current is None or key < current[0]:
-            best[r["post_id"]] = (key, r["theme_id"])
-    return {post_id: value[1] for post_id, value in best.items()}
+            best[r["post_id"]] = (key, r["theme_id"], r["classifier"] or "manual")
+    return {post_id: (value[1], value[2]) for post_id, value in best.items()}
 
 
 def _collect(conn: sqlite3.Connection, workspace_id: str, days: int) -> _Data:
@@ -193,7 +197,7 @@ def _collect(conn: sqlite3.Connection, workspace_id: str, days: int) -> _Data:
         published = _parse(r["published_at"])
         if published is None or published < cutoff:
             continue
-        theme_id = assigned.get(r["id"])
+        theme_id, classifier = assigned.get(r["id"], (None, "manual"))
         if theme_id is None and r["theme_id"] in data.themes:
             theme_id = r["theme_id"]  # seeded / manually themed posts that were never classified
         figures = (int(r["views"] or 0), int(r["engagements"] or 0), int(r["clicks"] or 0),
@@ -202,6 +206,8 @@ def _collect(conn: sqlite3.Connection, workspace_id: str, days: int) -> _Data:
         data.by_platform.setdefault(r["platform"], _Acc()).add(*figures)
         if theme_id is not None:
             data.by_theme.setdefault(theme_id, _Acc()).add(*figures)
+            by_classifier = data.by_theme_classifier.setdefault(theme_id, {})
+            by_classifier[classifier] = by_classifier.get(classifier, 0) + 1
             data.by_cell.setdefault((r["platform"], theme_id), _Acc()).add(*figures)
         if r["metrics_source"] == "sim":
             data.simulated += 1
@@ -253,7 +259,8 @@ def _theme_insights(data: _Data) -> list[ThemeInsight]:
         acc = acc or _Acc()  # an active theme with no published posts shows up with zero posts
         lift, lift_by = _lifts(acc, data.baseline)
         out.append(ThemeInsight(theme_id=theme_id, name=meta["name"], color=meta["color"],
-                                **_metric_fields(acc), lift=lift, lift_by=lift_by))
+                                **_metric_fields(acc), lift=lift, lift_by=lift_by,
+                                classifiers=dict(sorted(data.by_theme_classifier.get(theme_id, {}).items()))))
     out.sort(key=_rank_key)
     return out
 
@@ -391,6 +398,14 @@ def _what_works(data: _Data) -> dict[str, str]:
 # --- public API ------------------------------------------------------------------------------------------------
 
 
+def _total_classifiers(data: _Data) -> dict[str, int]:
+    total: dict[str, int] = {}
+    for counts in data.by_theme_classifier.values():
+        for name, n in counts.items():
+            total[name] = total.get(name, 0) + n
+    return dict(sorted(total.items()))
+
+
 def compute_insights(conn: sqlite3.Connection, workspace_id: str, days: int = 30) -> InsightsResponse:
     data = _collect(conn, workspace_id, days)
     themes = _theme_insights(data)
@@ -406,6 +421,7 @@ def compute_insights(conn: sqlite3.Connection, workspace_id: str, days: int = 30
         sources=Sources(real=data.real, simulated=data.simulated),
         summary="",
         cached_summary=CachedSummary(body=cached["body"], created_at=cached["created_at"]) if cached else None,
+        classifiers=_total_classifiers(data),
     )
     ins.summary = template_summary(ins)
     return ins
