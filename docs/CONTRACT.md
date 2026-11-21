@@ -49,6 +49,7 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | GET | /api/connections | -> `list[Connection]` | U1 |
 | POST | /api/connections/{platform} | `ConnectionCreate` -> `Connection` | U1 |
 | POST | /api/connections/{platform}/demo | -> `DemoSignInResult` (the synthetic sign-in of a demo workspace: connects the platform and backfills synthetic numbers; 409 in any other workspace; see `docs/REAL.md`) | U1 |
+| POST | /api/posts/{id}/demo/metrics?advance_minutes=5 | -> `DemoMetricsRead` (a synthetic metrics read of a published post in a demo workspace; 409 in any other workspace or for an unpublished post; see `docs/REAL.md`) | U1 |
 | DELETE | /api/connections/{platform} | -> `Connection` (status disconnected) | U1 |
 | GET | /api/dashboard?days=30&platform= | -> `DashboardSummary` | U1 |
 | GET | /api/activity?limit=30 | -> `list[ActivityItem]` | U1 |
@@ -134,6 +135,7 @@ column, it says so in its report instead of editing `db.py`.
   platform's engagements. `other` = a split platform's engagements beyond the three (saves); `unsplit` = engagements
   from platforms that only report a total (and any daily numbers above the snapshot). The five numbers always add up to
   `totals.engagements`. The Engagements tile shows the split in place of its trend line.
+- A demo workspace (docs/REAL.md) gets a synthetic split from the engagement totals, so its `unsplit` is 0.
 - Only the screenshot reader, the manual numbers form and MCP `record_metrics` fill the split today. The Instagram,
   LinkedIn, TikTok and Reddit auto-readers still save one engagements total, so those platforms count as `unsplit`.
 

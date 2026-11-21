@@ -21,13 +21,14 @@ import {
 } from './mockData';
 import type { Mode } from './mockData';
 import { fileKind } from './pickFiles.types';
+import { splitEngagements } from './demo/logic';
 import { buildShareInfo } from './shareLinks';
 import { LIVE_PLATFORMS, comingSoonReason, isLivePlatform } from './platforms';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
-  DemoSignInResult, EngagementSplit, HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics,
-  InsightsResponse, LiftBy, Platform,
+  DemoMetricsRead, DemoSignInResult, EngagementSplit, HarvestStatus, IngestRequest, IngestResult, IngestSource,
+  InsightMetrics, InsightsResponse, LiftBy, Platform,
   PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, TrendsStatus,
   TrendSourceStatus, Workspace, WritingStyle,
 } from './types';
@@ -442,6 +443,24 @@ function engagementSplit(s: State, days: number, rows: { p: Platform; t: Totals 
   return out.platforms.length > 0 ? out : null;
 }
 
+/**
+ * A demo workspace's split (like the server's `demo.engagement_split`): every platform with engagements is split with its
+ * fixed ratios, so the parts add up to the Engagements tile and `unsplit` is 0. Null before any platform has engagements.
+ */
+function demoEngagementSplit(rows: { p: Platform; t: Totals }[]): EngagementSplit | null {
+  const out: EngagementSplit = { likes: 0, comments: 0, shares: 0, other: 0, unsplit: 0, platforms: [] };
+  for (const { p, t } of rows) {
+    if (t.engagements <= 0) continue;
+    const parts = splitEngagements(t.engagements, p);
+    out.likes += parts.likes;
+    out.comments += parts.comments;
+    out.shares += parts.shares;
+    out.other += parts.other;
+    out.platforms.push(p);
+  }
+  return out.platforms.length > 0 ? out : null;
+}
+
 function dashboard(s: State, days: number, platform: Platform | null): DashboardSummary {
   const now = Date.now();
   const isReal = s.ws.data_mode === 'real';
@@ -523,7 +542,7 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
     data_mode: s.ws.data_mode ?? 'sample',
     // Follows the platform filter like everything else in the summary (all connected platforms when there is none).
     followers_total: plats.reduce((n, p) => (conn(s, p).status === 'connected' ? n + conn(s, p).followers : n), 0),
-    engagement_split: isReal ? engagementSplit(s, days, rows) : null,
+    engagement_split: isReal ? engagementSplit(s, days, rows) : isDemo ? demoEngagementSplit(rows) : null,
   };
 }
 
@@ -856,6 +875,37 @@ function demoSignIn(s: State, platform: Platform): DemoSignInResult {
   return {
     platform, connection: c, followers: c.followers, views: totals.views, engagements: totals.engagements, period_days: 30,
     posts_added: fresh ? s.posts.filter((r) => r.post.platform === platform).length : 0, fresh, captured_at: iso(now),
+  };
+}
+
+/** Same minutes as the server's `demo.FIRST_READ_MINUTES` / `REFRESH_MINUTES` / `MAX_ADVANCE_MINUTES`. */
+const DEMO_FIRST_READ_MIN = 3;
+const DEMO_REFRESH_MIN = 5;
+const DEMO_MAX_ADVANCE_MIN = 60;
+
+/** A platform's demo account is signed in before a post goes to it (so the post can grow), like the server's `ensure_signed_in`. */
+function demoEnsureSignedIn(s: State, platform: Platform): void {
+  if (conn(s, platform).status !== 'connected') demoSignIn(s, platform);
+}
+
+/**
+ * The synthetic "metrics back" of one published post (`POST /api/posts/{id}/demo/metrics`): the simulated audience grows
+ * as if `minutes` had passed. A post read ahead of the clock waits until real time catches up (`tick` skips it).
+ */
+function demoRead(s: State, r: PostRec, minutes: number): DemoMetricsRead {
+  const p = r.post;
+  const [v0, e0] = [p.views, p.engagements];
+  const now = Date.now();
+  const age = Math.max(r.sim.age, (now - parseIso(p.published_at ?? iso(now))) / HOUR) + minutes / 60;
+  const dv = r.sim.vmax * (reached(age) - reached(r.sim.age)) * (0.85 + 0.3 * s.rng());
+  r.sim.age = age;
+  grow(s, r, dv, now);
+  const [gv, ge] = [p.views - v0, p.engagements - e0];
+  note(s, 'metrics', `Read metrics back from ${LABEL[p.platform]} (demo): +${gv} views, +${ge} engagements (${splitEngagements(ge, p.platform).likes} likes, ${splitEngagements(ge, p.platform).comments} comments, ${splitEngagements(ge, p.platform).shares} shares)`, { platform: p.platform, post: p.id, at: now });
+  const parts = splitEngagements(ge, p.platform);
+  return {
+    post: p, advanced_minutes: minutes, views_gained: gv, engagements_gained: ge, likes_gained: parts.likes,
+    comments_gained: parts.comments, shares_gained: parts.shares, read_at: iso(now),
   };
 }
 
@@ -1345,8 +1395,23 @@ export const mockApi: PulseApi = {
     authed((s) => {
       const r = findPost(s, id);
       if (!isLivePlatform(r.post.platform)) unprocessable(comingSoonReason(r.post.platform));
-      if (r.post.status !== 'published') goLive(s, r, Date.now());
+      if (r.post.status !== 'published') {
+        const demo = s.ws.data_mode === 'demo';
+        if (demo) demoEnsureSignedIn(s, r.post.platform); // like the server: the demo account signs in first
+        goLive(s, r, Date.now());
+        if (demo) demoRead(s, r, DEMO_FIRST_READ_MIN); // ...and the first synthetic read comes back with the post
+      }
       return r.post;
+    }),
+  demoReadMetrics: (id, advanceMinutes) =>
+    authed((s) => {
+      if (s.ws.data_mode !== 'demo') throw new ApiError(409, 'Demo metrics only work in a demo workspace.');
+      const r = findPost(s, id);
+      if (r.post.status !== 'published') throw new ApiError(409, 'Only a published post has metrics to read.');
+      if (!isLivePlatform(r.post.platform)) unprocessable(comingSoonReason(r.post.platform));
+      demoEnsureSignedIn(s, r.post.platform);
+      const minutes = clamp(Math.floor(advanceMinutes ?? DEMO_REFRESH_MIN), 0, DEMO_MAX_ADVANCE_MIN);
+      return demoRead(s, r, minutes);
     }),
   convertLink: (code) =>
     call(() => {
