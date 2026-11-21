@@ -268,7 +268,7 @@ Claude calls `social_publish`, which asks the person.
 apps/desktop/
   package.json            electron, electron-builder, esbuild, typescript, @modelcontextprotocol/sdk, zod
   tsconfig.json           strict; path alias @autoRead/* -> ../mobile/src/autoRead/*
-  electron-builder.yml    mac dmg (arm64 + x64), win nsis; appId com.pulse.desktop
+  electron-builder.yml    mac dmg (x64 only, Rosetta 2 on Apple Silicon), win nsis (x64 only); appId com.pulse.desktop
   scripts/build.mjs       esbuild main + preloads -> dist/
   src/main/index.ts       app lifecycle, main window, single-instance lock
   src/main/config.ts      PULSE_URL, CLAUDE_BIN, limits
