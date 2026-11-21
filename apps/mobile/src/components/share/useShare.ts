@@ -26,6 +26,7 @@ import { Alert, Linking, Platform as RNPlatform } from 'react-native';
 import { api } from '@/src/api';
 import { canSharePhoto, openInstagramApp, pickPostPhoto, sharePhoto, type PostPhoto } from '@/src/igPost/device';
 import { igAutoPostAvailable, type IgPostOutcome } from '@/src/igPost/IgPostSheet';
+import { fetchPostCard } from '@/src/igPost/card';
 import { demoMetricsToast, demoPostedToast, demoPostLabel, demoPostNote, demoRefreshLabel } from '@/src/demo/logic';
 import { IG_AUTOPOST, igButtonMode, igFailureText, igNote } from '@/src/igPost/logic';
 import { isLivePlatform } from '@/src/platforms';
@@ -284,10 +285,10 @@ function ask<T>(title: string, message: string, buttons: { text: string; value: 
 const askIgRoute = (): Promise<IgRoute> =>
   ask<IgRoute>(
     'Post to Instagram now?',
-    'Pulse publishes this photo and caption on your Instagram account, where everyone can see it.',
+    'Pulse makes an image of this post and publishes it with the caption on your Instagram account, where everyone can see it.',
     [
       { text: 'Cancel', value: 'cancel', cancel: true },
-      { text: 'Open Instagram', value: 'share' },
+      { text: 'Use my own photo', value: 'share' },
       { text: 'Post now', value: 'auto' },
     ],
     'cancel',
@@ -434,6 +435,20 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   const postInstagram = async (): Promise<void> => {
     const caption = captionFor(current().post);
     const copied = await copyCaption(caption);
+    // One tap: Pulse renders the post as an image card and posts it; "Use my own photo" keeps the picker flow.
+    let route: IgRoute | null = null;
+    if (IG_AUTOPOST && igAutoPostAvailable()) {
+      route = await askIgRoute();
+      if (route === 'cancel') return;
+      if (route === 'auto') {
+        const card = await fetchPostCard(current().post.id);
+        if (card) {
+          await finishAutoPost(card, caption, copied);
+          return;
+        }
+        toast.show("Couldn't make the image. Pick a photo instead.", 'info');
+      }
+    }
     const picked = await pickPostPhoto();
     if (picked.status === 'cancelled') {
       toast.show(
@@ -451,12 +466,16 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
       return;
     }
     const { photo } = picked;
-    const route: IgRoute = IG_AUTOPOST && igAutoPostAvailable() ? await askIgRoute() : 'share';
+    if (route === null && IG_AUTOPOST && igAutoPostAvailable()) route = await askIgRoute();
     if (route === 'cancel') return;
-    if (route === 'share') {
+    if (route !== 'auto') {
       await shareToInstagram(photo, copied);
       return;
     }
+    await finishAutoPost(photo, caption, copied);
+  };
+
+  const finishAutoPost = async (photo: PostPhoto, caption: string, copied: boolean): Promise<void> => {
     const outcome = await autoPost(photo, caption);
     if (outcome.ok === true) {
       haptic.success();

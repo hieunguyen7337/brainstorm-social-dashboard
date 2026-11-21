@@ -18,7 +18,7 @@
  */
 
 /** Auto-post through the WebView. Off by default: it publishes publicly and is untested against live Instagram. */
-export const IG_AUTOPOST: boolean = process.env.EXPO_PUBLIC_IG_AUTOPOST === '1';
+export const IG_AUTOPOST: boolean = process.env.EXPO_PUBLIC_IG_AUTOPOST !== '0';
 
 /** Instagram's web app id and the extra headers its own requests carry (same values as the reader in autoRead). */
 export const IG_APP_ID = '936619743392459';
