@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { PLATFORMS } from '@/src/api';
+import { autoReadAvailable } from '@/src/autoRead';
 import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import { colors, gradient, platformMeta, space, type as t, withAlpha } from '@/src/theme';
 import { Button, Card, Chip, ChipRow } from '@/src/ui';
@@ -37,8 +38,9 @@ export function ConnectCta({ style }: { style?: StyleProp<ViewStyle> }) {
           {CONNECT_CTA_TITLE}
         </Text>
         <Text style={[t.dim, styles.body]}>
-          Upload a screenshot of your profile or insights page and Claude reads the numbers. Everything on this dashboard comes
-          from you.
+          {Platform.OS === 'android' && autoReadAvailable()
+            ? 'Sign in to your accounts inside Pulse and your numbers are read for you, then kept up to date. Everything on this dashboard comes from you.'
+            : 'Upload a screenshot of your profile or insights page and Claude reads the numbers. Everything on this dashboard comes from you.'}
         </Text>
       </View>
 
