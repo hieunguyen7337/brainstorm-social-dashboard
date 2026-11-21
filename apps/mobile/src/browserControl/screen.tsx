@@ -17,6 +17,7 @@ import type { WebViewMessageEvent, WebViewNavigation } from 'react-native-webvie
 import { UA_ANDROID } from '@/src/autoRead/config';
 import { loadNative, type NativeBits, type WebViewRef } from '@/src/autoRead/native';
 import { apiBase, getToken } from '@/src/http';
+import { holdUpdates } from '@/src/updateOnLaunch';
 import { colors, radius, space } from '@/src/theme';
 import {
   PAGE_ACTIONS,
@@ -183,6 +184,7 @@ function Controller({ native }: { native: NativeBits }) {
   // The session: heartbeat, then long-poll for commands until Stop or the screen closes.
   useEffect(() => {
     const ctrl = new AbortController();
+    const release = holdUpdates(); // no auto-update reload while Claude drives the browser
     let alive = true;
     let online = false;
     (async () => {
@@ -232,6 +234,7 @@ function Controller({ native }: { native: NativeBits }) {
     })();
     return () => {
       alive = false;
+      release();
       ctrl.abort();
       // Tell the server now, so Claude is told the phone stopped instead of waiting for the heartbeat to lapse.
       void api('POST', '/api/browser/session', { active: false }, new AbortController().signal).catch(() => undefined);
