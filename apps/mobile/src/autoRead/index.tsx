@@ -43,6 +43,7 @@ import {
   CAPTURE_QUALITY,
   CAPTURE_RETRY_QUALITY,
   CAPTURE_RETRY_WIDTH,
+  STALL_MS,
   UA_ANDROID,
   UA_IOS,
 } from './config';
@@ -139,8 +140,24 @@ function Sheet({
   const onLayout = (e: LayoutChangeEvent) => {
     size.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
   };
-  const busy = status !== 'login';
+  // A page that never finishes loading looked like an empty dark sheet (LinkedIn, 2026-11-21): show that it is
+  // loading, reload it once by itself after STALL_MS, and keep a Reload button in the footer while signing in.
+  const [loading, setLoading] = useState(false);
+  const reloadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!loading || !source) return;
+    const t = setTimeout(() => {
+      if (reloadedFor.current === source.uri) return;
+      reloadedFor.current = source.uri;
+      webRef.current?.reload();
+    }, STALL_MS);
+    return () => clearTimeout(t);
+  }, [loading, source]);
+  const reload = () => webRef.current?.reload();
+
+  const busy = status !== 'login' || loading;
   const overlay = status === 'anon' || status === 'claude';
+  const footerText = status === 'login' && loading ? `Loading ${meta.label}…` : STATUS_TEXT[status];
 
   return (
     <Modal
@@ -192,7 +209,14 @@ function Sheet({
                 allowFileAccess={false}
                 style={styles.web}
                 onNavigationStateChange={(s: WebViewNavigation) => runner.current?.navigated(s.url, s.loading)}
-                onLoadEnd={(e) => runner.current?.loadEnded(e.nativeEvent.url)}
+                onLoadStart={() => setLoading(true)}
+                onLoadProgress={(e) => {
+                  if (e.nativeEvent.progress >= 1) setLoading(false);
+                }}
+                onLoadEnd={(e) => {
+                  setLoading(false);
+                  runner.current?.loadEnded(e.nativeEvent.url);
+                }}
                 onMessage={(e: WebViewMessageEvent) => runner.current?.message(e.nativeEvent.data)}
                 onError={(e) => runner.current?.loadFailed(e.nativeEvent.url)}
               />
@@ -210,8 +234,21 @@ function Sheet({
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.sm) + space.xs }]}>
             {busy ? <ActivityIndicator size="small" color={colors.accent} /> : null}
             <Text style={styles.footerText} testID="auto-read-status">
-              {STATUS_TEXT[status]}
+              {footerText}
             </Text>
+            {status === 'login' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Reload page"
+                onPress={reload}
+                hitSlop={8}
+                style={({ pressed }) => [styles.reload, pressed && styles.pressed]}
+                testID="auto-read-reload"
+              >
+                <Ionicons name="refresh" size={16} color={colors.accent} />
+                <Text style={styles.reloadText}>Reload</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -309,5 +346,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  footerText: { color: colors.textDim, fontSize: 13, textAlign: 'center' },
+  footerText: { color: colors.textDim, fontSize: 13, textAlign: 'center', flexShrink: 1 },
+  reload: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: space.sm },
+  reloadText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
 });

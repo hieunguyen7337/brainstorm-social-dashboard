@@ -16,6 +16,8 @@ export const FALLBACK_LOAD_MS = 15_000;
 export const REFRESH_STALE_MS = 60 * 60 * 1000;
 /** Background refresh: one platform's read is abandoned after this long. */
 export const REFRESH_TIMEOUT_MS = 30_000;
+/** The sign-in sheet reloads a page by itself once when it has not finished loading after this long. */
+export const STALL_MS = 15_000;
 /** After a refresh that failed (signed out, timeout), do not try that platform again for this long (this app run). */
 export const REFRESH_RETRY_MS = 15 * 60 * 1000;
 /** Sign-out: how long the hidden incognito WebView stays mounted so Android applies the flag (clears cookies). */
