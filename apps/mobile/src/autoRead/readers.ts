@@ -532,15 +532,186 @@ async function run() {
 }
 `;
 
-/** LinkedIn creator dashboard: wait for one of its labels, settle, post the page text. */
+/**
+ * LinkedIn, shared by both steps: the login-page test, the guest-page test and the profile id in the address.
+ * A phone WebView lands on /feed/ after signing in, and /dashboard/ may not be served to every account on mobile web
+ * (2026-11-21: LinkedIn still failed on the owner's phone with a reader that only ran on /dashboard/), so nothing here
+ * depends on one page.
+ */
+const LINKEDIN_COMMON = String.raw`
+var LI_ID = /^[^\s\/?#%"'\\<>&]{1,100}$/;
+function liLoginPage() {
+  return pathIs('/login', '/checkpoint', '/authwall', '/uas', '/signup', '/m/login') || hasPasswordInput();
+}
+// A guest (signed-out) page: links to sign in or join, which signed-in pages do not carry.
+function liGuest() {
+  try {
+    return !!document.querySelector(
+      'a[href*="/login"], a[href*="/signup"], a[href*="session_redirect"], form[action*="login"], a[href*="/start/join"]'
+    );
+  } catch (e) {
+    return false;
+  }
+}
+// The profile id in /in/<id>/ ('' elsewhere, and for the /in/me/ shortcut).
+function liPathId() {
+  var m = /^\/in\/([^\/?#]+)/.exec(location.pathname);
+  if (!m) return '';
+  var id = m[1];
+  try {
+    id = decodeURIComponent(id);
+  } catch (e) {}
+  return LI_ID.test(id) && lower(id) !== 'me' ? id : '';
+}
+var LI_PROFILE = /\d[\d.,]*\s?[KkMmBb]?\+?\s+(?:followers?|connections?)(?![A-Za-z])/i;
+var LI_DASH = /post impressions|total followers|profile viewers|search appearances/i;
+`;
+
+/**
+ * LinkedIn step 0, on whichever signed-in page the person is on (usually /feed/). Same-origin GETs to LinkedIn's own
+ * Voyager API, the way its web app makes them: /voyager/api/me gives the public profile id, .../networkinfo the
+ * follower and connection counts. The API wants the JSESSIONID cookie's value (quotes removed) as its `csrf-token`
+ * header; that value is sent only to linkedin.com and never posted. On the dashboard or the person's own profile the
+ * page text comes along too. Posts `ok` whenever the person is signed in, even with no numbers: the app then opens
+ * the profile (step 1). `signed_out` only on a login page, or when the API refuses and the page is a guest page.
+ */
 const LINKEDIN_0 = String.raw`
-function liSignedOut() {
-  return pathIs('/login', '/checkpoint', '/authwall', '/uas', '/signup') || hasPasswordInput();
+function liCookie(name) {
+  var parts = String(document.cookie || '').split(';');
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i].replace(/^ +/, '');
+    if (p.indexOf(name + '=') === 0) {
+      try {
+        return decodeURIComponent(p.slice(name.length + 1));
+      } catch (e) {
+        return '';
+      }
+    }
+  }
+  return '';
+}
+function liCsrf() {
+  return liCookie('JSESSIONID').replace(/^"+|"+$/g, '');
+}
+async function liJson(path, csrf) {
+  try {
+    var r = await fetchText(path, {
+      'csrf-token': csrf,
+      accept: 'application/vnd.linkedin.normalized+json+2.1',
+      'x-restli-protocol-version': '2.0.0',
+      'x-li-lang': 'en_US',
+    });
+    return { status: r.status, json: r.ok ? asJson(r.text) : null };
+  } catch (e) {
+    return { status: 0, json: null };
+  }
+}
+// Breadth-first: the shallowest value stored under key that passes test (at most 4000 nodes, depth 8).
+function liFind(root, key, test) {
+  var queue = [root];
+  var depth = [0];
+  for (var seen = 0; seen < queue.length && seen < 4000; seen++) {
+    var v = queue[seen];
+    var d = depth[seen];
+    if (!isObj(v)) continue;
+    if (!Array.isArray(v) && Object.prototype.hasOwnProperty.call(v, key) && test(v[key])) return v[key];
+    if (d >= 8) continue;
+    var keys = Object.keys(v);
+    for (var i = 0; i < keys.length; i++) {
+      if (isObj(v[keys[i]])) {
+        queue.push(v[keys[i]]);
+        depth.push(d + 1);
+      }
+    }
+  }
+  return undefined;
+}
+function liIsId(s) {
+  return typeof s === 'string' && LI_ID.test(s) && lower(s) !== 'me';
+}
+function liIsCount(n) {
+  return num(n) !== undefined && n >= 0;
+}
+async function liWaitText(pattern, maxMs) {
+  var t0 = Date.now();
+  for (;;) {
+    var text = bodyText();
+    if (pattern.test(text)) {
+      await sleep(Math.min(SETTLE_MS, Math.max(0, remaining() - 300)));
+      var again = bodyText();
+      return pattern.test(again) ? again : text;
+    }
+    if (Date.now() - t0 >= maxMs || remaining() <= 500) return '';
+    await tick();
+  }
 }
 async function run() {
-  await readText(/post impressions|total followers|profile viewers|search appearances/i, liSignedOut, function (text) {
-    return { text: text };
-  });
+  if (liLoginPage()) return finish('signed_out');
+  var csrf = liCsrf();
+  var diag = { path: location.pathname, csrf: !!csrf, me: -1 };
+  var me = csrf ? await liJson('/voyager/api/me', csrf) : { status: -1, json: null };
+  diag.me = me.status;
+  // Only the API names the signed-in account: an /in/<id>/ address may be someone else's profile.
+  var pid = (me.json ? liFind(me.json, 'publicIdentifier', liIsId) : undefined) || '';
+  diag.id = !!pid;
+  if (!pid && (me.status === -1 || me.status === 401 || me.status === 403) && liGuest()) {
+    return finish('signed_out');
+  }
+  var out = { publicId: pid || null, diag: diag };
+  if (pid && csrf && remaining() > 2500) {
+    var ni = await liJson('/voyager/api/identity/profiles/' + encodeURIComponent(pid) + '/networkinfo', csrf);
+    diag.ni = ni.status;
+    var f = ni.json ? liFind(ni.json, 'followersCount', liIsCount) : undefined;
+    var c = ni.json ? liFind(ni.json, 'connectionsCount', liIsCount) : undefined;
+    if (f !== undefined) out.followers = f;
+    if (c !== undefined) out.connections = c;
+  }
+  // The page's own numbers: the creator dashboard, or the person's own profile.
+  if (pathIs('/dashboard') && remaining() > 1500) {
+    var dt = await liWaitText(LI_DASH, 6000);
+    if (dt) {
+      out.page = 'dashboard';
+      out.text = dt;
+    }
+  } else if (pid && lower(liPathId()) === lower(pid) && remaining() > 1500) {
+    var pt = await liWaitText(LI_PROFILE, 6000);
+    if (pt) {
+      out.page = 'profile';
+      out.text = pt;
+    }
+  }
+  diag.text = !!out.text;
+  finish('ok', out);
+}
+`;
+
+/**
+ * LinkedIn step 1, on the person's own profile (/in/<id>/, or /in/me/ which LinkedIn redirects there): wait for
+ * "500+ connections" / "1,234 followers", settle, post the page text. Nothing found by the deadline is `empty` with a
+ * `diag` (the app then sends a screenshot of this page).
+ */
+const LINKEDIN_1 = String.raw`
+async function run() {
+  for (;;) {
+    if (liLoginPage()) return finish('signed_out');
+    var text = bodyText();
+    if (LI_PROFILE.test(text)) {
+      await sleep(SETTLE_MS);
+      if (liLoginPage()) return finish('signed_out');
+      var again = bodyText();
+      return finish('ok', {
+        publicId: liPathId() || null,
+        page: 'profile',
+        text: LI_PROFILE.test(again) ? again : text,
+        diag: { path: location.pathname, text: true },
+      });
+    }
+    if (remaining() <= 0) {
+      if (liGuest() && !liPathId()) return finish('signed_out');
+      return finish('empty', { publicId: liPathId() || null, diag: { path: location.pathname, text: false, len: text.length, guest: liGuest() } });
+    }
+    await tick();
+  }
 }
 `;
 
@@ -691,7 +862,9 @@ function readerFor(platform: unknown, step: unknown): ReaderDef | null {
     case 'tiktok:0':
       return { hosts: ['tiktok.com'], net: true, body: TIKTOK_0 };
     case 'linkedin:0':
-      return { hosts: ['linkedin.com'], text: true, body: LINKEDIN_0 };
+      return { hosts: ['linkedin.com'], net: true, text: true, body: LINKEDIN_COMMON + LINKEDIN_0 };
+    case 'linkedin:1':
+      return { hosts: ['linkedin.com'], text: true, body: LINKEDIN_COMMON + LINKEDIN_1 };
     case 'x:0':
       return { hosts: ['x.com', 'twitter.com'], body: X_COMMON + X_0 };
     case 'x:1':
@@ -713,7 +886,7 @@ function cleanHandle(h: unknown): string | null {
 }
 
 /**
- * The script for `platform` at `step` (instagram, tiktok, linkedin, reddit, facebook: 0; x: 0 and 1), ready for
+ * The script for `platform` at `step` (instagram, tiktok, reddit, facebook: 0; linkedin, x: 0 and 1), ready for
  * `WebView.injectJavaScript`. Any other pair throws `Error('no such reader')`. `opts.deadlineMs` exists for tests.
  */
 export function readerScript(

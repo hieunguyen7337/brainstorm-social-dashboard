@@ -160,6 +160,9 @@ export class AutoReadRunner {
       this.t('msg', { status: msg.status, step: msg.step, diag: d && typeof d === 'object' ? d.diag : undefined });
       // A failed read says which step failed (status codes, no cookie values): visible in `adb logcat -s ReactNativeJS`.
       if (msg.status !== 'ok') console.log(`[autoRead] ${String(raw).slice(0, 500)}`);
+      // An `ok` message may carry page text: log only its `diag` (status codes and yes/no), never the data itself.
+      else if (msg.data && typeof msg.data === 'object' && 'diag' in msg.data)
+        console.log(`[autoRead] ${msg.platform} step ${msg.step} ok ${JSON.stringify((msg.data as { diag: unknown }).diag).slice(0, 300)}`);
       if (msg.status === 'ok') this.onStepData(msg.data);
       else if (msg.status === 'signed_out') this.toLogin(false);
       else void this.stepEmpty(msg.data);
@@ -343,6 +346,7 @@ export class AutoReadRunner {
     } catch {
       outcome = { kind: 'empty' };
     }
+    console.log(`[autoRead] ${this.deps.platform} step ${this.step} -> ${outcome.kind}`);
     if (outcome.kind === 'read') {
       void this.finishParsed(outcome.read, outcome.confidence);
     } else if (outcome.kind === 'next' && this.step + 1 < this.flow.steps.length) {

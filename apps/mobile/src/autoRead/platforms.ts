@@ -8,7 +8,7 @@ import {
   hasNumbers,
   parseFacebookText,
   parseInstagramJson,
-  parseLinkedInText,
+  parseLinkedInData,
   parseRedditJson,
   parseTikTokJson,
   parseXText,
@@ -192,12 +192,23 @@ const tiktok: Flow = (() => {
 })();
 
 // ---- LinkedIn ------------------------------------------------------------------------------------------------------
-// The dashboard text has the number on the line before each label. Only the signed-in pages count as "past login":
-// the logged-out landing page lives at "/".
+// Step 0 runs on whichever signed-in page the person lands on (on a phone that is /feed/; /dashboard/ may not be served
+// to every account on mobile web, and the old flow only read /dashboard/). It asks LinkedIn's own API for the
+// profile id and the follower and connection counts. When those give no numbers, step 1 opens the person's own profile
+// (/in/<id>/, or /in/me/, which LinkedIn redirects there) and reads "1,234 followers" / "500+ connections" from its
+// text; the fallback screenshot is of that profile too. Only signed-in pages count as "past login": the logged-out
+// landing page lives at "/".
+
+const LI_ID = /^[^\s/?#%"'\\<>&]{1,100}$/;
+const liId = (v: unknown): string | null => {
+  const s = str(v);
+  return s && LI_ID.test(s) && s.toLowerCase() !== 'me' ? s : null;
+};
+const liProfileUrl = (id: string | null | undefined): string =>
+  `https://www.linkedin.com/in/${id && liId(id) ? encodeURIComponent(id) : 'me'}/`;
 
 const linkedin: Flow = (() => {
-  const onDashboard = (u: PageUrl) => startsWithAny(u.path, ['/dashboard']);
-  return makeFlow({
+  const base = makeFlow({
     platform: 'linkedin',
     loginUrl: 'https://www.linkedin.com/login',
     domains: ['linkedin.com'],
@@ -213,18 +224,43 @@ const linkedin: Flow = (() => {
       '/search',
       '/post/',
       '/analytics',
+      '/me/',
+      '/check/',
+      '/premium',
+      '/company/',
+      '/groups',
+      '/my-items',
     ],
-    steps: [
-      {
-        url: () => 'https://www.linkedin.com/dashboard/',
-        matches: onDashboard,
-        direct: onDashboard,
-        script: (ctx) => readerScript('linkedin', 0, ctx),
-        finish: (data) => read(parseLinkedInText(str(rec(data).text) ?? ''), 'medium'),
-        showsNumbers: true,
-      },
-    ],
+    steps: [],
+    fallbackUrl: (ctx, hint) => liProfileUrl(liId(rec(hint).publicId) ?? ctx.handle),
   });
+  const anyPage = (u: PageUrl) => base.pastLogin(u);
+  base.steps.push(
+    {
+      url: () => 'https://www.linkedin.com/feed/',
+      matches: anyPage,
+      direct: anyPage,
+      script: (ctx) => readerScript('linkedin', 0, ctx),
+      finish: (data) => {
+        const parsed = parseLinkedInData(data);
+        if (hasNumbers(parsed)) return read(parsed, typeof rec(data).followers === 'number' ? 'high' : 'medium');
+        return { kind: 'next', ctx: { handle: liId(rec(data).publicId) } };
+      },
+      showsNumbers: false, // the feed shows other people's numbers; the profile (step 1, fallbackUrl) shows theirs
+    },
+    {
+      url: (ctx) => liProfileUrl(ctx.handle),
+      matches: (u) => startsWithAny(u.path, ['/in/']),
+      script: (ctx) => readerScript('linkedin', 1, ctx),
+      finish: (data, ctx) => {
+        const d = rec(data);
+        const parsed = parseLinkedInData({ ...d, page: 'profile', publicId: liId(d.publicId) ?? ctx.handle ?? null });
+        return read(parsed, 'medium');
+      },
+      showsNumbers: true,
+    },
+  );
+  return base;
 })();
 
 // ---- X -------------------------------------------------------------------------------------------------------------
