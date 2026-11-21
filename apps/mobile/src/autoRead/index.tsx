@@ -9,8 +9,11 @@
  *     onClose={(reason) => { setOpen(false); if (reason) showMessage(reason); }}  // reason only when reading gave up
  *     readScreenshot={(base64, mediaType) => api.readScreenshot(platform, base64, mediaType)} />
  *
- * The sheet is a full-screen modal with a WebView (not incognito: the sign-in stays in Android's cookie store, so a later
- * read opens signed in; `forgetSignIns()` drops it) on the platform's login page. After the person signs in it
+ * The sheet is a full-screen modal with a WebView (not incognito: the sign-in stays in Android's cookie store, which
+ * react-native-webview flushes to disk on every finished page, so a later read and an app restart open signed in;
+ * `forgetSignIns()` drops it) on the platform's login page. The login the person types there is saved to the vault once
+ * the sign-in worked (vault/capture.ts), and a later login page is filled and submitted by itself from the vault
+ * (docs/VAULT.md). After the person signs in it
  * opens the page with their numbers and reads them with a script it injects (never cookies, tokens or page HTML); if that
  * finds nothing within 12 s it captures the WebView as a JPEG and sends it to `readScreenshot`. `onResult` gets a
  * `ScreenshotRead` plus `source: 'device'`.
@@ -49,12 +52,25 @@ import {
   UA_ANDROID,
   UA_IOS,
 } from './config';
-import { fillScriptFor, takeVaultFill, useVaultStatus, type FillStatus } from '@/src/vault';
+import { useToast } from '@/src/ui/Toast';
+import { fillScriptFor, saveLogin, useVaultStatus, vaultIndex, type FillStatus } from '@/src/vault';
+import { buildCaptureScript, makeCaptureHolder, type CaptureHolder, type NavKind } from '@/src/vault/capture';
 import { canFill } from '@/src/vault/fill';
-import { HREF_POLL_JS, HREF_POLL_MS, takeHref } from './hrefPoll';
+import { HREF_POLL_JS, HREF_POLL_MS } from './hrefPoll';
 import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner, type RunnerStatus } from './runner';
-import { FILL_CHECK_MS, fillNote, offerVaultFill } from './vaultOffer';
+import {
+  AUTO_FILL_DELAY_MS,
+  FILL_CHECK_MS,
+  FILLING_NOTICE,
+  MAX_FILL_ATTEMPTS,
+  NO_FORM_RETRY_MS,
+  SAVE_FAILED_NOTICE,
+  SAVED_NOTICE,
+  fillNote,
+  offerVaultFill,
+  routeSheetMessage,
+} from './vaultOffer';
 import { AUTO_READ_FAILED, type AutoReadSheetProps } from './types';
 
 export { AUTO_READ_FAILED } from './types';
@@ -65,6 +81,8 @@ export { AutoRefresh, forgetSignIns } from './refresh';
 // ---- the sheet --------------------------------------------------------------------------------------------------------
 
 const STAYS_SIGNED_IN = 'Pulse stays signed in on this phone to refresh your numbers. Sign out in Settings.';
+const STAYS_SIGNED_IN_VAULT =
+  'Pulse stays signed in on this phone and saves the login you type here, encrypted on this phone, to sign you back in. Remove it in Settings > Saved logins.';
 
 const STATUS_TEXT: Record<RunnerStatus, string> = {
   anon: 'Checking your public profile…',
@@ -95,21 +113,33 @@ function Sheet({
   const size = useRef({ w: 0, h: 0 });
   const runner = useRef<AutoReadRunner | null>(null);
   const vault = useVaultStatus();
-  const [signInUrl, setSignInUrl] = useState<string | null>(null);
-  const signInUrlRef = useRef<string | null>(null);
-  const [attempts, setAttempts] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
+  const vaultRef = useRef(vault);
+  vaultRef.current = vault;
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  /** The WebView's own (native) URL: onNavigationStateChange / onLoadEnd only, never a page-reported href. */
+  const nativeUrl = useRef<string | null>(null);
+  /** Document loads seen (a new one starts with every native `loading: true`): one automatic fill per load. */
+  const loadSeq = useRef(0);
+  const filledFor = useRef<string | null>(null);
+  /** Saved-login fills injected in this sheet session (at most MAX_FILL_ATTEMPTS). */
+  const fills = useRef(0);
+  const fillingRef = useRef(false);
   const [filling, setFilling] = useState(false);
   const [vaultNote, setVaultNote] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  const capture = useRef<CaptureHolder | null>(null);
   const statusRef = useRef<RunnerStatus>('login');
   statusRef.current = status;
   const alive = useRef(true);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef({ onClose, onResult, readScreenshot, handle });
   latest.current = { onClose, onResult, readScreenshot, handle };
 
   /** The WebView as a JPEG (base64, no data: prefix), width at most 1400 px; a second, smaller try if it is too large. */
-  const capture = useCallback(async (): Promise<string> => {
+  const captureShot = useCallback(async (): Promise<string> => {
     const { w, h } = size.current;
     if (!shotRef.current || w <= 0 || h <= 0) throw new Error('not ready');
     const ratio = PixelRatio.get();
@@ -142,14 +172,13 @@ function Sheet({
       handle: latest.current.handle,
       loadUrl: (uri) => setSource({ uri }),
       inject: (js) => webRef.current?.injectJavaScript(js),
-      capture,
+      capture: captureShot,
       readScreenshot: (base64, mediaType) => latest.current.readScreenshot(base64, mediaType),
       emitResult: (read) => latest.current.onResult(read),
       emitClose: (reason) => latest.current.onClose(reason),
-      onStatus: setStatus,
-      onSignInPage: (url) => {
-        signInUrlRef.current = url;
-        setSignInUrl((p) => (p === url ? p : url));
+      onStatus: (s) => {
+        statusRef.current = s;
+        setStatus(s);
       },
     });
     runner.current = r;
@@ -160,7 +189,31 @@ function Sheet({
       release();
       if (runner.current === r) runner.current = null;
     };
-  }, [platform, capture]);
+  }, [platform, captureShot]);
+
+  // The login typed on the sheet, held in memory until the sign-in worked (vault/capture.ts). Never logged or traced.
+  useEffect(() => {
+    const holder = makeCaptureHolder({
+      platform,
+      save: async (u, p) => {
+        // Keep the person's biometric choice when the login replaces one saved before; a new one asks for nothing.
+        const bio = (await vaultIndex())[platform]?.bio === true;
+        await saveLogin(platform, u, p, { bio });
+      },
+      onSaved: () => {
+        toastRef.current.show(SAVED_NOTICE); // the toast outlives the sheet, which may close as the read finishes
+        if (alive.current) setSavedNote(SAVED_NOTICE);
+      },
+      onSaveFailed: () => {
+        if (alive.current) setSavedNote(SAVE_FAILED_NOTICE);
+      },
+    });
+    capture.current = holder;
+    return () => {
+      holder.dispose();
+      if (capture.current === holder) capture.current = null;
+    };
+  }, [platform]);
 
   // Close on a signed-in page reads first (the person thinks they are done); a second Close, or Close on the login page,
   // closes.
@@ -206,11 +259,14 @@ function Sheet({
     () => () => {
       alive.current = false;
       clearCheck();
+      if (autoTimer.current) clearTimeout(autoTimer.current);
+      autoTimer.current = null;
     },
     [],
   );
 
   const onFill = (fs: FillStatus) => {
+    if (fs !== 'partial') capture.current?.fillEnded();
     if (fs === 'partial') {
       runner.current?.noteVaultFill();
     } else if (fs === 'filled') {
@@ -218,17 +274,32 @@ function Sheet({
       clearCheck();
       checkTimer.current = setTimeout(() => {
         checkTimer.current = null;
-        if (statusRef.current === 'login' && canFill(platform, signInUrlRef.current)) {
+        if (statusRef.current === 'login' && canFill(platform, nativeUrl.current)) {
           setVaultNote(fillNote('failed', meta.label));
         }
       }, FILL_CHECK_MS);
+    } else if (fs === 'no_form' && fills.current < MAX_FILL_ATTEMPTS) {
+      // The form had not rendered yet: one more try on this page, still within the attempt cap.
+      filledFor.current = null;
+      scheduleAutoFill(NO_FORM_RETRY_MS);
     } else {
       setVaultNote(fillNote(fs, meta.label));
     }
   };
 
+  /** True when the saved login may be typed into the page the WebView is natively on, right now. */
+  const fillAllowed = (): boolean =>
+    offerVaultFill(platform, {
+      status: statusRef.current,
+      hasLogin: !!vaultRef.current.saved[platform],
+      url: nativeUrl.current,
+      attempts: fills.current,
+      dismissed: false,
+    });
+
   const signInWithSaved = async () => {
-    if (filling) return;
+    if (fillingRef.current || !fillAllowed()) return;
+    fillingRef.current = true;
     setFilling(true);
     let script: string | null = null;
     try {
@@ -236,41 +307,78 @@ function Sheet({
     } catch {
       script = null;
     }
+    fillingRef.current = false;
     if (!alive.current) return;
     setFilling(false);
     if (!script) {
       setVaultNote(fillNote('unreadable', meta.label));
       return;
     }
-    if (!(statusRef.current === 'login' && canFill(platform, signInUrlRef.current) && webRef.current)) {
+    // Re-checked after the (possibly biometric) unlock: the page may have moved on meanwhile.
+    if (!(fillAllowed() && webRef.current)) {
       script = null;
       return;
     }
     setVaultNote(null);
+    fills.current += 1;
+    capture.current?.fillStarted();
     webRef.current.injectJavaScript(script);
     script = null;
-    setAttempts((n) => n + 1);
     runner.current?.noteVaultFill();
   };
 
-  const onMessage = (data: string) => {
-    const f = takeVaultFill(data);
-    if (f) {
-      if (f.platform === platform) onFill(f.status);
-      return;
-    }
-    const href = takeHref(data);
-    if (href) runner.current?.navigated(href, false);
-    else runner.current?.message(data);
+  /** Fill the saved login by itself once the login page had a moment to render (no approval bar any more). */
+  const scheduleAutoFill = (ms: number) => {
+    if (autoTimer.current) clearTimeout(autoTimer.current);
+    autoTimer.current = setTimeout(() => {
+      autoTimer.current = null;
+      if (!alive.current || !fillAllowed()) return;
+      const key = `${loadSeq.current} ${nativeUrl.current}`;
+      if (filledFor.current === key) return;
+      filledFor.current = key;
+      void signInWithSaved();
+    }, ms);
   };
 
-  const offer = offerVaultFill(platform, {
-    status,
-    hasLogin: !!vault.saved[platform],
-    url: signInUrl,
-    attempts,
-    dismissed,
-  });
+  /** Every native navigation event: the only source of the URL the vault trusts. */
+  const onNative = (url: string | null | undefined, kind: NavKind) => {
+    if (kind === 'start') loadSeq.current += 1;
+    if (typeof url === 'string') nativeUrl.current = url;
+    capture.current?.native(url, kind);
+    if (kind === 'start' || !canFill(platform, url) || !webRef.current) return;
+    // Listen for the login the person types (only on the platform's own login form, only with a vault on this phone).
+    if (vaultRef.current.available) webRef.current.injectJavaScript(buildCaptureScript(platform));
+    if (vaultRef.current.saved[platform] && filledFor.current !== `${loadSeq.current} ${url}`) {
+      scheduleAutoFill(AUTO_FILL_DELAY_MS);
+    }
+  };
+
+  // The saved-login index loads after the first page may already be up: fill then.
+  const hasSaved = !!vault.saved[platform];
+  useEffect(() => {
+    const url = nativeUrl.current;
+    if (hasSaved && canFill(platform, url) && filledFor.current !== `${loadSeq.current} ${url}`) {
+      scheduleAutoFill(AUTO_FILL_DELAY_MS);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSaved, platform]);
+
+  const onMessage = (data: unknown, sourceUrl: string | null | undefined) =>
+    routeSheetMessage(data, sourceUrl, {
+      capture: (msg, src) => {
+        capture.current?.offer(msg, src);
+      },
+      fill: (f) => {
+        if (f.platform === platform) onFill(f.status);
+      },
+      href: (href, src) => {
+        capture.current?.pageHref(href, src);
+        runner.current?.navigated(href, false);
+      },
+      runner: (raw) => runner.current?.message(raw),
+    });
+
+  const autoFilling = filling && status === 'login';
   const busy = status !== 'login' || loading;
   const overlay = status === 'anon' || status === 'claude';
   const footerText = status === 'login' && loading ? `Loading ${meta.label}…` : STATUS_TEXT[status];
@@ -303,41 +411,23 @@ function Sheet({
         </View>
 
         <Text style={styles.note} testID="auto-read-stays-signed-in">
-          {STAYS_SIGNED_IN}
+          {vault.available ? STAYS_SIGNED_IN_VAULT : STAYS_SIGNED_IN}
         </Text>
 
-        {offer ? (
-          <View style={styles.vaultBar} testID="auto-read-vault-bar">
-            <Text style={styles.vaultText}>{`Sign in with your saved ${meta.label} login?`}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sign in with saved login"
-              onPress={() => void signInWithSaved()}
-              disabled={filling}
-              style={({ pressed }) => [styles.vaultPrimary, pressed && styles.pressed]}
-              testID="auto-read-vault-signin"
-            >
-              {filling ? (
-                <ActivityIndicator size="small" color={colors.bg} />
-              ) : (
-                <Text style={styles.vaultPrimaryText}>Sign in</Text>
-              )}
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Not now"
-              onPress={() => setDismissed(true)}
-              hitSlop={8}
-              style={({ pressed }) => [styles.vaultSecondary, pressed && styles.pressed]}
-              testID="auto-read-vault-dismiss"
-            >
-              <Text style={styles.vaultSecondaryText}>Not now</Text>
-            </Pressable>
+        {autoFilling ? (
+          <View style={styles.vaultBar} testID="auto-read-vault-filling">
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text style={styles.vaultText}>{FILLING_NOTICE}</Text>
           </View>
         ) : null}
         {vaultNote && status === 'login' ? (
           <Text style={styles.vaultNote} testID="auto-read-vault-note">
             {vaultNote}
+          </Text>
+        ) : null}
+        {savedNote ? (
+          <Text style={styles.vaultNote} testID="auto-read-vault-saved">
+            {savedNote}
           </Text>
         ) : null}
 
@@ -353,13 +443,17 @@ function Sheet({
                 javaScriptEnabled
                 domStorageEnabled
                 cacheEnabled={false}
+                thirdPartyCookiesEnabled
                 textZoom={100}
                 setSupportMultipleWindows={false}
                 originWhitelist={['*']}
                 onShouldStartLoadWithRequest={allowWebUrl}
                 allowFileAccess={false}
                 style={styles.web}
-                onNavigationStateChange={(s: WebViewNavigation) => runner.current?.navigated(s.url, s.loading)}
+                onNavigationStateChange={(s: WebViewNavigation) => {
+                  runner.current?.navigated(s.url, s.loading);
+                  onNative(s.url, s.loading ? 'start' : 'change');
+                }}
                 onLoadStart={() => setLoading(true)}
                 onLoadProgress={(e) => {
                   if (e.nativeEvent.progress >= 1) setLoading(false);
@@ -367,8 +461,9 @@ function Sheet({
                 onLoadEnd={(e) => {
                   setLoading(false);
                   runner.current?.loadEnded(e.nativeEvent.url);
+                  onNative(e.nativeEvent.url, 'end');
                 }}
-                onMessage={(e: WebViewMessageEvent) => onMessage(e.nativeEvent.data)}
+                onMessage={(e: WebViewMessageEvent) => onMessage(e.nativeEvent.data, e.nativeEvent.url)}
                 onError={(e) => runner.current?.loadFailed(e.nativeEvent.url)}
               />
             </View>
@@ -486,17 +581,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderHi,
   },
   vaultText: { flex: 1, minWidth: 160, color: colors.text, fontSize: 13, fontWeight: '600' },
-  vaultPrimary: {
-    minWidth: 72,
-    alignItems: 'center',
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
-  },
-  vaultPrimaryText: { color: colors.bg, fontSize: 13, fontWeight: '700' },
-  vaultSecondary: { paddingHorizontal: space.sm, paddingVertical: space.sm },
-  vaultSecondaryText: { color: colors.textDim, fontSize: 13, fontWeight: '600' },
   vaultNote: {
     color: colors.textDim,
     fontSize: 12,

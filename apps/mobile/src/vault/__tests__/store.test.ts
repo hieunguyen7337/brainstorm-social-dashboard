@@ -114,12 +114,14 @@ describe('reading back', () => {
     expect(Object.keys(vault).sort()).toEqual(
       [
         'MAX_FIELD',
+        'biometricsAvailable',
         'canFill',
         'clearVault',
         'deleteLogin',
         'fillScriptFor',
         'hasLogin',
         'saveLogin',
+        'setLoginBio',
         'takeVaultFill',
         'useVaultStatus',
         'vaultAvailable',
@@ -144,6 +146,146 @@ describe('reading back', () => {
     failReads = false;
     secure.set('pulse.vault.v1.tiktok', { value: '{broken', opts: {} });
     expect(await vault.fillScriptFor('tiktok')).toBeNull();
+  });
+});
+
+describe('biometric choice per login', () => {
+  const FAKE_PASS = 'hunter2-fake';
+  const KEY = 'pulse.vault.v1.linkedin';
+  const OLD_DAY = '2026-01-02T03:04:05.000Z';
+  const backdate = (bio: boolean) =>
+    async.set('pulse.vault.meta', JSON.stringify({ linkedin: { savedAt: OLD_DAY, bio } }));
+
+  it('saveLogin with { bio: false } on a phone with biometrics saves it without the prompt', async () => {
+    bioCapable = true;
+    await vault.saveLogin('linkedin', USER, FAKE_PASS, { bio: false });
+    expect(secure.get(KEY)!.opts.requireAuthentication).toBe(false);
+    expect((await vault.vaultIndex()).linkedin!.bio).toBe(false);
+  });
+
+  it('saveLogin with { bio: true } on a phone without biometrics saves it without the prompt', async () => {
+    await vault.saveLogin('linkedin', USER, FAKE_PASS, { bio: true });
+    expect(secure.get(KEY)!.opts.requireAuthentication).toBe(false);
+    expect((await vault.vaultIndex()).linkedin!.bio).toBe(false);
+  });
+
+  it('biometricsAvailable needs the secure store and biometrics, and never throws', () => {
+    expect(vault.biometricsAvailable()).toBe(false);
+    bioCapable = true;
+    expect(vault.biometricsAvailable()).toBe(true);
+    fakeStore.canUseBiometricAuthentication.mockImplementationOnce(() => {
+      throw new Error('no hardware');
+    });
+    expect(vault.biometricsAvailable()).toBe(false);
+    storeMissing = true;
+    expect(vault.biometricsAvailable()).toBe(false);
+  });
+
+  it('setLoginBio(true) rewrites the same value behind the prompt and keeps savedAt', async () => {
+    bioCapable = true;
+    await vault.saveLogin('linkedin', USER, FAKE_PASS, { bio: false });
+    backdate(false);
+    const before = secure.get(KEY)!.value;
+    jest.clearAllMocks();
+    await vault.setLoginBio('linkedin', true);
+    expect(fakeStore.getItemAsync).toHaveBeenCalledWith(KEY, expect.objectContaining({ requireAuthentication: false }));
+    expect(fakeStore.deleteItemAsync).toHaveBeenCalledWith(KEY, expect.objectContaining({ requireAuthentication: false }));
+    expect(fakeStore.setItemAsync).toHaveBeenCalledTimes(1);
+    expect(fakeStore.deleteItemAsync.mock.invocationCallOrder[0]).toBeLessThan(
+      fakeStore.setItemAsync.mock.invocationCallOrder[0],
+    );
+    expect(secure.get(KEY)!.value).toBe(before);
+    expect(secure.get(KEY)!.opts).toMatchObject({ keychainAccessible: 7, requireAuthentication: true });
+    expect((await vault.vaultIndex()).linkedin).toEqual({ savedAt: OLD_DAY, bio: true });
+    expect(await vault.fillScriptFor('linkedin')).toContain(USER);
+    expect(fakeStore.getItemAsync).toHaveBeenLastCalledWith(KEY, expect.objectContaining({ requireAuthentication: true }));
+  });
+
+  it('setLoginBio(false) unlocks with the prompt, then writes without it', async () => {
+    bioCapable = true;
+    await vault.saveLogin('linkedin', USER, FAKE_PASS);
+    backdate(true);
+    jest.clearAllMocks();
+    await vault.setLoginBio('linkedin', false);
+    expect(fakeStore.getItemAsync).toHaveBeenCalledWith(
+      KEY,
+      expect.objectContaining({ requireAuthentication: true, authenticationPrompt: 'Unlock your saved LinkedIn login' }),
+    );
+    expect(fakeStore.deleteItemAsync).toHaveBeenCalledWith(KEY, expect.objectContaining({ requireAuthentication: true }));
+    expect(fakeStore.setItemAsync).toHaveBeenCalledWith(KEY, expect.any(String), expect.objectContaining({ requireAuthentication: false }));
+    expect(JSON.parse(secure.get(KEY)!.value)).toEqual({ v: 1, u: USER, p: FAKE_PASS });
+    expect((await vault.vaultIndex()).linkedin).toEqual({ savedAt: OLD_DAY, bio: false });
+  });
+
+  it('asking for the state it already has changes nothing and shows no prompt', async () => {
+    bioCapable = true;
+    await vault.saveLogin('linkedin', USER, FAKE_PASS, { bio: false });
+    jest.clearAllMocks();
+    await vault.setLoginBio('linkedin', false);
+    expect(fakeStore.getItemAsync).not.toHaveBeenCalled();
+    expect(fakeStore.setItemAsync).not.toHaveBeenCalled();
+    expect(fakeStore.deleteItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('a cancelled prompt or an unreadable entry throws and leaves the old entry and index alone', async () => {
+    bioCapable = true;
+    await vault.saveLogin('linkedin', USER, FAKE_PASS);
+    backdate(true);
+    const before = { ...secure.get(KEY)! };
+    jest.clearAllMocks();
+    failReads = true;
+    await expect(vault.setLoginBio('linkedin', false)).rejects.toThrow("Couldn't unlock the saved login.");
+    failReads = false;
+    expect(fakeStore.deleteItemAsync).not.toHaveBeenCalled();
+    expect(fakeStore.setItemAsync).not.toHaveBeenCalled();
+    expect(secure.get(KEY)).toEqual(before);
+    expect((await vault.vaultIndex()).linkedin).toEqual({ savedAt: OLD_DAY, bio: true });
+
+    secure.set(KEY, { value: '{broken', opts: before.opts });
+    await expect(vault.setLoginBio('linkedin', false)).rejects.toThrow("Couldn't unlock the saved login.");
+    expect(secure.get(KEY)!.value).toBe('{broken');
+    expect((await vault.vaultIndex()).linkedin).toEqual({ savedAt: OLD_DAY, bio: true });
+  });
+
+  it('a failed write puts the old entry back and leaves the index alone', async () => {
+    bioCapable = true;
+    await vault.saveLogin('linkedin', USER, FAKE_PASS, { bio: false });
+    backdate(false);
+    const before = secure.get(KEY)!.value;
+    fakeStore.setItemAsync.mockRejectedValueOnce(new Error('User canceled the authentication'));
+    await expect(vault.setLoginBio('linkedin', true)).rejects.toThrow("Couldn't change the saved login. Try again.");
+    expect(secure.get(KEY)!.value).toBe(before);
+    expect(secure.get(KEY)!.opts.requireAuthentication).toBe(false);
+    expect((await vault.vaultIndex()).linkedin).toEqual({ savedAt: OLD_DAY, bio: false });
+    expect(await vault.fillScriptFor('linkedin')).toContain(USER);
+  });
+
+  it('refuses a platform with no login, and the prompt on a phone without biometrics', async () => {
+    await expect(vault.setLoginBio('linkedin', true)).rejects.toThrow('No login saved for this platform.');
+    await vault.saveLogin('linkedin', USER, FAKE_PASS);
+    jest.clearAllMocks();
+    await expect(vault.setLoginBio('linkedin', true)).rejects.toThrow("This phone can't ask for a fingerprint or face.");
+    expect(fakeStore.getItemAsync).not.toHaveBeenCalled();
+    expect((await vault.vaultIndex()).linkedin!.bio).toBe(false);
+  });
+
+  it('nothing these return or throw carries the saved login', async () => {
+    bioCapable = true;
+    const out: unknown[] = [
+      vault.biometricsAvailable(),
+      await vault.saveLogin('linkedin', USER, FAKE_PASS, { bio: false }),
+      await vault.setLoginBio('linkedin', true),
+      await vault.setLoginBio('linkedin', false),
+    ];
+    failReads = true;
+    await vault.setLoginBio('linkedin', true).catch((e: Error) => out.push(e.message));
+    failReads = false;
+    fakeStore.setItemAsync.mockRejectedValueOnce(new Error('keystore'));
+    await vault.setLoginBio('linkedin', true).catch((e: Error) => out.push(e.message));
+    expect(out).toHaveLength(6);
+    const text = JSON.stringify(out) + JSON.stringify([...async.values()]);
+    expect(text).not.toContain(USER);
+    expect(text).not.toContain(FAKE_PASS);
   });
 });
 
