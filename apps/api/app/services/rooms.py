@@ -12,13 +12,11 @@ import secrets
 import sqlite3
 import time
 from datetime import UTC, datetime
-from functools import lru_cache
-
-import segno
 
 from app.config import settings
 from app.db import new_id, now_iso
 from app.models import Post
+from app.qr import qr_svg  # noqa: F401  (re-exported: rooms and tests import it from here)
 from app.routes.links import _record
 from app.services import ai
 from app.services import posts as posts_svc
@@ -88,14 +86,6 @@ def voter_from_request(request) -> tuple[str, bool]:
 def set_voter_cookie(response, voter: str) -> None:
     response.set_cookie(
         VOTER_COOKIE, voter, max_age=VOTER_MAX_AGE, path="/", httponly=True, samesite="lax"
-    )
-
-
-@lru_cache(maxsize=256)
-def qr_svg(url: str) -> str:
-    """One inline `<svg viewBox=...>` QR code for `url` (no XML declaration), memoised per url."""
-    return segno.make(url, error="m", micro=False).svg_inline(
-        omitsize=True, dark="#0B0F1A", light="#FFFFFF", border=2, svgclass="qr", lineclass=None
     )
 
 

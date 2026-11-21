@@ -146,6 +146,9 @@ export const mcpSetupPrompt = (tok: string | null = token): string => {
 };
 
 export const androidDownloadUrl = (): string => `${publicBaseUrl()}/download/android`;
+/** The public install QR image (SVG text) and the big-screen page that shows it. Neither carries a token. */
+export const androidQrUrl = (): string => `${androidDownloadUrl()}/qr.svg`;
+export const installPageUrl = (): string => `${publicBaseUrl()}/get`;
 
 // ---- fetch wrapper ----------------------------------------------------------------------------
 

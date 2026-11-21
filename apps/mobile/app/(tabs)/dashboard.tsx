@@ -22,6 +22,7 @@ import {
   pickLinkPost,
   sortedDays,
 } from '@/src/components/dashboard';
+import { InstallQr } from '@/src/components/share/InstallQr';
 import { TopBanners } from '@/src/components/dashboard/TopBanners';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
@@ -143,9 +144,14 @@ export default function DashboardScreen() {
         // A real workspace waits for its connections before drawing anything: no flash of charts, then a call to action.
         <DashboardSkeleton followers />
       ) : mode === 'empty' ? (
-        <Reveal index={0}>
-          <ConnectCta />
-        </Reveal>
+        <>
+          <Reveal index={0}>
+            <ConnectCta />
+          </Reveal>
+          <Reveal index={1}>
+            <InstallQr />
+          </Reveal>
+        </>
       ) : !summary ? (
         // First load: skeleton. If it failed, a retry (the skeleton shows again while the retry is in flight).
         dash.error && !dash.refreshing ? (
@@ -201,6 +207,10 @@ export default function DashboardScreen() {
                 notRead={summary.not_read}
               />
             )}
+          </Reveal>
+
+          <Reveal index={2}>
+            <InstallQr />
           </Reveal>
 
           <Reveal index={2}>
