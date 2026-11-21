@@ -20,6 +20,7 @@ import {
   type Platform as PulsePlatform,
   type Workspace,
 } from './api';
+import { forgetSignIns } from './autoRead';
 import { clearRoomWelcome, markRoomJoined, ROOM_GUEST_BRAND } from './components/room/roomStore';
 
 export type SessionStatus =
@@ -210,7 +211,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     clearRoomWelcome();
+    // Drop the platform sign-ins kept for background refresh. Started first; the hidden WebView that clears them lives in
+    // the tab layout, so wait (briefly, never longer than 1.5 s) before the status flip unmounts it.
+    const forgotten = forgetSignIns().catch(() => undefined);
     await setToken(null);
+    if (Platform.OS !== 'web') {
+      await Promise.race([forgotten, new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
+    }
     if (!alive.current) return;
     setMock(isMock());
     setWorkspaceState(null);

@@ -12,8 +12,14 @@ export const INJECT_DELAY_MS = 500;
 export const SETTLE_MS = 2_500;
 /** Give the fallback page this long to load before capturing whatever is on screen. */
 export const FALLBACK_LOAD_MS = 15_000;
-/** Close-time cookie reset (Android): wait for the incognito flag to flip off, then on again. */
-export const SESSION_RESET_STEP_MS = 250;
+/** Background refresh (refresh.tsx): a platform is read again when its last automatic read is older than this. */
+export const REFRESH_STALE_MS = 60 * 60 * 1000;
+/** Background refresh: one platform's read is abandoned after this long. */
+export const REFRESH_TIMEOUT_MS = 30_000;
+/** After a refresh that failed (signed out, timeout), do not try that platform again for this long (this app run). */
+export const REFRESH_RETRY_MS = 15 * 60 * 1000;
+/** Sign-out: how long the hidden incognito WebView stays mounted so Android applies the flag (clears cookies). */
+export const FORGET_HOLD_MS = 500;
 
 /** After we navigate away, late events for the page we left (its `onLoadEnd`) are ignored for this long. */
 export const STALE_PAGE_MS = 1_500;
