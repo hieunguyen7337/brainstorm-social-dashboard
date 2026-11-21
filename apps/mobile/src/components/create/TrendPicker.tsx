@@ -6,6 +6,7 @@ import { fmtPct } from '@/src/format';
 import { colors, radius, space, trendSourceMeta, type as t, withAlpha } from '@/src/theme';
 import type { Trend } from '@/src/types';
 import { Button, Card, IconButton, Skeleton, haptic } from '@/src/ui';
+import { SET_UP_BRAND_TEXT, knownRelevance } from '@/src/components/trends/trendUtils';
 
 import { TREND_SHOWN, type TrendChoice } from './logic';
 
@@ -68,12 +69,13 @@ function TrendRow({
   onPress: () => void;
 }) {
   const look = sourceOf(trend.source);
-  const match = fmtPct(trend.relevance, 0);
+  const known = knownRelevance(trend);
+  const match = known === null ? null : `${fmtPct(known, 0)} match`;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${trend.title}, ${look.label}, ${match} match`}
+      accessibilityLabel={match === null ? `${trend.title}, ${look.label}` : `${trend.title}, ${look.label}, ${match}`}
       onPress={() => {
         haptic.select();
         onPress();
@@ -93,7 +95,7 @@ function TrendRow({
           {trend.title}
         </Text>
         <Text style={styles.itemMeta} numberOfLines={1}>
-          {`${look.label}  ·  ${match} match`}
+          {`${look.label}  ·  ${match ?? SET_UP_BRAND_TEXT}`}
         </Text>
       </View>
       {selected ? <Ionicons name="checkmark-circle" size={20} color={colors.accent} /> : null}
@@ -115,6 +117,7 @@ export function TrendPicker({
   onClear,
 }: TrendPickerProps) {
   const full = choice?.full;
+  const fullKnown = full ? knownRelevance(full) : null;
   const shown = (list ?? []).slice(0, TREND_SHOWN);
 
   let listBody;
@@ -179,7 +182,9 @@ export function TrendPicker({
                 {full ? (
                   <View style={styles.meta}>
                     <SourceBadge source={full.source} />
-                    <Text style={styles.metaText}>{`${fmtPct(full.relevance, 0)} match`}</Text>
+                    <Text style={styles.metaText}>
+                      {fullKnown === null ? SET_UP_BRAND_TEXT : `${fmtPct(fullKnown, 0)} match`}
+                    </Text>
                   </View>
                 ) : null}
               </>

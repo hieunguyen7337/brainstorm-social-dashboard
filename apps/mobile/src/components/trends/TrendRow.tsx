@@ -9,11 +9,15 @@ import { BuzzBar, RelevanceBar } from './Bars';
 import { SourceBadge } from './SourceBadge';
 import {
   HOT_SCORE,
+  SET_UP_BRAND_TEXT,
   SOURCE_SHORT,
   buzzWord,
   clamp01,
   fitWord,
   hostOf,
+  knownRelevance,
+  matchReason,
+  matchTermsOf,
   safeAgo,
   safeUrl,
   toPct,
@@ -53,11 +57,14 @@ export const TrendRow = memo(function TrendRow({
   onOpen,
 }: TrendRowProps) {
   const meta = trendSourceMeta[trend.source];
-  const relevance = clamp01(trend.relevance);
+  /** null when the workspace has no brand profile: no percentage, no bar. */
+  const relevance = knownRelevance(trend);
+  const terms = matchTermsOf(trend);
   const buzz = clamp01(trend.score);
   const hot = buzz >= HOT_SCORE;
   const host = hostOf(trend.url);
   const canOpen = safeUrl(trend.url) !== null;
+  const pct = relevance === null ? null : toPct(relevance);
 
   // Entrance: fade + rise, staggered by `enterDelay`. Decided once at mount so later re-renders never replay it.
   const enter = useRef(enterDelay).current;
@@ -78,7 +85,14 @@ export const TrendRow = memo(function TrendRow({
 
   // Bars start once the row has faded in.
   const barDelay = (enter ?? 0) + 140;
-  const pct = toPct(relevance);
+  const label = [
+    `${rank}. ${trend.title}.`,
+    pct === null ? null : `${pct}% match.`,
+    hot ? 'Hot.' : null,
+    `${meta.label}.`,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' ');
 
   return (
     <Animated.View style={{ opacity: appear, transform: [{ translateY: rise }] }}>
@@ -87,7 +101,7 @@ export const TrendRow = memo(function TrendRow({
           onPress={() => onToggle(trend.id)}
           accessibilityRole="button"
           aria-expanded={expanded}
-          accessibilityLabel={`${rank}. ${trend.title}. ${pct}% match${hot ? ', hot' : ''}. ${meta.label}.`}
+          accessibilityLabel={label}
           accessibilityHint={expanded ? 'Hides the details' : 'Shows the details and what you can do with it'}
           style={({ pressed }) => [styles.head, pressed && styles.headPressed]}
         >
@@ -109,11 +123,19 @@ export const TrendRow = memo(function TrendRow({
             </View>
 
             <View style={styles.matchRow}>
-              <RelevanceBar value={relevance} animate={animateBars} delay={barDelay} />
-              <Text style={styles.matchLabel} numberOfLines={1}>
-                <Text style={styles.matchNum}>{`${pct}%`}</Text>
-                {' match'}
-              </Text>
+              {relevance === null || pct === null ? (
+                <Text style={styles.setUp} numberOfLines={1}>
+                  {SET_UP_BRAND_TEXT}
+                </Text>
+              ) : (
+                <>
+                  <RelevanceBar value={relevance} animate={animateBars} delay={barDelay} />
+                  <Text style={styles.matchLabel} numberOfLines={1}>
+                    <Text style={styles.matchNum}>{`${pct}%`}</Text>
+                    {' match'}
+                  </Text>
+                </>
+              )}
               <View style={styles.flameSlot}>
                 {hot ? <Ionicons name="flame" size={16} color={colors.warn} /> : null}
               </View>
@@ -138,6 +160,7 @@ export const TrendRow = memo(function TrendRow({
             host={host}
             hot={hot}
             relevance={relevance}
+            terms={terms}
             buzz={buzz}
             canOpen={canOpen}
             onCreate={onCreate}
@@ -154,7 +177,10 @@ interface DetailsProps {
   brand: string;
   host: string;
   hot: boolean;
-  relevance: number;
+  /** null when the workspace has no brand profile. */
+  relevance: number | null;
+  /** Words of the headline that overlap the brand profile. */
+  terms: string[];
   buzz: number;
   canOpen: boolean;
   onCreate: (trend: Trend) => void;
@@ -162,10 +188,11 @@ interface DetailsProps {
 }
 
 /** The expanded half of a row. Mounts when the row opens and fades in. */
-function Details({ trend, brand, host, hot, relevance, buzz, canOpen, onCreate, onOpen }: DetailsProps) {
+function Details({ trend, brand, host, hot, relevance, terms, buzz, canOpen, onCreate, onOpen }: DetailsProps) {
   const meta = trendSourceMeta[trend.source];
   const short = SOURCE_SHORT[trend.source];
   const ago = safeAgo(trend.fetched_at);
+  const pct = relevance === null ? null : toPct(relevance);
 
   const appear = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -197,8 +224,13 @@ function Details({ trend, brand, host, hot, relevance, buzz, canOpen, onCreate, 
         </View>
       </View>
 
-      <Explain icon="sparkles" tint={colors.accent} head={`${toPct(relevance)}% match`} tag={fitWord(relevance)}>
-        {`How closely this topic fits ${brand}, scored against your brand profile.`}
+      <Explain
+        icon="sparkles"
+        tint={colors.accent}
+        head={pct === null ? SET_UP_BRAND_TEXT : `${pct}% match`}
+        tag={relevance === null ? '' : fitWord(relevance)}
+      >
+        {matchReason(brand, relevance, terms)}
       </Explain>
       <Explain
         icon="flame"
@@ -250,7 +282,7 @@ function Explain({
       <View style={styles.explainText}>
         <Text style={styles.explainHead}>
           {head}
-          <Text style={[styles.explainTag, tagColor ? { color: tagColor } : null]}>{`  ${tag}`}</Text>
+          {tag ? <Text style={[styles.explainTag, tagColor ? { color: tagColor } : null]}>{`  ${tag}`}</Text> : null}
         </Text>
         <Text style={t.small}>{children}</Text>
       </View>
@@ -280,6 +312,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   matchNum: { color: colors.text, fontWeight: '800' },
+  setUp: { flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: '600', color: colors.textMute },
   flameSlot: { width: 16, alignItems: 'center' },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   source: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
