@@ -28,7 +28,20 @@ export async function hasLogin(_platform: Platform): Promise<boolean> {
   return false;
 }
 
-export async function saveLogin(_platform: Platform, _username: string, _password: string): Promise<void> {
+export function biometricsAvailable(): boolean {
+  return false;
+}
+
+export async function saveLogin(
+  _platform: Platform,
+  _username: string,
+  _password: string,
+  _opts?: { bio?: boolean },
+): Promise<void> {
+  throw new Error('Saved logins live only in the Pulse phone app.');
+}
+
+export async function setLoginBio(_platform: Platform, _on: boolean): Promise<void> {
   throw new Error('Saved logins live only in the Pulse phone app.');
 }
 

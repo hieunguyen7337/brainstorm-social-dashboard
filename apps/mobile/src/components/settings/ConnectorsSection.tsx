@@ -3,6 +3,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
 import { Animated, Platform as RNPlatform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { api, ApiError, type Connection, type Platform } from '@/src/api';
+import { forgetOnPhone } from '@/src/connect/forgetOnPhone';
 import { LIVE_PLATFORMS, UPCOMING_PLATFORMS } from '@/src/platforms';
 import { fmtCompact } from '@/src/format';
 import { useAsync } from '@/src/hooks';
@@ -117,7 +118,7 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
     const label = platformMeta[platform].label;
     const ok = await confirm(
       `Disconnect ${label}?`,
-      `${label} will be disconnected from this workspace. You can reconnect it any time.`,
+      `${label} will be disconnected from this workspace, and Pulse deletes its saved login and signs out on this phone (other platforms sign back in with their saved logins). You can reconnect it any time.`,
       'Disconnect',
       true,
     );
@@ -126,6 +127,8 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
     setData((list) => upsert(list, { ...conn, status: 'disconnected' }));
     try {
       const saved = await api.disconnect(platform);
+      // Only Disconnect and the workspace sign-out clear a saved login and the in-app sign-in (docs/VAULT.md).
+      void forgetOnPhone(platform);
       if (isConnection(saved)) setData((list) => upsert(list, saved));
       else void reload();
       toast.show(`Disconnected ${label}`, 'info');

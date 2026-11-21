@@ -1,6 +1,7 @@
 /**
- * Settings > Saved logins (docs/VAULT.md). Save, replace or delete a platform login kept in the phone's secure store.
- * A saved value is never shown again: the sheet below owns the typed username / password and drops them on close.
+ * Settings > Saved logins (docs/VAULT.md). Save, replace or delete a platform login kept in the phone's secure store, and
+ * choose per login whether reading it needs the fingerprint / face prompt. A saved value is never shown again: the sheet
+ * below owns the typed username / password and drops them on close.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState } from 'react';
@@ -12,18 +13,21 @@ import { useWide } from '@/src/layout';
 import { colors, platformMeta, radius, space, type as t } from '@/src/theme';
 import { LIVE_PLATFORMS } from '@/src/platforms';
 import { type Platform } from '@/src/types';
-import { Button, Card, ComingSoonLine, PlatformLabel, SectionHeader, TextField, confirm, useToast } from '@/src/ui';
-import { MAX_FIELD, deleteLogin, saveLogin, useVaultStatus } from '@/src/vault';
+import { Button, Card, ComingSoonLine, PlatformLabel, SectionHeader, TextField, Toggle, confirm, useToast } from '@/src/ui';
+import { MAX_FIELD, biometricsAvailable, deleteLogin, saveLogin, setLoginBio, useVaultStatus } from '@/src/vault';
 
 export function VaultSection() {
   const { available, saved } = useVaultStatus();
   const toast = useToast();
   const [editing, setEditing] = useState<Platform | null>(null);
+  // The value each in-flight toggle asked for; the toggle is disabled until setLoginBio settles.
+  const [pendingBio, setPendingBio] = useState<Partial<Record<Platform, boolean>>>({});
+  const bioAvailable = available && biometricsAvailable();
 
   const header = (
     <SectionHeader
       title="Saved logins"
-      subtitle="Encrypted on this phone. Pulse's servers and Claude never see it. You can't view it again, only replace it."
+      subtitle="Saved here when you sign in through Connect, encrypted on this phone. Pulse's servers and Claude never see them, and you can't view one again, only replace or delete it."
     />
   );
 
@@ -52,41 +56,85 @@ export function VaultSection() {
     toast.show('Login deleted');
   };
 
+  const changeBio = async (p: Platform, next: boolean) => {
+    if (pendingBio[p] !== undefined) return;
+    setPendingBio((s) => ({ ...s, [p]: next }));
+    try {
+      await setLoginBio(p, next);
+      toast.show(next ? 'Fingerprint or face unlock on' : 'Fingerprint or face unlock off');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Couldn't change the saved login. Try again.", 'error');
+    } finally {
+      setPendingBio((s) => {
+        const rest = { ...s };
+        delete rest[p];
+        return rest;
+      });
+    }
+  };
+
   return (
     <View style={styles.section}>
       {header}
       <Card style={styles.list}>
         {LIVE_PLATFORMS.map((p) => {
           const info = saved[p];
+          const pending = pendingBio[p];
           return (
             <View key={p} style={styles.row}>
-              <View style={styles.rowText}>
-                <PlatformLabel platform={p} />
-                <Text style={t.small}>{info ? `Login saved · ${fmtDay(info.savedAt)}` : 'No login saved'}</Text>
+              <View style={styles.rowTop}>
+                <View style={styles.rowText}>
+                  <PlatformLabel platform={p} />
+                  <Text style={t.small}>{info ? `Login saved · ${fmtDay(info.savedAt)}` : 'No login saved'}</Text>
+                </View>
+                <View style={styles.actions}>
+                  {info ? (
+                    <>
+                      <Button title="Replace" variant="secondary" small onPress={() => setEditing(p)} />
+                      <Button title="Delete" variant="danger" small onPress={() => void remove(p)} />
+                    </>
+                  ) : (
+                    <Button title="Save login" small onPress={() => setEditing(p)} />
+                  )}
+                </View>
               </View>
-              <View style={styles.actions}>
-                {info ? (
-                  <>
-                    <Button title="Replace" variant="secondary" small onPress={() => setEditing(p)} />
-                    <Button title="Delete" variant="danger" small onPress={() => void remove(p)} />
-                  </>
-                ) : (
-                  <Button title="Save login" small onPress={() => setEditing(p)} />
-                )}
-              </View>
+              {info && bioAvailable ? (
+                <Toggle
+                  label="Ask for fingerprint or face"
+                  value={pending ?? info.bio}
+                  disabled={pending !== undefined}
+                  onValueChange={(next) => void changeBio(p, next)}
+                />
+              ) : null}
             </View>
           );
         })}
         <ComingSoonLine />
       </Card>
       {editing ? (
-        <LoginSheet key={editing} platform={editing} replacing={!!saved[editing]} onClose={() => setEditing(null)} />
+        <LoginSheet
+          key={editing}
+          platform={editing}
+          replacing={!!saved[editing]}
+          bioAvailable={bioAvailable}
+          onClose={() => setEditing(null)}
+        />
       ) : null}
     </View>
   );
 }
 
-function LoginSheet({ platform, replacing, onClose }: { platform: Platform; replacing: boolean; onClose: () => void }) {
+function LoginSheet({
+  platform,
+  replacing,
+  bioAvailable,
+  onClose,
+}: {
+  platform: Platform;
+  replacing: boolean;
+  bioAvailable: boolean;
+  onClose: () => void;
+}) {
   const wide = useWide();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -95,6 +143,8 @@ function LoginSheet({ platform, replacing, onClose }: { platform: Platform; repl
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // On by default: a login saved here asks for the fingerprint / face prompt, as before.
+  const [bio, setBio] = useState(true);
 
   // The typed values never outlive the sheet.
   useEffect(
@@ -116,7 +166,7 @@ function LoginSheet({ platform, replacing, onClose }: { platform: Platform; repl
     setBusy(true);
     setError(null);
     try {
-      await saveLogin(platform, username, password);
+      await saveLogin(platform, username, password, { bio });
       setUsername('');
       setPassword('');
       onClose();
@@ -173,7 +223,12 @@ function LoginSheet({ platform, replacing, onClose }: { platform: Platform; repl
               error={error}
               {...noAssist}
             />
-            <Text style={t.small}>Pulse signs you in only after you approve it on the sign-in screen.</Text>
+            {bioAvailable ? (
+              <Toggle label="Ask for fingerprint or face" value={bio} disabled={busy} onValueChange={setBio} />
+            ) : null}
+            <Text style={t.small}>
+              Pulse signs you in by itself on the sign-in screen. Challenge and two-factor steps stay with you.
+            </Text>
           </ScrollView>
           <View style={styles.buttons}>
             <Button title="Cancel" variant="secondary" onPress={close} style={styles.btn} />
@@ -189,14 +244,12 @@ const styles = StyleSheet.create({
   section: { gap: space.md },
   list: { padding: 0 },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.md,
+    gap: space.sm,
     padding: space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   rowText: { flex: 1, minWidth: 0, gap: 4 },
   actions: { flexDirection: 'row', gap: space.sm },
   overlay: { flex: 1, backgroundColor: colors.overlay },
