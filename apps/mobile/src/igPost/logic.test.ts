@@ -151,7 +151,7 @@ describe('IG_STATE_PROBE_JS', () => {
 });
 
 describe('buildIgPostScript', () => {
-  const caption = 'New drop "today" </script>\nLine two   #pulse #launch';
+  const caption = `New drop "today" </script>\nLine two ${String.fromCharCode(0x2028)} #pulse #launch`;
   const params = { uploadId: '1763712000000', width: 1080, height: 1080, bytes: BYTES.length, b64Length: B64.length, caption };
 
   const loaded = (opts: Parameters<typeof fakePage>[0]) => {

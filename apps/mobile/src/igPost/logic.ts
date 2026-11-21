@@ -173,6 +173,9 @@ export interface IgPostParams {
  * Known risks: Instagram changes these private endpoints without notice, may ask for a checkpoint or refuse a new
  * device (stage 'upload' or 'configure' with status 400/403), and one tap that times out on our side may still post.
  */
+const LS = String.fromCharCode(0x2028);
+const PS = String.fromCharCode(0x2029);
+
 export function buildIgPostScript(p: IgPostParams): string {
   if (!/^\d{10,20}$/.test(p.uploadId)) throw new Error('bad upload id');
   const num = (n: number) => (Number.isFinite(n) && n > 0 ? Math.round(n) : 0);
@@ -186,8 +189,8 @@ export function buildIgPostScript(p: IgPostParams): string {
     appId: IG_APP_ID,
     asbdId: IG_ASBD_ID,
   };
-  // JSON is valid JS; U+2028/2029 are escaped for engines that predate ES2019.
-  const json = JSON.stringify(params).replace(/ /g, '\\u2028').replace(/ /g, '\\u2029');
+  // JSON is valid JS; U+2028/2029 (LS, PS) are escaped for engines that predate ES2019.
+  const json = JSON.stringify(params).split(LS).join('\\u2028').split(PS).join('\\u2029');
   return `(function () {
 'use strict';
 var P = ${json};
