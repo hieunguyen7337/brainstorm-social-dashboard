@@ -275,39 +275,40 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expect(env.posted[0].status).toBe('ok');
     });
 
-    it('web_profile_info 429 -> empty with the username so the app can screenshot the profile', async () => {
+    it('web_profile_info 429 -> no numbers, the app opens the profile to read its live header', async () => {
       const env = await run({
         cookies: COOKIES,
         routes: [[CURRENT, ok({ user: { username: 'jane' } })], [PROFILE, st(429)]],
       });
-      expect(env.posted[0].status).toBe('empty');
-      expect(env.posted[0].data.username).toBe('jane');
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.go).toBe('jane');
+      expect(env.posted[0].data.user).toEqual({ username: 'jane' });
       expect(env.posted[0].data.diag.b).toBe(429);
       expectNoSecrets(env.rawPosted);
     });
 
-    it('web_profile_info with a non-JSON body -> empty with the username', async () => {
+    it('web_profile_info with a non-JSON body -> no numbers, the app opens the profile', async () => {
       const env = await run({
         routes: [[CURRENT, ok({ user: { username: 'jane' } })], [PROFILE, st(200, '<html>login</html>')]],
       });
-      expect(env.posted[0]).toMatchObject({ status: 'empty', data: { username: 'jane' } });
+      expect(env.posted[0]).toMatchObject({ status: 'ok', data: { go: 'jane', user: { username: 'jane' } } });
     });
 
-    it('web_profile_info with an unexpected shape -> empty with the username', async () => {
+    it('web_profile_info with an unexpected shape -> no numbers, the app opens the profile', async () => {
       const env = await run({
         routes: [[CURRENT, ok({ user: { username: 'jane' } })], [PROFILE, ok({ data: { user: null } })]],
       });
-      expect(env.posted[0]).toMatchObject({ status: 'empty', data: { username: 'jane' } });
+      expect(env.posted[0]).toMatchObject({ status: 'ok', data: { go: 'jane', user: { username: 'jane' } } });
     });
 
-    it('web_profile_info hangs -> times out and posts empty with the username (still inside the deadline)', async () => {
+    it('web_profile_info hangs -> times out and sends the app to the profile (still inside the deadline)', async () => {
       const env = makeEnv({
         routes: [[CURRENT, ok({ user: { username: 'jane' } })], [PROFILE, { status: 200, hang: true }]],
       });
       env.inject(readerScript('instagram', 0));
       await env.advance(READER_DEADLINE_MS);
       expect(env.posted).toHaveLength(1);
-      expect(env.posted[0]).toMatchObject({ status: 'empty', data: { username: 'jane' } });
+      expect(env.posted[0]).toMatchObject({ status: 'ok', data: { go: 'jane', user: { username: 'jane' } } });
     });
 
     it('cookie present, every call fails -> empty (the person IS signed in), diag has booleans only', async () => {
@@ -328,6 +329,42 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expect(env.posted[0].status).toBe('ok');
       expect(env.posted[0].data.go).toBe('jane');
       expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 7 });
+    });
+
+    it('vivo, 2026-11-21: every data call fails and the cached page says 0: no number from cache, the profile is opened', async () => {
+      const cached = '<meta property="og:description" content="0 Followers, 0 Following, 0 Posts - See Instagram photos" />';
+      const env = await run({
+        html: page(navBar('tanda')),
+        cookies: COOKIES,
+        routes: [
+          [CURRENT, st(400)],
+          [INFO, st(429)],
+          [PROFILE, st(404)],
+          ['/tanda/', ok(cached)],
+        ],
+      });
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.go).toBe('tanda');
+      expect(env.posted[0].data.user).toEqual({ username: 'tanda' });
+      expect(env.calls.map((c) => c.url)).not.toContainEqual(expect.stringMatching(/^\/tanda\/$/));
+    });
+
+    it('on the profile with every data call failing and no visible header: empty (screenshot, then error), never 0', async () => {
+      const env = makeEnv({
+        url: 'https://www.instagram.com/tanda/',
+        html: '<!doctype html><html><head><meta property="og:description" content="0 Followers, 0 Following, 0 Posts" /></head><body>' + navBar('tanda') + '</body></html>',
+        cookies: COOKIES,
+        routes: [
+          [CURRENT, st(400)],
+          [INFO, st(429)],
+          [PROFILE, st(404)],
+        ],
+      });
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
+      expect(env.posted[0].status).toBe('empty');
+      expect(env.posted[0].data.username).toBe('tanda');
+      expect(env.posted[0].data.user).toBeUndefined();
     });
 
     it('true number or error: no visible header on the profile saves nothing from the data call or meta text', async () => {

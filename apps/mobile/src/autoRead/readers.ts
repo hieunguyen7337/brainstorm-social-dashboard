@@ -347,24 +347,6 @@ function igBodyText() {
     return '';
   }
 }
-function igMeta(doc) {
-  var out = [];
-  try {
-    var metas = doc.querySelectorAll('meta[property="og:description"], meta[name="description"]');
-    for (var i = 0; i < metas.length; i++) out.push(metas[i].getAttribute('content') || '');
-  } catch (e) {}
-  return out.join('\n');
-}
-function igMetaFromHtml(html) {
-  var out = [];
-  var re = /<meta[^>]+(?:property|name)="(?:og:description|description)"[^>]*>/gi;
-  var m;
-  while ((m = re.exec(String(html || ''))) && out.length < 4) {
-    var c = /content="([^"]*)"/i.exec(m[0]);
-    if (c) out.push(c[1].replace(/&#0?44;/g, ',').replace(/&amp;/g, '&'));
-  }
-  return out.join('\n');
-}
 async function igJson(path) {
   try {
     var r = await fetchText(path, igHeaders());
@@ -424,36 +406,16 @@ async function run() {
       edge_owner_to_timeline_media: { count: num(info.media_count) },
     };
   }
-  // Last way before a screenshot: the profile page's own text ("12 Followers, 34 Following, 5 Posts"), which Instagram
-  // serves even when its data calls answer 400/429/404 (2026-11-21, on the owner's phone).
-  if (!user) {
-    var counts = null;
-    if (pathIs('/' + lower(username))) counts = igCountsFromText(igBodyText()) || igCountsFromText(igMeta(document));
-    if (!counts && remaining() > 1500) {
-      try {
-        var h = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
-        diag.h = h.status;
-        if (h.ok) counts = igCountsFromText(igMetaFromHtml(h.text));
-      } catch (e) {}
-    }
-    diag.t = !!counts;
-    if (counts) {
-      user = {
-        username: username,
-        edge_followed_by: { count: counts.followers },
-        edge_follow: { count: counts.following },
-        edge_owner_to_timeline_media: { count: counts.posts },
-      };
-    }
-  }
-  if (!user) return finish('empty', { username: username, diag: diag });
-  var out = igUser(user, username);
-  // The person sees their own numbers on their profile page, so the app opens it and reads there (step 1). Step 0
-  // still sends what it found, in case the profile page never loads (2026-11-21: the owner asked to see it go there).
+  // No cached copy is ever used (owner, 2026-11-21: "the app should show error, instead of relying on cache"). The page's
+  // meta description is a slow server copy: on the vivo every data call failed (400, 429, 404) and it said 0 followers
+  // while the header showed 1. So when the calls fail the app opens the profile and reads its live header (below), then
+  // a screenshot of it read by Claude, then reports an error.
+  var out = user ? igUser(user, username) : { username: username };
+  // The person sees their own numbers on their profile page, so the app opens it in view and reads there (step 1).
   if (STEP === 0 && !pathIs('/' + lower(username))) return finish('ok', { user: out, diag: diag, go: username });
   // Only what the person sees on their own profile is saved (owner, 2026-11-21: "either show the true correct number or
-  // come back as error"). The data calls and the meta description are Instagram's server copies and can lag: on the vivo
-  // both said 0 while the header said 1. So the visible header wins; without it this step comes back empty, and the app
+  // come back as error"). The data calls are Instagram's server answers and can fail or lag, so the live header the
+  // person sees wins over them; without it this step comes back empty, and the app
   // falls back to a screenshot of this page read by Claude, or reports an error. No number is ever guessed.
   var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
   diag.api = apiF === undefined ? -1 : apiF;
