@@ -21,6 +21,8 @@ def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 def _clean(text: str) -> str:
     text = re.sub(r"https?://\S+", "", text or "")
     text = re.sub(r"(^|\s)#\w+", " ", text)
+    # The card font has no emoji: drop them rather than draw empty boxes.
+    text = re.sub("[\U0001F000-\U0001FAFF←-⇿⌀-➿⬀-⯿️‍]", "", text)
     text = " ".join(text.split())
     return text[:220].rstrip() + ("…" if len(text) > 220 else "")
 
