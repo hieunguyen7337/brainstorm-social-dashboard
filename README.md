@@ -133,6 +133,9 @@ Point the desktop app at it with `PULSE_API_URL=http://localhost:8000 npm run de
 
 - **Install:** scan the QR at https://pulse-hackathon.fly.dev/get (or open `/download/android`); it always points to the
   newest APK built with EAS (`apps/mobile/eas.json`, profile `preview`). The app updates itself over the air (EAS Update).
+- **Assistant:** the Assistant tab chats with Claude using your own Anthropic API key (Settings > Claude API key). The key
+  stays on the phone and requests go straight to Anthropic. Pick Opus, Sonnet or Haiku 5.5 there. Details and the
+  rebuild note: [apps/mobile/README.md](apps/mobile/README.md#assistant-androidios).
 
 ## Deprecated: web app
 

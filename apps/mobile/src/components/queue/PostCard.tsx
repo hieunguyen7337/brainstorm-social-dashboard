@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { memo, useCallback, useMemo, useState, type ComponentProps } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import type { Post, PostStatus } from '@/src/api';
 import { fmtDateTime, hashtagsText, inHours, timeAgo, tomorrowMorning } from '@/src/format';
@@ -19,6 +19,7 @@ import {
   useToast,
   type BadgeTone,
 } from '@/src/ui';
+import { LinkifiedText } from './LinkifiedText';
 import { LinkRow } from './LinkRow';
 import { LiveStats } from './LiveStats';
 import { PostEditor } from './PostEditor';
@@ -141,6 +142,14 @@ function PostCardImpl({
   }, [post.link_url, toast]);
 
   const openLink = useCallback(() => onOpenLink(post), [onOpenLink, post]);
+  // The tracked link goes through onOpenLink (counts the click like a visitor); any other URL opens as is.
+  const openText = useCallback(
+    (url: string) => {
+      if (post.link_url && url === post.link_url) onOpenLink(post);
+      else void Linking.openURL(url).catch(() => undefined);
+    },
+    [onOpenLink, post],
+  );
 
   const handleSave = useCallback(
     async (nextContent: string, hashtags: string[]) => {
@@ -190,9 +199,9 @@ function PostCardImpl({
         <PostEditor post={post} saving={busy === 'save'} onSave={handleSave} onCancel={() => setMode('view')} />
       ) : (
         <View style={styles.body}>
-          <Text style={styles.content} selectable>
+          <LinkifiedText style={styles.content} selectable onPressUrl={openText}>
             {expanded || !truncated ? content : collapsed}
-          </Text>
+          </LinkifiedText>
           {tags.length > 0 ? <Text style={styles.tags}>{hashtagsText(tags)}</Text> : null}
           <View style={styles.bodyActions}>
             {truncated ? (

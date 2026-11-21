@@ -563,6 +563,21 @@ export interface DemoSignInResult {
   captured_at: string;
 }
 
+/** POST /api/posts/{id}/demo/metrics (demo workspaces only): a synthetic metrics read of one published post. */
+export interface DemoMetricsRead {
+  /** The post with its new counters. */
+  post: Post;
+  /** How far the simulated clock jumped for this read. */
+  advanced_minutes: number;
+  views_gained: number;
+  engagements_gained: number;
+  /** The gained engagements as the platform shows them apart (the rest is "other", saves). */
+  likes_gained: number;
+  comments_gained: number;
+  shares_gained: number;
+  read_at: string;
+}
+
 // ---- the client surface (real client and in-memory mock both implement this) -------------------
 
 export interface DashboardQuery {
@@ -657,6 +672,8 @@ export interface PulseApi {
   getHarvestStatus(): Promise<HarvestStatus[]>;
   /** POST /api/connections/{platform}/demo: the synthetic sign-in of a demo workspace (409 anywhere else). */
   demoSignIn(platform: Platform): Promise<DemoSignInResult>;
+  /** POST /api/posts/{id}/demo/metrics: read a published demo post's metrics back (409 in any other workspace). */
+  demoReadMetrics(postId: string, advanceMinutes?: number): Promise<DemoMetricsRead>;
 
   /** GET /api/posts/{id}/share (may 404 until the room/share API is deployed: callers fall back to `buildShareInfo`). */
   getShare(postId: string): Promise<ShareInfo>;

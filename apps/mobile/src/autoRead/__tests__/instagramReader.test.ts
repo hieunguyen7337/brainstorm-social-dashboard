@@ -492,7 +492,7 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       const env = await onProfile([...base(st(429)), [FEEDURL, ok(feedJson('jane'))]]);
       const feedCalls = env.calls.filter((c) => c.url.includes(FEEDURL));
       expect(feedCalls).toHaveLength(1);
-      expect(feedCalls[0].url).toBe('/api/v1/feed/user/jane/username/?count=12');
+      expect(feedCalls[0].url).toBe(`/api/v1/feed/user/${UID}/?count=12`);
       expect(feedCalls[0].init.credentials).toBe('include');
       expect(feedCalls[0].init.headers['x-ig-app-id']).toBe('936619743392459');
       expect(feedCalls[0].init.headers['x-csrftoken']).toBe('SECRETCSRF');
@@ -547,6 +547,24 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       const env = await onProfile([...base(noEdges), [FEEDURL, ok(feedJson('jane'))]]);
       expect(env.posted[0].data.feed).toHaveLength(3);
       expect(env.posted[0].data.user.edge_owner_to_timeline_media).toEqual({ count: 3 });
+    });
+
+    it('web_profile_info gave post edges with no like or comment counts: the feed is asked for them', async () => {
+      const bare = ok({
+        data: {
+          user: {
+            username: 'jane',
+            edge_followed_by: { count: 1234 },
+            edge_owner_to_timeline_media: {
+              count: 1,
+              edges: [{ node: { taken_at_timestamp: 1_700_000_000, edge_media_preview_like: { count: -1 } } }],
+            },
+          },
+        },
+      });
+      const env = await onProfile([...base(bare), [FEEDURL, ok(feedJson('jane'))]]);
+      expect(env.calls.some((c) => c.url.includes(FEEDURL))).toBe(true);
+      expect(env.posted[0].data.feed).toHaveLength(3);
     });
 
     it('web_profile_info gave posts: no feed call, no feed field', async () => {

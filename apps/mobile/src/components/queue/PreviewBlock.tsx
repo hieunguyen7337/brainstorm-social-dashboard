@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { Post } from '@/src/api';
+import { openTrackedLink, type Post } from '@/src/api';
 import { PostPreview } from '@/src/components/previews';
 import { space, type as t } from '@/src/theme';
 import { handleFromBrand, type Account } from './queueModel';
@@ -50,6 +50,7 @@ export function PreviewBlock({
           handle={handle}
           followers={account?.followers}
           link={post.link_url}
+          onPressLink={published ? () => void openTrackedLink(post).catch(() => undefined) : undefined}
           timeLabel={timeLabel}
           stats={
             published

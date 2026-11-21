@@ -14,8 +14,8 @@ export const SETTLE_MS = 2_500;
 export const FALLBACK_LOAD_MS = 15_000;
 /** Background refresh (refresh.tsx): a platform is read again when its last automatic read is older than this. */
 export const REFRESH_STALE_MS = 60 * 60 * 1000;
-/** Background refresh: one platform's read is abandoned after this long. */
-export const REFRESH_TIMEOUT_MS = 30_000;
+/** Background refresh: one platform's read is abandoned after this long (the reader, then up to two screenshots read by Claude). */
+export const REFRESH_TIMEOUT_MS = 90_000;
 /** The sign-in sheet reloads a page by itself once when it has not finished loading after this long. */
 export const STALL_MS = 15_000;
 /** After a refresh that failed (signed out, timeout), do not try that platform again for this long (this app run). */

@@ -145,8 +145,9 @@ const instagram: Flow = (() => {
     domains: ['instagram.com'],
     loginPaths: IG_LOGIN,
     steps: [],
-    fallbackUrl: (_ctx, hint) => {
-      const name = str(rec(hint).username);
+    fallbackUrl: (ctx, hint) => {
+      // The name the page reported, else the account the caller knows (the requests may have failed before naming it).
+      const name = str(rec(hint).username) ?? ctx.handle ?? null;
       return name && IG_NAME.test(name) ? `https://www.instagram.com/${name}/` : null;
     },
   });

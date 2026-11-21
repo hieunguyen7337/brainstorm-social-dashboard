@@ -14,6 +14,7 @@ import { GetTheAppCard } from '@/src/components/settings/GetTheAppCard';
 import { StyleSection } from '@/src/components/settings/StyleSection';
 import { ThemesSection } from '@/src/components/settings/ThemesSection';
 import { VaultSection } from '@/src/components/settings/VaultSection';
+import { ClaudeKeySection } from '@/src/assistant/ClaudeKeySection';
 import { APP_NAME } from '@/src/config';
 import { BOARD_MAX_WIDTH, Col, Grid, useWide } from '@/src/layout';
 import { useIsAccountsWorkspace, useIsDemoWorkspace, useIsRealWorkspace, useSession } from '@/src/session';
@@ -74,6 +75,7 @@ export default function SettingsScreen() {
           <Col span={6} style={styles.wideStack} testID="settings-col-right">
             {accounts}
             {real ? <VaultSection /> : null}
+            <ClaudeKeySection />
             <ClaudeMcpCard />
             <BrowserControlCard />
             <GetTheAppCard />
@@ -103,6 +105,7 @@ export default function SettingsScreen() {
 
       <AutopilotSection />
 
+      <ClaudeKeySection />
       <ClaudeMcpCard />
       <BrowserControlCard />
       <GetTheAppCard />

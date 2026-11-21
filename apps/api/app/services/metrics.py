@@ -54,14 +54,21 @@ def bump_daily(conn: sqlite3.Connection, workspace_id: str, platform: str, day: 
     )
 
 
-def tick(conn: sqlite3.Connection, workspace_id: str) -> None:
-    """Advance every simulated published post by the time since its last tick. O(posts)."""
-    now = _now()
+def tick(conn: sqlite3.Connection, workspace_id: str, *, now: datetime | None = None,
+         post_id: str | None = None) -> None:
+    """Advance every simulated published post by the time since its last tick. O(posts).
+
+    `now` (default: the real clock) and `post_id` (default: every post) exist for the demo workspace's synthetic metrics
+    read (`services/demo.read_metrics`): it ticks one post as if a few minutes had passed. A post ticked ahead of the
+    clock simply waits until real time catches up (`a1 - a0 < 1` below).
+    """
+    now = now or _now()
     rows = conn.execute(
         """SELECT p.id, p.platform, p.quality, p.published_at, p.last_tick_at, c.followers, c.status, c.mode
            FROM posts p LEFT JOIN connections c ON c.workspace_id = p.workspace_id AND c.platform = p.platform
-           WHERE p.workspace_id = ? AND p.status = 'published' AND p.published_at IS NOT NULL AND p.metrics_source = 'sim'""",
-        (workspace_id,),
+           WHERE p.workspace_id = ? AND p.status = 'published' AND p.published_at IS NOT NULL AND p.metrics_source = 'sim'
+             AND (? IS NULL OR p.id = ?)""",
+        (workspace_id, post_id, post_id),
     ).fetchall()
     day = now.date().isoformat()
     changed = False

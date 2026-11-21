@@ -54,6 +54,27 @@ public/             PWA manifest + icons (copied into dist/)
 `eas.json` profiles: `preview` (Android APK, internal), `ios-sim` (iOS simulator build), `production`.
 `EXPO_PUBLIC_API_URL` is set per profile to the placeholder `https://pulse-hackathon.fly.dev`.
 
+## Assistant (Android/iOS)
+
+- **Where:** the Assistant tab exists in the Android and iOS apps. Plain web hides it. Pulse Desktop uses its own local
+  Claude Code flow instead (`docs/DESKTOP.md`), unchanged.
+- **Your key:** Settings > Claude API key. Paste your own Anthropic key (`sk-ant-...`). It is stored only on the device
+  in `expo-secure-store` (Keychain / Android Keystore, `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, entry
+  `pulse.assistant.anthropic.v1`), never logged, never in AsyncStorage, never sent to Pulse's server. Save, Replace,
+  Remove and Test key (Test sends one tiny request).
+- **Direct to Anthropic:** requests go from the phone to Anthropic with `@anthropic-ai/sdk`. Usage is billed to your
+  own Anthropic account.
+- **Models:** Claude Opus 5.5 (default, `claude-opus-5-5`), Claude Sonnet 5.5 (`claude-sonnet-5-5`) or Claude Haiku 5.5
+  (`claude-haiku-5-5`). The choice is stored on the device.
+- **Tools** (run on the phone against Pulse's REST API with the workspace token): `get_dashboard`, `list_trends`,
+  `list_posts`, `create_post` (saves a draft, never publishes), `propose_instagram_post`. Pulse does not generate
+  images; you pick the photo.
+- **Posting:** always needs your click in the confirm dialog (editable caption, photo picker). Then it goes through the
+  existing Instagram path: Android auto-post only when built with `EXPO_PUBLIC_IG_AUTOPOST=1`, else the share sheet,
+  else open Instagram.
+- **Rebuild needed:** the key store is a native module. Binaries built before it show "Update the app" in Settings and
+  the Assistant tab. Install a new APK or iOS build; an over-the-air update is not enough.
+
 ## Desktop layout, rooms, share (wide >= 1024 px)
 
 - **Wide board.** `src/layout` (`useWide()`, `Grid`, `Col`) switches every tab to a desktop board at >= 1024 px and a

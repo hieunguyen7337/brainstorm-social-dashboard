@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { fmtDateTime, inHours, tomorrowMorning } from '@/src/format';
 import { publishedCardNote, publishedCardTitle } from '@/src/realCopy';
-import { useIsRealWorkspace } from '@/src/session';
+import { useIsDemoWorkspace, useIsRealWorkspace } from '@/src/session';
 import { colors, platformMeta, space, type as t, withAlpha } from '@/src/theme';
 import { ShareButtons } from '@/src/components/share/ShareButtons';
 import type { ShareWiring } from '@/src/components/share/useShare';
@@ -126,6 +126,8 @@ function DraftActions({
           />
         </View>
       ) : null}
+      {/* "Post on LinkedIn" first: making a post and posting it is Generate, then this one tap (owner, 2026-11-21). */}
+      <ShareButtons post={post} compact={compact || !wide} disabled={blocked} {...share} />
       {compact ? (
         <>
           <View style={styles.row}>
@@ -154,7 +156,6 @@ function DraftActions({
           </View>
         </>
       )}
-      <ShareButtons post={post} compact={compact || !wide} disabled={blocked} {...share} />
       {scheduleOpen ? (
         <View style={styles.choices}>
           <Text style={t.label}>Schedule for</Text>
@@ -183,13 +184,14 @@ function PublishedCard({
 }: PostActionsProps) {
   const label = platformMeta[post.platform].label;
   const real = useIsRealWorkspace();
+  const demo = useIsDemoWorkspace();
   return (
     <Card tone="raised" style={[styles.stateCard, { borderColor: withAlpha(colors.success, 0.4) }]}>
       <View style={styles.head}>
         <Ionicons name="checkmark-circle" size={22} color={colors.success} />
         <View style={styles.headText}>
           <Text style={t.h3}>{publishedCardTitle(label, real)}</Text>
-          <Text style={t.small}>{publishedCardNote(real, post.platform)}</Text>
+          <Text style={t.small}>{publishedCardNote(real, post.platform, demo)}</Text>
         </View>
       </View>
       {post.link_url ? (

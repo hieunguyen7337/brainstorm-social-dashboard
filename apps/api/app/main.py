@@ -6,9 +6,9 @@ import importlib
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.config import settings
 from app.db import connect, init_db
@@ -80,6 +80,22 @@ def create_app() -> FastAPI:
             return JSONResponse({"detail": "APK not published yet"}, status_code=404)
         return RedirectResponse(settings.android_apk_url, status_code=302)
 
+    rel = "https://github.com/hieunguyen7337/brainstorm-social-dashboard/releases/latest/download/"
+    desktop = {"windows": rel + "Pulse-Setup.exe", "mac": rel + "Pulse.dmg"}
+
+    @app.get("/download/windows")
+    def download_windows():
+        return RedirectResponse(desktop["windows"], status_code=302)
+
+    @app.get("/download/mac")
+    def download_mac():
+        return RedirectResponse(desktop["mac"], status_code=302)
+
+    @app.get("/download/desktop")
+    def download_desktop(request: Request):
+        ua = request.headers.get("user-agent", "")
+        return RedirectResponse(desktop["mac" if "Mac OS X" in ua or "Macintosh" in ua else "windows"], status_code=302)
+
     @app.get("/download/android/qr.svg")
     def download_android_qr():
         return Response(
@@ -106,19 +122,15 @@ def create_app() -> FastAPI:
 
 
 def _mount_web(app: FastAPI) -> None:
-    dist = os.path.abspath(settings.web_dist)
+    """Every other path shows the "Install Pulse on Android" page. The web app is not served (owner, 2026-11-21:
+    "don't show the web app, show the download page only"); the tracked links, rooms and checkout pages are their own
+    routes above and keep working."""
 
     @app.get("/{path:path}", include_in_schema=False)
     def web(path: str):
-        if path.startswith(("api/", "mcp", "r/", "l/")):
+        if path.startswith(("api/", "mcp", "r/", "l/", "v/", "room/")):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        candidate = os.path.normpath(os.path.join(dist, path))
-        if candidate.startswith(dist) and os.path.isfile(candidate):
-            return FileResponse(candidate)
-        for html in (candidate + ".html", os.path.join(dist, "index.html")):
-            if html.startswith(dist) and os.path.isfile(html):
-                return FileResponse(html)
-        return JSONResponse({"detail": "web app not built"}, status_code=404)
+        return HTMLResponse(install_page(android_download_url()), headers={"Cache-Control": "public, max-age=300"})
 
 
 app = create_app()

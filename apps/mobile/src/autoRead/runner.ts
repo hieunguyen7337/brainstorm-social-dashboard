@@ -41,6 +41,11 @@ export interface RunnerDeps {
   platform: Platform;
   /** The person's public handle, if the caller knows it (enables the anonymous first try). */
   handle?: string | null;
+  /**
+   * The connected account's handle, for the screenshot only: when the page's own requests fail and name no account, the
+   * fallback opens this account's profile and Claude reads its screenshot. Never starts the anonymous try.
+   */
+  fallbackHandle?: string | null;
   /** Point the WebView at a URL (the first call mounts it). */
   loadUrl(url: string): void;
   /** `injectJavaScript` on the WebView. */
@@ -157,6 +162,9 @@ export class AutoReadRunner {
   private fallbackTarget: PageUrl | null = null;
   /** The profile was read and its header showed no counts: a failure from here says so (AUTO_READ_NO_COUNTS). */
   private noCounts = false;
+  /** The page the fallback captures (raw URL), reloaded once when Claude finds no numbers in the first screenshot. */
+  private fallbackRaw: string | null = null;
+  private retried = false;
   private lastInject: { url: string; at: number; ran: boolean } | null = null;
   private disposed = false;
   private lastFillAt: number | null = null;
@@ -441,7 +449,9 @@ export class AutoReadRunner {
   private async stepEmpty(hint: unknown): Promise<void> {
     if (this.phase !== 'reading') return;
     this.clearTimers();
-    const target = this.flow.fallbackUrl(this.ctx, hint);
+    // The requests may have failed before naming the account: the handle the caller knows opens its profile instead.
+    const known = this.ctx.handle ?? cleanHandle(this.deps.handle) ?? cleanHandle(this.deps.fallbackHandle);
+    const target = this.flow.fallbackUrl(known ? { ...this.ctx, handle: known } : this.ctx, hint);
     const t = parsePageUrl(target);
     if (!t && !this.flow.steps[this.step].showsNumbers) {
       await this.fail();
@@ -449,6 +459,7 @@ export class AutoReadRunner {
     }
     this.setPhase('fallback');
     this.fallbackTarget = t;
+    this.fallbackRaw = t ? target : this.currentRaw;
     // From a step's finish (`noCounts`), or straight from the reader's `empty` message (`diag.vis` false).
     const h = (typeof hint === 'object' && hint !== null ? hint : {}) as { noCounts?: unknown; diag?: { vis?: unknown } | null };
     this.noCounts = h.noCounts === true || (typeof h.diag === 'object' && h.diag !== null && h.diag.vis === false);
@@ -492,15 +503,29 @@ export class AutoReadRunner {
     try {
       read = await this.deps.readScreenshot(base64, 'image/jpeg');
     } catch {
-      if (this.in('claude')) await this.fail();
+      if (this.in('claude') && !this.retryCapture()) await this.fail();
       return;
     }
     if (!this.in('claude')) return;
     if (!read || !hasNumbers(read)) {
-      await this.fail();
+      if (!this.retryCapture()) await this.fail();
       return;
     }
     await this.end(() => this.deps.emitResult({ ...read, source: 'device' }));
+  }
+
+  /**
+   * Claude found no numbers (or could not be asked): reload the page once and screenshot it again, since a page that
+   * was still drawing, or refused one request, often shows its numbers on a fresh load. False when already retried.
+   */
+  private retryCapture(): boolean {
+    if (this.retried || this.isOver() || !this.fallbackRaw) return false;
+    this.retried = true;
+    this.t('retryCapture');
+    this.setPhase('fallback');
+    this.navigateTo(this.fallbackRaw);
+    this.arm(FALLBACK_LOAD_MS, () => void this.captureNow());
+    return true;
   }
 
   // ---- endings -----------------------------------------------------------------------------------------------------

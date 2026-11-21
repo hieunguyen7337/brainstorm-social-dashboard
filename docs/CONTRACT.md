@@ -49,6 +49,7 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | GET | /api/connections | -> `list[Connection]` | U1 |
 | POST | /api/connections/{platform} | `ConnectionCreate` -> `Connection` | U1 |
 | POST | /api/connections/{platform}/demo | -> `DemoSignInResult` (the synthetic sign-in of a demo workspace: connects the platform and backfills synthetic numbers; 409 in any other workspace; see `docs/REAL.md`) | U1 |
+| POST | /api/posts/{id}/demo/metrics?advance_minutes=5 | -> `DemoMetricsRead` (a synthetic metrics read of a published post in a demo workspace; 409 in any other workspace or for an unpublished post; see `docs/REAL.md`) | U1 |
 | DELETE | /api/connections/{platform} | -> `Connection` (status disconnected) | U1 |
 | GET | /api/dashboard?days=30&platform= | -> `DashboardSummary` | U1 |
 | GET | /api/activity?limit=30 | -> `list[ActivityItem]` | U1 |
@@ -106,7 +107,8 @@ column, it says so in its report instead of editing `db.py`.
 ## AI (U2)
 - `claude-sonnet-5-5` through the official `anthropic` SDK, structured output via
   `client.messages.parse(..., output_format=<pydantic model>)` -> `response.parsed_output`, `max_tokens` 4000,
-  `output_config={"effort": "low"}`. Key from `ANTHROPIC_API_KEY` (never logged, never committed).
+  `output_config={"effort": "low"}`. Key from `ANTHROPIC_API_KEY` (never logged, never committed). Server calls only: the
+  phone Assistant uses the person's own key, stored on-device, and never the server key.
 - Caps: `AI_WORKSPACE_LIMIT` generations per workspace (default 30), `AI_GLOBAL_CAP_USD` total (default 60),
   cost = input $2/MTok + output $10/MTok from `response.usage`, recorded in `ai_usage`.
 - No key, cap reached or API error -> deterministic template fallback (`ai_used: false` in the response), so
@@ -134,6 +136,7 @@ column, it says so in its report instead of editing `db.py`.
   platform's engagements. `other` = a split platform's engagements beyond the three (saves); `unsplit` = engagements
   from platforms that only report a total (and any daily numbers above the snapshot). The five numbers always add up to
   `totals.engagements`. The Engagements tile shows the split in place of its trend line.
+- A demo workspace (docs/REAL.md) gets a synthetic split from the engagement totals, so its `unsplit` is 0.
 - Only the screenshot reader, the manual numbers form and MCP `record_metrics` fill the split today. The Instagram,
   LinkedIn, TikTok and Reddit auto-readers still save one engagements total, so those platforms count as `unsplit`.
 

@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, platformMeta, radius, space, type as t, withAlpha } from '@/src/theme';
 import type { Post } from '@/src/types';
 import { PlatformIcon, haptic } from '@/src/ui';
 
 import { IgPostSheet } from '@/src/igPost/IgPostSheet';
+import { LiPostSheet } from '@/src/liPost/LiPostSheet';
 
 import { useShare, type ShareAction, type ShareWiring } from './useShare';
 
@@ -25,6 +26,7 @@ const tintOf = (action: ShareAction): string => platformMeta[action.key === 'thr
 
 function ActionIcon({ action, size, color }: { action: ShareAction; size: number; color: string }) {
   if (action.mode === 'copy') return <Ionicons name="copy-outline" size={size} color={color} />;
+  if (action.mode === 'demo-refresh') return <Ionicons name="refresh-outline" size={size} color={color} />;
   if (action.key === 'threads') return <FontAwesome6 name="threads" size={size} color={color} brand />;
   return <PlatformIcon platform={action.key} size={size} color={color} />;
 }
@@ -86,6 +88,29 @@ export function ShareButtons({ post, compact = false, small = false, disabled = 
   const share = useShare(post, wiring);
   return (
     <View style={styles.wrap} testID="share-buttons">
+      {post.platform === 'instagram' ? (
+        <View style={styles.imageRow}>
+          {share.image ? <Image source={{ uri: share.image.uri }} style={styles.thumb} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={share.image ? 'Change image' : 'Add image'}
+            onPress={() => void share.addImage()}
+            disabled={disabled || share.busyKey !== null}
+            style={styles.imageBtn}
+            testID="add-image"
+          >
+            <Ionicons name="image-outline" size={18} color={colors.text} />
+            <Text style={[t.h3, { fontSize: 14 }]}>{share.image ? 'Change image' : 'Add image'}</Text>
+          </Pressable>
+          {share.image ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Remove image" onPress={share.removeImage} hitSlop={8}>
+              <Text style={[t.small, { color: colors.textDim }]}>Remove</Text>
+            </Pressable>
+          ) : (
+            <Text style={[t.small, { flex: 1 }]}>Or Pulse makes one from the text.</Text>
+          )}
+        </View>
+      ) : null}
       <View style={compact ? styles.column : styles.row}>
         {share.actions.map((action) => (
           <ShareButton
@@ -120,12 +145,26 @@ export function ShareButtons({ post, compact = false, small = false, disabled = 
         </Pressable>
       ))}
       {share.igSheet ? <IgPostSheet {...share.igSheet} /> : null}
+      {share.liSheet ? <LiPostSheet {...share.liSheet} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { gap: space.sm },
+  imageRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  thumb: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: colors.cardHi },
+  imageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cardHi,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
   column: { gap: space.sm },
   button: {

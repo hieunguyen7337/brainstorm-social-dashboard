@@ -92,6 +92,10 @@ export const realApi: PulseApi = {
   ingestMetrics: (body) => request('POST', '/api/metrics/ingest', { body }),
   getHarvestStatus: () => request('GET', '/api/connections/harvest-status'),
   demoSignIn: (platform) => request('POST', `/api/connections/${encodeURIComponent(platform)}/demo`),
+  demoReadMetrics: (postId, advanceMinutes) =>
+    request('POST', `/api/posts/${encodeURIComponent(postId)}/demo/metrics`, {
+      query: { advance_minutes: advanceMinutes },
+    }),
 
   getAutopilot: () => request('GET', '/api/autopilot'),
   putAutopilot: (body) => request('PUT', '/api/autopilot', { body }),
