@@ -53,3 +53,17 @@ Minimum Claude Code version: `MIN_VERSION` in `src/main/claude/status.ts`.
   `read`, `openWindow`, `signOut`, `runTask(platform, { url, visible? }, task)` and `onPageMessage(wc, cb)`; the
   result reasons are documented at the top of that file.
 - Not built: the hourly background refresh (the app re-reads on "Update"; `read()` is ready for it).
+
+## Claude tools
+
+`src/main/mcp/` runs the local MCP server `pulse_desktop` (streamable HTTP, stateless, `127.0.0.1:<random port>/mcp`,
+per-launch bearer token passed to Claude only through the 0600 MCP config; wrong bearer 401, wrong Host or any Origin
+403, body over 1 MB 413). It starts with the app and stops on quit.
+
+- `social_status()`: per platform `signedIn` and `lastReadAt`.
+- `social_read_metrics({ platform })`: a hidden read, saved to Pulse with ingest `source: "device"`. Signed out gives
+  Claude the "press Connect with <Platform> in Pulse" text. At most one read per platform every 10 minutes.
+- `social_publish({ platform, caption, pulse_post_id? })`: Instagram only. Never posts by itself: Pulse shows its
+  confirm dialog (caption, photo picker); a cancel or no answer within 10 minutes posts nothing. After an OK the poster
+  (`src/main/social/post.ts`, the Android `buildIgPostScript` flow) runs in a hidden Instagram window, once, with no
+  automatic retry. One post in flight, at most 5 a day.
