@@ -1,7 +1,7 @@
 # Pulse Desktop: Electron app plan (branch `electron-desktop`)
 
-Status: **proposal, awaiting owner sign-off.** Nothing here is built yet. Once approved, the lead folds the
-"Contract changes" section into `docs/CONTRACT.md`.
+Status: **approved by the owner on 21 Nov 2026 (decisions in section 12).** Nothing is built yet. The lead folds
+the "Contract changes" section into `docs/CONTRACT.md` before units start.
 
 ## 1. Goal
 
@@ -46,6 +46,15 @@ Rules for option A:
 
 - One partition per platform: `persist:pulse-<platform>` (e.g. `persist:pulse-instagram`). Separate from the main
   Pulse window and from each other.
+- **Sign in once, then invisible.** The partition is stored on disk, so the login survives app restarts until the
+  platform expires it or the person signs out. The person sees a platform window only (a) the first time, to log
+  in, (b) when the platform asks for something only a human can do (checkpoint, 2FA, captcha), and (c) when they
+  click "Show Instagram". All other reads and posts run in a hidden window (`show: false`) that is created for the
+  task and destroyed when it ends: at most one hidden social window exists at a time, and none when idle. There
+  is never a pile of open windows on the person's desktop.
+- When a hidden task finds the person signed out (`signed_out` from the reader), it does not pop a window by
+  itself: the connect card switches to "Sign in again" and the Claude tool returns "Instagram needs you to sign in
+  again in Pulse".
 - Cookie values are never read, logged, sent over IPC, sent to the Pulse API, or given to Claude. The only data
   that leaves a social window is the `PageMessage` (parsed numbers or post results) defined in `autoRead/types.ts`.
 - "Sign out of Instagram in Pulse" = `session.fromPartition('persist:pulse-instagram').clearStorageData()`.
@@ -85,16 +94,19 @@ Rules for option A:
 
 ### 4.1 Main window: what it loads
 
-**Recommended for the hackathon: load the hosted web app** (`PULSE_URL`, default `PUBLIC_BASE_URL`). The web
-client already uses same-origin API calls (`apiBase()` in `src/http.ts` returns `''` on web), so no CORS change,
-no second build, and every Fly deploy updates the desktop app too.
+**Owner decision: bundle the web export inside the app.** `npx expo export --platform web` output is copied into
+the app and served from a privileged custom protocol `app://pulse/` (`protocol.handle`, SPA fallback to
+`index.html`). The app starts without the network and the UI version is pinned to the app build.
 
-The preload only exposes `window.pulseDesktop` to the main frame, and every IPC handler checks that
-`event.senderFrame.url` starts with the configured `PULSE_URL` origin. Navigation away from that origin in the main
-window opens the system browser (`shell.openExternal`) instead.
-
-Later (not today): bundle the export via a custom `app://pulse/` protocol for offline start, which needs the API
-to allow that origin (CORS) and a desktop `EXPO_PUBLIC_API_URL`.
+- API base: on web `apiBase()` (`src/http.ts`) returns `''` (same origin), which would point at `app://pulse`. It
+  gains one branch: when `window.pulseDesktop` exists, use `window.pulseDesktop.apiUrl` (the Fly URL, from the
+  desktop's `PULSE_API_URL` config). `publicBaseUrl()` follows it, so the MCP URL shown in Settings stays right.
+- CORS: the API already sends `allow_origins=["*"]` (`app/main.py`), and Pulse auth is a Bearer header, not a
+  cookie, so `app://pulse` needs no API change.
+- The preload only exposes `window.pulseDesktop` to the main frame, and every IPC handler checks that
+  `event.senderFrame.url` starts with `app://pulse/`. Any other navigation in the main window opens the system
+  browser (`shell.openExternal`) instead.
+- Tracked links (`/r/<code>`), room pages and the MCP URL stay on the Fly host, unchanged.
 
 ### 4.2 Renderer integration (the Pulse app itself)
 
@@ -117,10 +129,12 @@ behaviour is unchanged.
 ```ts
 interface PulseDesktop {
   version: string;
+  apiUrl: string;                                           // Fly API base for the bundled renderer
   social: {
     status(): Promise<Record<Platform, { signedIn: boolean; lastReadAt: string | null }>>;
     connect(platform: Platform): Promise<{ ok: true; read: DeviceRead } | { ok: false; reason?: string }>;
-    openWindow(platform: Platform): Promise<void>;          // show the signed-in site to the person
+                                                            // first time: visible login window; later: hidden read
+    openWindow(platform: Platform): Promise<void>;          // "Show Instagram": the signed-in site, visible
     signOut(platform?: Platform): Promise<void>;
   };
   claude: {
@@ -140,19 +154,21 @@ and a prompt; the main process decides everything else.
 - `sessions.ts`: partition per platform, UA fix, `signedIn(platform)` by cookie **name** presence
   (`sessionid` on instagram.com, `li_at` on linkedin.com, `auth_token` on x.com, `sessionid` on tiktok.com,
   `c_user` on facebook.com, `reddit_session` on reddit.com), `signOut()`.
-- `window.ts`: one `BrowserWindow` per platform (`contextIsolation: true`, `sandbox: true`,
-  `nodeIntegration: false`, preload = postMessage shim only). Shown during login and for "show me the page";
-  hidden (`show: false`) for background reads. `setWindowOpenHandler` keeps popups (OAuth) inside the same
-  partition.
+- `window.ts`: a task queue that runs one social task at a time in one `BrowserWindow` (`contextIsolation: true`,
+  `sandbox: true`, `nodeIntegration: false`, preload = postMessage shim only). Visible for login, checkpoints and
+  "Show Instagram"; hidden (`show: false`) for everything else, and destroyed when its task ends.
+  `setWindowOpenHandler` keeps popups (OAuth) inside the same partition. Background refresh (hourly, like
+  `REFRESH_STALE_MS` on Android) runs through the same queue.
 - `runner.ts`: builds `RunnerDeps` for the existing `autoRead/runner.ts`:
   `loadUrl` -> `webContents.loadURL`, `inject` -> `webContents.executeJavaScript`, `capture` ->
   `webContents.capturePage()` resized to `CAPTURE_MAX_WIDTH` JPEG, `readScreenshot` -> renderer-free HTTPS call to
   `/api/connections/{platform}/screenshot` with the workspace token, page messages from the shim via IPC (accepted
   only from that platform's window, `pulse === 'autoRead'`). The runner's results go back to the renderer, and the
   renderer saves with `POST /api/metrics/ingest` exactly as today.
-- `post.ts`: platform posters. Phase 1: Instagram via `buildIgPostScript`. Phase 2: LinkedIn and X (new scripts,
-  same pattern). Until a poster exists, "publish" opens the platform's composer in its window with the text on the
-  clipboard (`src/shareLinks.ts` already has the composer links).
+- `post.ts`: v1 is **Instagram only**, via `buildIgPostScript` (photo upload + configure with caption) in a
+  hidden window. The confirmation happens once, in Pulse (4.6); the poster then publishes directly, with no second
+  confirmation on instagram.com. Other platforms in v1: Pulse's existing share links / composer (`src/shareLinks.ts`).
+  LinkedIn and X posters are phase 2.
 - Pace and limits: reuse `autoRead/config.ts` timeouts; at most one read per platform per `REFRESH_STALE_MS`; at
   most N posts per platform per day (config, default 5).
 
@@ -179,8 +195,14 @@ cwd: <app-data>/claude-workdir   (an empty folder, never the person's projects)
 - Binary: `CLAUDE_BIN` env, else `claude` on `PATH`, else common install paths (`~/.claude/local/claude`,
   `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`). Electron apps launched from Finder do not inherit the
   shell `PATH`, so resolve it once from the login shell (`$SHELL -ilc 'command -v claude'`).
-- Status: `claude --version` and `claude auth status --json`. Not installed or not logged in -> the panel shows
-  `npm i -g @anthropic-ai/claude-code` / `claude auth login`; the rest of Pulse works without it.
+- Status (owner decision: rely on the person's own Claude Code login, with clear prompts when it is missing):
+  checked at launch and before each run with `claude --version` and `claude auth status --json`. The Assistant
+  panel shows one of three states, each with a copy button and a "Check again" button:
+  - not found: "Install Claude Code" + the install command, and "Already installed? Choose the claude binary"
+    (saved as `CLAUDE_BIN`);
+  - found but signed out: "Sign in to Claude" + `claude auth login` (or a button that opens Terminal with it);
+  - version too old: "Update Claude Code" + the update command.
+  The rest of Pulse (dashboard, Instagram read and post from the app's own buttons) works without Claude.
 - Streaming: same line splitter as LocalBridge; each stdout line is forwarded as a parsed JSON event, stderr as
   `stderr` events, then `done {code}`. Stop = `SIGTERM` the child (and on window close / app quit).
 - One run at a time per window; session id kept per conversation for `--resume`.
@@ -208,7 +230,7 @@ Streamable HTTP on `127.0.0.1`, random port, per-launch bearer token, LocalBridg
 | `social_read_metrics(platform)` | Runs the reader in that platform's window; returns parsed numbers; the app saves them via ingest | read-only, rate-limited |
 | `social_list_recent_posts(platform)` | The person's recent posts as parsed by the reader (text, counts, url) | read-only |
 | `social_open_composer(platform, text)` | Shows the platform window on its composer, text on the clipboard | person finishes by hand |
-| `social_publish(platform, text, image?, pulse_post_id?)` | Publishes through the platform poster | **native confirm dialog** in the app showing account, platform and exact text; nothing is sent unless the person clicks Post. Then marks the Pulse post published |
+| `social_publish(platform, text, image, pulse_post_id?)` | v1: `instagram` only. Publishes through the poster | **One confirmation, in Pulse**: an in-app dialog (renderer, so it carries Pulse's look) showing account, photo and exact caption. Clicking Post publishes straight to Instagram with no further step there. Nothing is sent without that click. Then marks the Pulse post published |
 | `social_edit_post(platform, url, text)` | Phase 2, only where the site supports editing (LinkedIn, X Premium) | same confirm dialog |
 
 Pulse's existing remote tools (`generate_posts`, `create_post`, `list_posts`, `list_trends`, ...) cover drafting,
@@ -223,8 +245,8 @@ Claude calls `social_publish`, which asks the person.
 2. Cookie values, tokens and page HTML never leave the social partition. Only `PageMessage` payloads (already
    pruned, see `autoRead/types.ts`) do.
 3. Claude never sees credentials: it gets parsed numbers and post text through MCP tools.
-4. Every write to a social platform needs an explicit click in a native dialog. No auto-publish from Claude or
-   autopilot in desktop v1, even if autopilot is on.
+4. Every write to a social platform needs one explicit click in Pulse's confirm dialog (and only there: no second
+   confirmation on the platform). No auto-publish from Claude or autopilot in desktop v1, even if autopilot is on.
 5. Local MCP: loopback only, random port, random token, Host/Origin check. `mcp.json` 0600, deleted on quit.
 6. Claude runs with no built-in tools, strict MCP config and an empty cwd, so a prompt-injected trend headline
    cannot read files or run commands.
@@ -259,8 +281,8 @@ apps/mobile/src/components/assistant/       chat panel (desktop only)
 - `docs/CONTRACT.md`: new "Desktop" part: the `window.pulseDesktop` interface (4.3), the `pulse_desktop` MCP tools
   (4.6), and the rules in section 5.
 - Ingest `source`: keep `"device"` for desktop reads (no API change). Optional later: `"desktop"` for analytics.
-- API: none required for phase 1 (the hosted web app is same-origin). CORS for `app://pulse` only when 4.1's
-  bundled mode is built.
+- API: none. CORS is already `*` and auth is a Bearer header. Mobile: `apiBase()` reads
+  `window.pulseDesktop.apiUrl` when present (4.1).
 - `POST /api/posts/{id}/publish` already exists; `social_publish` calls it after a successful real post so
   the Queue shows it published. If we want to store the real post URL, that is a new `Post.external_url` field
   (lead decision).
@@ -273,18 +295,18 @@ D2 and D3.
 | Unit | Scope | Files | Done when |
 |---|---|---|---|
 | **D0** (lead) | Contract + `window.pulseDesktop` types | `docs/CONTRACT.md`, `apps/mobile/src/desktop/types.ts` | Approved |
-| **D1** | Electron shell: main window on `PULSE_URL`, preload stub, security flags, navigation rules, build, `npm run dev` | `apps/desktop/**` except `social/`, `claude/`, `mcp/` | App opens Pulse; `tsc`, `node --test`, build pass |
-| **D2** | Social sessions + reader adapter + `social.connect/status/signOut` IPC | `apps/desktop/src/main/social/{sessions,window,runner}.ts`, `src/preload/social.ts`, tests | Instagram and LinkedIn connect end to end on a real account (owner check); runner tests with a fake webContents |
+| **D1** | Electron shell: bundled export on `app://pulse/`, preload stub (`version`, `apiUrl`), security flags, navigation rules, build, `npm run dev` | `apps/desktop/**` except `social/`, `claude/`, `mcp/` | App opens the bundled Pulse and talks to Fly; `tsc`, `node --test`, build pass |
+| **D2** | Social sessions + one-at-a-time hidden task window + reader adapter + `social.connect/status/signOut/openWindow` IPC, Instagram | `apps/desktop/src/main/social/{sessions,window,runner}.ts`, `src/preload/social.ts`, tests | First connect shows the login once; after an app restart a read runs with no visible window (owner check on a real account); runner/queue tests with a fake webContents |
 | **D3** | LocalBridge port + `claude.*` IPC + locate/status | `apps/desktop/src/main/claude/**`, tests ported from LocalBridge's `server.test.js` | Fake-`claude` tests pass; real run streams into devtools (owner check) |
-| **D4** | Local MCP server + `social_*` tools + confirm dialog + Instagram poster | `apps/desktop/src/main/mcp/**`, `src/main/social/post.ts`, tests | Claude lists `pulse_desktop` tools; publish shows the dialog; nothing posts without a click |
-| **D5** | Renderer: desktop-aware `autoRead/index.web.tsx`, `src/desktop/useDesktop.ts`, Assistant panel | those files + `components/assistant/**` | Web build unchanged without the bridge; `tsc` + `expo export` pass |
+| **D4** | Local MCP server + `social_*` tools + in-app confirm dialog + Instagram poster (hidden window) | `apps/desktop/src/main/mcp/**`, `src/main/social/post.ts`, tests | Claude lists `pulse_desktop` tools; publish shows the dialog; nothing posts without a click |
+| **D5** | Renderer: desktop-aware `autoRead/index.web.tsx`, `apiBase()` desktop branch in `src/http.ts`, `src/desktop/useDesktop.ts`, Assistant panel with the three Claude-missing states, publish confirm dialog | those files + `components/assistant/**` | Web build unchanged without the bridge; `tsc` + `expo export` pass |
 | **D6** | Packaging + README (unsigned dmg for the demo) | `electron-builder.yml`, `apps/desktop/README.md` | dmg installs and runs on a second Mac (owner check) |
 
 Verification adds: `cd apps/desktop && npx tsc --noEmit && node --test && npm run build`, plus the existing mobile
 and API checks for any shared file touched.
 
-Hackathon cut (deadline 16:30 AEST today): D1 + D2 (Instagram and LinkedIn read) + D3 + a minimal D5 panel is
-the demo. D4 publish with a confirm dialog only for Instagram if time allows; otherwise "open composer".
+Hackathon cut (deadline 16:30 AEST today): D1 + D2 (Instagram read, hidden after first login) + D3 + a minimal D5
+panel is the demo. D4 Instagram publish with the in-app confirm if time allows.
 
 ## 9. Testing
 
@@ -315,10 +337,13 @@ the demo. D4 publish with a confirm dialog only for Instagram if time allows; ot
 - Background autopilot that publishes for real (only after OAuth and an explicit owner decision).
 - Linux build.
 
-## 12. Decisions needed from the owner
+## 12. Owner decisions (21 Nov 2026)
 
-1. Main window: hosted URL (recommended today) or bundled export?
-2. Which platforms may **publish** in v1: Instagram only (recommended), or also LinkedIn and X?
-3. Confirm "every real post needs a click in a dialog" (recommended), or allow auto-publish for approved posts.
-4. macOS only for the demo (recommended), or Windows too?
-5. Acceptable to rely on the person's own Claude Code CLI login (section 10 risk), with API key as the fallback?
+1. **Windows:** sign in once; afterwards social windows stay hidden and exist only while a task runs, one at a
+   time. A window appears only for the first login, a platform checkpoint, or "Show Instagram" (section 3, 4.4).
+2. **Main window:** the web export is bundled in the app (`app://pulse/`), API on Fly (4.1).
+3. **v1 platform:** Instagram only for reading via the session and for publishing. Others keep the current
+   screenshot path and share links.
+4. **Confirmation:** one click in Pulse's confirm dialog publishes; no second confirmation on Instagram.
+5. **Claude:** rely on the person's own Claude Code CLI login. When detection fails, the Assistant panel says
+   exactly what to do (install, sign in, update) (4.5).
