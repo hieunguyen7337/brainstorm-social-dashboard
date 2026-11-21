@@ -9,7 +9,7 @@ from app.auth import get_workspace
 from app.db import get_db
 from app.models import Platform, Post, PostCreate, PostPatch, PostStatus
 from app.platforms import live_sql_list, require_live
-from app.services import metrics
+from app.services import demo, metrics
 from app.services.posts import create_post, get_post_row, publish_post, row_to_post
 
 router = APIRouter()
@@ -89,9 +89,25 @@ def delete_post(post_id: str, ws: sqlite3.Row = Depends(get_workspace),
 def publish(post_id: str, ws: sqlite3.Row = Depends(get_workspace),
             conn: sqlite3.Connection = Depends(get_db)):
     row = get_post_row(conn, ws["id"], post_id)
+    first_publish = row is not None and row["status"] != "published"
     if row is not None:
         require_live(row["platform"])
+        if first_publish and demo.is_demo(ws):
+            # Demo workspace: the platform's demo account is signed in first (a post on a platform that is not connected
+            # would never grow), so posting never dead-ends.
+            demo.ensure_signed_in(conn, ws, row["platform"])
     post = publish_post(conn, ws["id"], post_id)
     if post is None:
         raise HTTPException(status_code=404, detail="post not found")
+    if first_publish and demo.is_demo(ws):
+        # ...and "posting synthetically" ends with the first synthetic metrics read: the numbers come back with the post.
+        return demo.read_metrics(conn, ws, post_id, demo.FIRST_READ_MINUTES).post
     return post
+
+
+@router.post("/api/posts/{post_id}/demo/metrics", response_model=demo.DemoMetricsRead)
+def demo_metrics(post_id: str, advance_minutes: int = Query(demo.REFRESH_MINUTES, ge=0, le=demo.MAX_ADVANCE_MINUTES),
+                 ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Connection = Depends(get_db)):
+    """A synthetic metrics read of a published post in a demo workspace (409 in any other workspace, docs/REAL.md)."""
+    demo.require_demo(ws)
+    return demo.read_metrics(conn, ws, post_id, advance_minutes)

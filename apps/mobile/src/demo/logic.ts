@@ -5,7 +5,7 @@
  */
 import { fmtCompact } from '../format';
 import { platformMeta } from '../theme';
-import type { DemoSignInResult, Platform } from '../types';
+import type { DemoMetricsRead, DemoSignInResult, Platform, Post } from '../types';
 
 /** How long each checklist line takes: three lines, about three seconds, whatever the server's speed. */
 export const STEP_MS = 1000;
@@ -110,4 +110,37 @@ export function checklist(s: DemoState): ChecklistLine[] {
 /** The note on the platform card after a sign-in: it says the numbers are synthetic. */
 export function demoSuccessNote(platform: Platform, r: DemoSignInResult): string {
   return `Signed in to ${platformMeta[platform].label} with the demo account: ${fmtCompact(r.followers)} followers and ${fmtCompact(r.views)} views in the last ${r.period_days} days. Every number here is synthetic.`;
+}
+
+// ---- posting and metrics back (the demo pathway after the sign-in) -----------------------------------
+
+const counted = (n: number, one: string, many: string): string => `${fmtCompact(n)} ${n === 1 ? one : many}`;
+
+/** The one button a draft's card gets in a demo workspace instead of the real composers: it posts synthetically. */
+export const demoPostLabel = (platform: Platform): string => `Post on ${platformMeta[platform].label} (demo)`;
+
+/** The button a published post's card gets: it reads the post's metrics back again. */
+export const demoRefreshLabel = (): string => 'Refresh metrics (demo)';
+
+/** Under that button: nothing real happens, and the numbers are simulated. */
+export const demoPostNote = (platform: Platform, published: boolean): string =>
+  published
+    ? 'Reads the metrics of this post back (synthetic). Each read moves the simulated clock on a few minutes.'
+    : `Posts synthetically: nothing is sent to ${platformMeta[platform].label}, and the metrics that come back are simulated.`;
+
+/** Toast after a post went out in a demo workspace; the first synthetic metrics read came back with it. */
+export function demoPostedToast(label: string, post: Pick<Post, 'views' | 'engagements'>): string {
+  return `Posted to ${label} (demo). First read: ${counted(post.views, 'view', 'views')}, ${counted(post.engagements, 'engagement', 'engagements')}. Synthetic.`;
+}
+
+/** Toast after "Publish all" in a demo workspace. */
+export function demoPostedAllToast(count: number, every = false): string {
+  const what = every && count > 1 ? `all ${count} posts` : `${count} ${count === 1 ? 'post' : 'posts'}`;
+  return `Posted ${what} (demo). First metrics are in, all synthetic.`;
+}
+
+/** Toast after "Refresh metrics": what the read found. */
+export function demoMetricsToast(label: string, read: Pick<DemoMetricsRead, 'views_gained' | 'engagements_gained' | 'advanced_minutes'>): string {
+  const when = read.advanced_minutes > 0 ? ` after ${read.advanced_minutes} simulated min` : '';
+  return `Read back from ${label} (demo): +${counted(read.views_gained, 'view', 'views')}, +${counted(read.engagements_gained, 'engagement', 'engagements')}${when}.`;
 }

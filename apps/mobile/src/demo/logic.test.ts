@@ -3,6 +3,12 @@ import {
   checklist,
   demoEmail,
   demoHandle,
+  demoMetricsToast,
+  demoPostedAllToast,
+  demoPostedToast,
+  demoPostLabel,
+  demoPostNote,
+  demoRefreshLabel,
   demoSlug,
   demoSuccessNote,
   initialState,
@@ -151,5 +157,39 @@ describe('the success note', () => {
     expect(note).toContain('9.7k followers');
     expect(note).toContain('84k views in the last 30 days');
     expect(note).toContain('synthetic');
+  });
+});
+
+describe('posting and metrics back', () => {
+  it('labels the demo post button and the refresh button', () => {
+    expect(demoPostLabel('linkedin')).toBe('Post on LinkedIn (demo)');
+    expect(demoPostLabel('instagram')).toBe('Post on Instagram (demo)');
+    expect(demoRefreshLabel()).toBe('Refresh metrics (demo)');
+  });
+
+  it('says nothing is sent and the metrics are simulated', () => {
+    expect(demoPostNote('instagram', false)).toContain('nothing is sent to Instagram');
+    expect(demoPostNote('instagram', false)).toContain('simulated');
+    expect(demoPostNote('instagram', true)).toContain('synthetic');
+  });
+
+  it('toasts the first read that came back with the post', () => {
+    const toast = demoPostedToast('LinkedIn', { views: 272, engagements: 1 });
+    expect(toast).toBe('Posted to LinkedIn (demo). First read: 272 views, 1 engagement. Synthetic.');
+    expect(demoPostedToast('Instagram', { views: 12_400, engagements: 880 })).toContain('12k views, 880 engagements');
+  });
+
+  it('toasts a bulk post', () => {
+    expect(demoPostedAllToast(2)).toBe('Posted 2 posts (demo). First metrics are in, all synthetic.');
+    expect(demoPostedAllToast(1)).toContain('1 post (demo)');
+    expect(demoPostedAllToast(3, true)).toContain('all 3 posts');
+  });
+
+  it('toasts what a refresh read back', () => {
+    const read = { views_gained: 410, engagements_gained: 1, advanced_minutes: 5 };
+    expect(demoMetricsToast('LinkedIn', read)).toBe(
+      'Read back from LinkedIn (demo): +410 views, +1 engagement after 5 simulated min.',
+    );
+    expect(demoMetricsToast('LinkedIn', { ...read, advanced_minutes: 0 })).not.toContain('simulated min');
   });
 });

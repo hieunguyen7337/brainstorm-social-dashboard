@@ -112,6 +112,18 @@ screenshot and vault flows are untouched.
   (`source 'seed'`, `metrics_source 'sim'`, one published minutes ago so the simulated audience visibly grows it),
   a `Connected X (demo)` event with `real 0` and one account snapshot with `source 'demo'`. It is idempotent: signing
   in again adds nothing twice. `POST /api/connections/{platform}` in a demo workspace does the same thing.
+- **Posting pathway: generate, post, metrics back.** Generation is the real AI pipeline, untouched: `POST /api/generate`
+  does not look at `data_mode`, so a demo workspace gets one Claude call per channel, the same caps (30 per workspace,
+  the global dollar cap) and the same template fallback when there is no key. Posting is synthetic: publishing in a demo
+  workspace (`POST /api/posts/{id}/publish`) first signs the platform's demo account in if it is not (so a post never
+  lands on a platform that cannot grow; idempotent), marks the post published, and takes a first synthetic metrics read
+  that comes back with the post (`metrics.tick` run as if 3 minutes had passed, `metrics_source 'sim'`, a `metrics`
+  event with `real 0`). `POST /api/posts/{id}/demo/metrics?advance_minutes=5` (demo workspaces only, 409 elsewhere, 409
+  for an unpublished post) reads again, jumping the simulated clock `advance_minutes` (0 to 60) so the numbers visibly
+  move; a post read ahead of the clock waits until real time catches up. In the app a draft's card has one button, "Post
+  on <Platform> (demo)", instead of the real composers (nothing opens, nothing is copied), and a published card's is
+  "Refresh metrics (demo)"; the toasts say what came back and that it is synthetic. A deliberate tap on a post's tracked
+  link is still a genuine visit and counts as one; the generator and the reads never touch the link routes.
 - **No real numbers in, no synthetic numbers out.** In a demo workspace `POST /api/metrics/ingest`, the screenshot
   reader (no AI is used) and `PUT .../profile` answer 409. The generator never writes `real = 1` and never calls the
   tracked-link routes, so "real people" counts stay real. `metrics_source 'sim'` makes Insights call every demo post

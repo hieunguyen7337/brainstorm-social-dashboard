@@ -49,6 +49,7 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | GET | /api/connections | -> `list[Connection]` | U1 |
 | POST | /api/connections/{platform} | `ConnectionCreate` -> `Connection` | U1 |
 | POST | /api/connections/{platform}/demo | -> `DemoSignInResult` (the synthetic sign-in of a demo workspace: connects the platform and backfills synthetic numbers; 409 in any other workspace; see `docs/REAL.md`) | U1 |
+| POST | /api/posts/{id}/demo/metrics?advance_minutes=5 | -> `DemoMetricsRead` (a synthetic metrics read of a published post in a demo workspace; 409 in any other workspace or for an unpublished post; see `docs/REAL.md`) | U1 |
 | DELETE | /api/connections/{platform} | -> `Connection` (status disconnected) | U1 |
 | GET | /api/dashboard?days=30&platform= | -> `DashboardSummary` | U1 |
 | GET | /api/activity?limit=30 | -> `list[ActivityItem]` | U1 |

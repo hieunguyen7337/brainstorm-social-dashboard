@@ -26,7 +26,7 @@ import { LIVE_PLATFORMS, comingSoonReason, isLivePlatform } from './platforms';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
-  DemoSignInResult, HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
+  DemoMetricsRead, DemoSignInResult, HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
   PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, TrendsStatus,
   TrendSourceStatus, Workspace, WritingStyle,
 } from './types';
@@ -825,6 +825,33 @@ function demoSignIn(s: State, platform: Platform): DemoSignInResult {
   };
 }
 
+/** Same minutes as the server's `demo.FIRST_READ_MINUTES` / `REFRESH_MINUTES` / `MAX_ADVANCE_MINUTES`. */
+const DEMO_FIRST_READ_MIN = 3;
+const DEMO_REFRESH_MIN = 5;
+const DEMO_MAX_ADVANCE_MIN = 60;
+
+/** A platform's demo account is signed in before a post goes to it (so the post can grow), like the server's `ensure_signed_in`. */
+function demoEnsureSignedIn(s: State, platform: Platform): void {
+  if (conn(s, platform).status !== 'connected') demoSignIn(s, platform);
+}
+
+/**
+ * The synthetic "metrics back" of one published post (`POST /api/posts/{id}/demo/metrics`): the simulated audience grows
+ * as if `minutes` had passed. A post read ahead of the clock waits until real time catches up (`tick` skips it).
+ */
+function demoRead(s: State, r: PostRec, minutes: number): DemoMetricsRead {
+  const p = r.post;
+  const [v0, e0] = [p.views, p.engagements];
+  const now = Date.now();
+  const age = Math.max(r.sim.age, (now - parseIso(p.published_at ?? iso(now))) / HOUR) + minutes / 60;
+  const dv = r.sim.vmax * (reached(age) - reached(r.sim.age)) * (0.85 + 0.3 * s.rng());
+  r.sim.age = age;
+  grow(s, r, dv, now);
+  const [gv, ge] = [p.views - v0, p.engagements - e0];
+  note(s, 'metrics', `Read metrics back from ${LABEL[p.platform]} (demo): +${gv} views, +${ge} engagements`, { platform: p.platform, post: p.id, at: now });
+  return { post: p, advanced_minutes: minutes, views_gained: gv, engagements_gained: ge, read_at: iso(now) };
+}
+
 // ---- generation -------------------------------------------------------------------------------------
 
 interface Ctx {
@@ -1299,8 +1326,23 @@ export const mockApi: PulseApi = {
     authed((s) => {
       const r = findPost(s, id);
       if (!isLivePlatform(r.post.platform)) unprocessable(comingSoonReason(r.post.platform));
-      if (r.post.status !== 'published') goLive(s, r, Date.now());
+      if (r.post.status !== 'published') {
+        const demo = s.ws.data_mode === 'demo';
+        if (demo) demoEnsureSignedIn(s, r.post.platform); // like the server: the demo account signs in first
+        goLive(s, r, Date.now());
+        if (demo) demoRead(s, r, DEMO_FIRST_READ_MIN); // ...and the first synthetic read comes back with the post
+      }
       return r.post;
+    }),
+  demoReadMetrics: (id, advanceMinutes) =>
+    authed((s) => {
+      if (s.ws.data_mode !== 'demo') throw new ApiError(409, 'Demo metrics only work in a demo workspace.');
+      const r = findPost(s, id);
+      if (r.post.status !== 'published') throw new ApiError(409, 'Only a published post has metrics to read.');
+      if (!isLivePlatform(r.post.platform)) unprocessable(comingSoonReason(r.post.platform));
+      demoEnsureSignedIn(s, r.post.platform);
+      const minutes = clamp(Math.floor(advanceMinutes ?? DEMO_REFRESH_MIN), 0, DEMO_MAX_ADVANCE_MIN);
+      return demoRead(s, r, minutes);
     }),
   convertLink: (code) =>
     call(() => {

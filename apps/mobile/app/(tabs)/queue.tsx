@@ -28,7 +28,8 @@ import { fmtDateTime } from '@/src/format';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
 import { publishedAllToast, publishedToast, queueSubtitle } from '@/src/realCopy';
-import { useIsRealWorkspace, useSession } from '@/src/session';
+import { demoPostedAllToast, demoPostedToast } from '@/src/demo/logic';
+import { useIsDemoWorkspace, useIsRealWorkspace, useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
 import { Screen, Segmented, ErrorState, confirm, haptic, useToast, type SegmentedOption } from '@/src/ui';
 
@@ -53,6 +54,7 @@ export default function QueueScreen() {
   const toast = useToast();
   const { workspace } = useSession();
   const real = useIsRealWorkspace();
+  const demo = useIsDemoWorkspace();
   const focused = useIsFocused();
   const navigation = useNavigation<TabNavigation>();
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -253,14 +255,14 @@ export default function QueueScreen() {
       if (!saved) return;
       if (saved.status === 'published') {
         haptic.success();
-        toast.show(publishedToast(label, real, post.platform));
+        toast.show(demo ? demoPostedToast(label, saved) : publishedToast(label, real, post.platform));
         goTab('published');
       } else {
         toast.show(`Couldn't publish to ${label}. Try again.`, 'error');
       }
       void reload();
     },
-    [run, publishRequest, toast, goTab, reload, real],
+    [run, publishRequest, toast, goTab, reload, real, demo],
   );
 
   const onDelete = useCallback(
@@ -389,10 +391,10 @@ export default function QueueScreen() {
       haptic.success();
       goTab('published');
     }
-    if (failed === 0) toast.show(publishedAllToast(published, real));
+    if (failed === 0) toast.show(demo ? demoPostedAllToast(published) : publishedAllToast(published, real));
     else toast.show(`Published ${published} of ${targets.length}. ${failed} could not be published.`, 'error');
     void reload();
-  }, [run, publishRequest, goTab, toast, reload, real]);
+  }, [run, publishRequest, goTab, toast, reload, real, demo]);
 
   const onRefresh = useCallback(async () => {
     setPulling(true);

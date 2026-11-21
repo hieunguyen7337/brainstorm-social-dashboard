@@ -36,7 +36,8 @@ export function publishedCardTitle(label: string, real: boolean): string {
 }
 
 /** The line under that title. The share buttons sit right below it. */
-export function publishedCardNote(real: boolean, platform?: Platform): string {
+export function publishedCardNote(real: boolean, platform?: Platform, demo = false): string {
+  if (demo) return 'Demo: posted synthetically. The first metrics are in and keep growing; every number is simulated.';
   if (!real) return 'Sandbox mode: your numbers start moving on the dashboard.';
   const how = copiesCaption(platform)
     ? 'Use the button below to copy the caption, then paste it into the app.'
