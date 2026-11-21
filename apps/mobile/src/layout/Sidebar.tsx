@@ -3,7 +3,7 @@
  * prop of the `Tabs` navigator, so routing, deep links and tab state stay exactly the navigator's own.
  *
  * Items are built from the same `Tabs.Screen` options as the bottom bar (title, `tabBarIcon`, `tabBarButtonTestID`),
- * so the two bars can never drift apart: Dashboard, Trends, Create, Queue, Settings.
+ * so the two bars can never drift apart: Dashboard, Trends, Create, Queue, Settings (and Assistant in Pulse Desktop).
  */
 import type { BottomTabBarProps } from 'expo-router/tabs';
 import { useState, type ReactNode } from 'react';
@@ -89,6 +89,8 @@ export function Sidebar({ state, descriptors, navigation, insets }: BottomTabBar
         {state.routes.map((route, index) => {
           const focused = index === state.index;
           const { options } = descriptors[route.key];
+          // `href: null` (the Assistant tab outside Pulse Desktop) arrives as a hidden item: the sidebar skips it too.
+          if ((StyleSheet.flatten(options.tabBarItemStyle) as { display?: string } | undefined)?.display === 'none') return null;
           const label =
             typeof options.tabBarLabel === 'string' ? options.tabBarLabel : (options.title ?? route.name);
           const onPress = () => {

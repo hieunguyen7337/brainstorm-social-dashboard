@@ -188,7 +188,7 @@ claude -p <prompt>
   [--resume <sessionId>]
   --mcp-config <app-data>/mcp.json --strict-mcp-config
   --tools ""                                   # no built-in Bash/Edit/Write/Read/WebFetch
-  --allowedTools "mcp__pulse__*" "mcp__pulse_desktop__*"
+  --allowedTools mcp__pulse mcp__pulse_desktop   # every tool on those two servers
   --setting-sources ""                         # ignore the person's project/user CLAUDE.md and hooks (verify)
   --append-system-prompt <Pulse brand/voice + rules for using the tools>
 cwd: <app-data>/claude-workdir   (an empty folder, never the person's projects)

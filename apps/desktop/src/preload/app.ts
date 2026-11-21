@@ -6,6 +6,21 @@ import type { ClaudeEvent, PublishConfirmRequest, PulseDesktop } from '@/src/des
 const apiArg = process.argv.find((a) => a.startsWith('--pulse-api-url='));
 const apiUrl = (apiArg ? apiArg.slice('--pulse-api-url='.length) : 'https://pulse-hackathon.fly.dev').replace(/\/+$/, '');
 
+// Claude events can arrive before the app subscribes (run() resolves first), so a run's events wait here until it does.
+const MAX_PENDING_EVENTS = 5000;
+const runListeners = new Map<string, Set<(e: ClaudeEvent) => void>>();
+const pendingEvents = new Map<string, ClaudeEvent[]>();
+ipcRenderer.on(IPC.claudeEvent, (_e: IpcRendererEvent, id: string, event: ClaudeEvent) => {
+  const listeners = runListeners.get(id);
+  if (listeners && listeners.size > 0) {
+    for (const cb of listeners) cb(event);
+    return;
+  }
+  const queue = pendingEvents.get(id) ?? [];
+  if (queue.length < MAX_PENDING_EVENTS) queue.push(event);
+  pendingEvents.set(id, queue);
+});
+
 const api: PulseDesktop = {
   version: DESKTOP_BRIDGE_VERSION,
   apiUrl,
@@ -19,12 +34,15 @@ const api: PulseDesktop = {
     status: () => ipcRenderer.invoke(IPC.claudeStatus),
     run: (req) => ipcRenderer.invoke(IPC.claudeRun, req),
     onEvent: (runId, cb) => {
-      const listener = (_e: IpcRendererEvent, id: string, event: ClaudeEvent) => {
-        if (id === runId) cb(event);
-      };
-      ipcRenderer.on(IPC.claudeEvent, listener);
+      const listeners = runListeners.get(runId) ?? new Set();
+      listeners.add(cb);
+      runListeners.set(runId, listeners);
+      const queued = pendingEvents.get(runId);
+      pendingEvents.delete(runId);
+      for (const event of queued ?? []) cb(event);
       return () => {
-        ipcRenderer.removeListener(IPC.claudeEvent, listener);
+        listeners.delete(cb);
+        if (listeners.size === 0) runListeners.delete(runId);
       };
     },
     stop: (runId) => ipcRenderer.invoke(IPC.claudeStop, runId),
