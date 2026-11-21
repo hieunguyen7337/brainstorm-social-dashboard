@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app import redact
 from app.db import PLATFORMS, new_id, now_iso
 from app.models import Platform, Post
+from app.platforms import live_platforms, require_live
 from app.services import metrics
 
 DOMAINS = {
@@ -302,6 +303,7 @@ def set_profile(conn: sqlite3.Connection, workspace_id: str, platform: str, raw_
     """
     if platform not in PLATFORMS:
         raise HTTPException(status_code=404, detail=f"unknown platform '{platform}'")
+    require_live(platform)
     url = validate_profile_url(platform, raw_url)
     row = conn.execute(
         "SELECT id, handle FROM connections WHERE workspace_id = ? AND platform = ?", (workspace_id, platform)
@@ -516,7 +518,7 @@ def harvest_status(conn: sqlite3.Connection, workspace_id: str) -> list[dict]:
         "SELECT platform, COUNT(*) AS n FROM posts WHERE workspace_id = ? AND metrics_source = 'real'"
         " GROUP BY platform", (workspace_id,))}
     out = []
-    for p in PLATFORMS:
+    for p in live_platforms():
         last = conn.execute(
             "SELECT captured_at, source FROM metric_snapshots WHERE workspace_id = ? AND platform = ?"
             " ORDER BY captured_at DESC, rowid DESC LIMIT 1", (workspace_id, p)).fetchone()

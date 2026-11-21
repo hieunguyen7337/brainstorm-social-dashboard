@@ -21,7 +21,6 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 
 import {
   api,
-  PLATFORMS,
   type ActivityItem,
   type Connection,
   type DashboardSummary,
@@ -35,7 +34,8 @@ import { useAsync, type AsyncState } from '@/src/hooks';
 import { Col, Grid } from '@/src/layout';
 import { useIsAccountsWorkspace, useIsDemoWorkspace } from '@/src/session';
 import { platformMeta, space, type as t } from '@/src/theme';
-import { Card, Chip, ChipRow, ErrorState, Skeleton } from '@/src/ui';
+import { LIVE_PLATFORMS } from '@/src/platforms';
+import { Card, Chip, ComingSoonLine, ChipRow, ErrorState, Skeleton } from '@/src/ui';
 import { ActivityCard } from './ActivityCard';
 import { BigChartsCard } from './BigChartsCard';
 import { BoardKpis } from './BoardKpis';
@@ -313,7 +313,7 @@ function BoardHeader({
       </View>
       <ChipRow style={styles.chips}>
         <Chip small label="All" icon="apps" selected={platform === null} onPress={() => onPlatform(null)} />
-        {PLATFORMS.map((p) => (
+        {LIVE_PLATFORMS.map((p) => (
           <Chip
             key={p}
             small
@@ -324,6 +324,7 @@ function BoardHeader({
           />
         ))}
       </ChipRow>
+      <ComingSoonLine />
     </View>
   );
 }

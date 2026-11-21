@@ -8,10 +8,11 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.config import settings
 from app.db import connect, init_db
+from app.qr import android_download_url, install_page, standalone_qr_svg
 
 log = logging.getLogger("pulse")
 
@@ -78,6 +79,18 @@ def create_app() -> FastAPI:
         if not settings.android_apk_url:
             return JSONResponse({"detail": "APK not published yet"}, status_code=404)
         return RedirectResponse(settings.android_apk_url, status_code=302)
+
+    @app.get("/download/android/qr.svg")
+    def download_android_qr():
+        return Response(
+            standalone_qr_svg(android_download_url()),
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    @app.get("/get", response_class=HTMLResponse)
+    def get_page():
+        return HTMLResponse(install_page(android_download_url()), headers={"Cache-Control": "public, max-age=300"})
 
     for module, attr in ROUTERS:
         router = _optional(module, attr)

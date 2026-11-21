@@ -12,8 +12,9 @@ from datetime import UTC, datetime, timedelta
 
 from app import db
 from app.config import settings
-from app.db import PLATFORMS, new_id, now_iso
+from app.db import new_id, now_iso
 from app.models import AutopilotConfig, AutopilotRun
+from app.platforms import live_platforms
 from app.services import ai
 
 log = logging.getLogger("pulse")
@@ -82,7 +83,7 @@ def run_once(conn: sqlite3.Connection, ws: sqlite3.Row, *, now: str | None = Non
 
     connected = _connected_platforms(conn, workspace_id)
     wanted = set(cfg.platforms) if cfg.platforms else connected
-    platforms = [p for p in PLATFORMS if p in wanted and p in connected]
+    platforms = [p for p in live_platforms() if p in wanted and p in connected]
 
     # Make sure the config row exists, so last_run_at can be stored even for a workspace never configured.
     conn.execute("INSERT OR IGNORE INTO autopilot (workspace_id) VALUES (?)", (workspace_id,))

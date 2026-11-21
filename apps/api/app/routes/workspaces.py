@@ -9,13 +9,13 @@ from app.auth import get_workspace
 from app.config import settings
 from app.db import PLATFORMS, get_db, new_id, now_iso
 from app.models import (
-    Connection,
     ConnectionCreate,
     Workspace,
     WorkspaceCreate,
     WorkspacePatch,
     WorkspaceWithToken,
 )
+from app.platforms import ConnectionOut, live_sql_list, platform_status, require_live
 from app.services import demo, harvest, style
 from app.services.seed import DEMO, DEMO_BRAND, seed_real_workspace, seed_workspace
 
@@ -28,10 +28,10 @@ def _ws(row: sqlite3.Row) -> dict:
     return out
 
 
-def _conn(row: sqlite3.Row) -> Connection:
-    return Connection(
+def _conn(row: sqlite3.Row) -> ConnectionOut:
+    return ConnectionOut(
         platform=row["platform"], handle=row["handle"], status=row["status"], mode=row["mode"],
-        followers=row["followers"], connected_at=row["connected_at"],
+        followers=row["followers"], connected_at=row["connected_at"], availability=platform_status(row["platform"]),
     )
 
 
@@ -85,9 +85,11 @@ def patch_workspace(body: WorkspacePatch, ws: sqlite3.Row = Depends(get_workspac
     return _ws(conn.execute("SELECT * FROM workspaces WHERE id = ?", (ws["id"],)).fetchone())
 
 
-@router.get("/api/connections", response_model=list[Connection])
+@router.get("/api/connections", response_model=list[ConnectionOut])
 def list_connections(ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Connection = Depends(get_db)):
-    rows = conn.execute("SELECT * FROM connections WHERE workspace_id = ?", (ws["id"],)).fetchall()
+    rows = conn.execute(
+        f"SELECT * FROM connections WHERE workspace_id = ? AND platform IN ({live_sql_list()})", (ws["id"],)
+    ).fetchall()
     rows.sort(key=lambda r: PLATFORMS.index(r["platform"]))
     return [_conn(r) for r in rows]
 
@@ -95,9 +97,10 @@ def list_connections(ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Con
 def _check_platform(platform: str) -> None:
     if platform not in PLATFORMS:
         raise HTTPException(status_code=404, detail=f"unknown platform '{platform}'")
+    require_live(platform)
 
 
-@router.post("/api/connections/{platform}", response_model=Connection)
+@router.post("/api/connections/{platform}", response_model=ConnectionOut)
 def connect_platform(platform: str, body: ConnectionCreate, ws: sqlite3.Row = Depends(get_workspace),
                      conn: sqlite3.Connection = Depends(get_db)):
     _check_platform(platform)
@@ -141,13 +144,17 @@ def connect_platform(platform: str, body: ConnectionCreate, ws: sqlite3.Row = De
 @router.post("/api/connections/{platform}/demo", response_model=demo.DemoSignInResult)
 def demo_sign_in(platform: str, ws: sqlite3.Row = Depends(get_workspace),
                  conn: sqlite3.Connection = Depends(get_db)):
-    """The synthetic sign-in of a demo workspace (docs/REAL.md): connects the platform and reads synthetic numbers."""
+    """The synthetic sign-in of a demo workspace (docs/REAL.md): connects the platform and reads synthetic numbers.
+
+    `_check_platform` also refuses a platform that is "coming soon" (docs: app/platforms.py), so the demo offers exactly
+    the platforms the real app does.
+    """
     _check_platform(platform)
     demo.require_demo(ws)
     return demo.sign_in(conn, ws, platform)
 
 
-@router.delete("/api/connections/{platform}", response_model=Connection)
+@router.delete("/api/connections/{platform}", response_model=ConnectionOut)
 def disconnect_platform(platform: str, ws: sqlite3.Row = Depends(get_workspace),
                         conn: sqlite3.Connection = Depends(get_db)):
     _check_platform(platform)

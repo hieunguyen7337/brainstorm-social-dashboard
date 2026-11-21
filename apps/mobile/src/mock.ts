@@ -22,6 +22,7 @@ import {
 import type { Mode } from './mockData';
 import { fileKind } from './pickFiles.types';
 import { buildShareInfo } from './shareLinks';
+import { LIVE_PLATFORMS, comingSoonReason, isLivePlatform } from './platforms';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
@@ -112,6 +113,7 @@ const isPlatform = (v: unknown): v is Platform => typeof v === 'string' && (PLAT
 
 function platformOf(v: unknown, field = 'platform'): Platform {
   if (!isPlatform(v)) unprocessable(`${field}: unknown platform`);
+  if (!isLivePlatform(v)) unprocessable(comingSoonReason(v)); // "X is coming soon to Pulse", like the API
   return v;
 }
 
@@ -201,7 +203,7 @@ interface State {
 let state: State | null = null;
 let aiAvailable = process.env.EXPO_PUBLIC_MOCK_AI === '1';
 
-const conn = (s: State, p: Platform): Connection => s.conns[PLATFORMS.indexOf(p)];
+const conn = (s: State, p: Platform): Connection => s.conns[LIVE_PLATFORMS.indexOf(p)];
 
 /** Public profile page of the two platforms the mock pretends to read for real. */
 const profileUrl = (p: Platform, handle: string): string => {
@@ -411,7 +413,7 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
   const now = Date.now();
   const isReal = s.ws.data_mode === 'real';
   const isDemo = s.ws.data_mode === 'demo'; // daily numbers like a sample workspace, but only signed-in platforms are listed
-  const plats: Platform[] = platform ? [platform] : [...PLATFORMS];
+  const plats: Platform[] = platform ? [platform] : [...LIVE_PLATFORMS];
   /** Sum daily rows for `n` days starting `from` days back (0 = today). */
   const sum = (ps: Platform[], from: number, n: number): Totals => {
     const t: Totals = { views: 0, engagements: 0, clicks: 0, conversions: 0 };
@@ -633,7 +635,7 @@ function insights(s: State, days: number): InsightsResponse {
 /** 120 days of per-platform daily metrics: drift, weekly seasonality, noise, spikes and the funnel ratios. */
 function seedDaily(s: State, now: number, rng: Rng): void {
   const todayShare = 0.6 + 0.4 * ((now % DAY) / DAY); // today is partial, but not a cliff on the chart
-  for (const p of PLATFORMS) {
+  for (const p of LIVE_PLATFORMS) {
     const m = MODEL[p];
     // Error-diffusion rounding: each day's rounding error carries into the next, so small daily counts
     // (conversions) still add up to the expected funnel ratios over a month.
@@ -729,7 +731,7 @@ function seed(brandInput: string | null | undefined): State {
       created_at: created, data_mode: 'sample',
     },
     slug,
-    conns: PLATFORMS.map(
+    conns: LIVE_PLATFORMS.map(
       (p, i): Connection => ({
         platform: p, handle: p === 'reddit' ? `u/${slug}` : `@${slug}`, status: 'connected', mode: 'sandbox',
         followers: Math.round(MODEL[p].followers * (0.985 + 0.03 * rng())),
@@ -771,7 +773,7 @@ function seedReal(brandInput: string | null | undefined): State {
   const s = seed(brandInput);
   const created = iso(Date.now());
   s.ws = { ...s.ws, created_at: created, data_mode: 'real' };
-  s.conns = PLATFORMS.map((p): Connection => ({ platform: p, handle: '', status: 'disconnected', mode: 'live', followers: 0, connected_at: created }));
+  s.conns = LIVE_PLATFORMS.map((p): Connection => ({ platform: p, handle: '', status: 'disconnected', mode: 'live', followers: 0, connected_at: created }));
   s.posts = [];
   s.daily = new Map();
   s.events = [];
@@ -789,7 +791,7 @@ function seedDemo(brandInput: string | null | undefined): State {
   const created = iso(Date.now());
   s.demoStash = { conns: s.conns, daily: s.daily, posts: s.posts.filter((r) => r.post.status === 'published') };
   s.ws = { ...s.ws, created_at: created, data_mode: 'demo' };
-  s.conns = PLATFORMS.map((p): Connection => ({ platform: p, handle: '', status: 'disconnected', mode: 'sandbox', followers: 0, connected_at: created }));
+  s.conns = LIVE_PLATFORMS.map((p): Connection => ({ platform: p, handle: '', status: 'disconnected', mode: 'sandbox', followers: 0, connected_at: created }));
   s.posts = [];
   s.daily = new Map();
   s.events = [];
@@ -804,7 +806,7 @@ function demoSignIn(s: State, platform: Platform): DemoSignInResult {
   if (s.ws.data_mode !== 'demo' || !s.demoStash) throw new ApiError(409, 'Demo sign-in only works in a demo workspace.');
   const c = conn(s, platform);
   const fresh = c.status !== 'connected';
-  const from = s.demoStash.conns[PLATFORMS.indexOf(platform)];
+  const from = s.demoStash.conns[LIVE_PLATFORMS.indexOf(platform)];
   if (fresh) {
     for (const [key, row] of s.demoStash.daily) {
       if (key.startsWith(`${platform}|`)) s.daily.set(key, { ...row });
@@ -1296,6 +1298,7 @@ export const mockApi: PulseApi = {
   publishPost: (id) =>
     authed((s) => {
       const r = findPost(s, id);
+      if (!isLivePlatform(r.post.platform)) unprocessable(comingSoonReason(r.post.platform));
       if (r.post.status !== 'published') goLive(s, r, Date.now());
       return r.post;
     }),
@@ -1485,7 +1488,7 @@ export const mockApi: PulseApi = {
     }),
   getHarvestStatus: () =>
     authed((s) =>
-      PLATFORMS.map((p): HarvestStatus => {
+      LIVE_PLATFORMS.map((p): HarvestStatus => {
         const c = conn(s, p);
         const h = s.saved[p];
         return {

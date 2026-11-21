@@ -5,7 +5,8 @@ import random
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
-from app.db import PLATFORMS, new_id
+from app.db import new_id
+from app.platforms import live_platforms
 from app.services.posts import create_post
 
 DEMO_BRAND = "Brew & Bloom"
@@ -73,6 +74,7 @@ def seed_real_workspace(conn: sqlite3.Connection, workspace_id: str) -> None:
     platforms as never-connected 'live' connections (no followers, no handle). No posts, no daily_metrics, no
     snapshots and no events: the first ingest of a platform connects it.
     """
+    PLATFORMS = live_platforms()  # demo data exists for live platforms only
     now = _fmt_time(datetime.now(UTC).replace(microsecond=0))
     for p in PLATFORMS:
         conn.execute(
@@ -96,6 +98,7 @@ def seed_real_workspace(conn: sqlite3.Connection, workspace_id: str) -> None:
 
 def seed_workspace(conn: sqlite3.Connection, workspace_id: str, brand_name: str, *, demo: bool) -> None:
     """Insert connections, themes, metrics, posts, autopilot and events for a fresh workspace."""
+    PLATFORMS = live_platforms()  # demo data exists for live platforms only
     rng = random.Random(workspace_id)
     now = datetime.now(UTC).replace(microsecond=0)
     slug = "".join(ch for ch in brand_name.lower() if ch.isalnum())[:24] or "brand"
@@ -231,7 +234,7 @@ def seed_workspace(conn: sqlite3.Connection, workspace_id: str, brand_name: str,
             (new_id("e_"), workspace_id, "connected", p, f"Connected {p.capitalize()} (sandbox)",
              _fmt_time(now - timedelta(days=29, hours=rng.randint(0, 5)))),
         )
-    for hours, plat, n in ((3, "instagram", 42), (7, "tiktok", 118), (26, "linkedin", 15)):
+    for hours, plat, n in ((3, "instagram", 42), (7, "linkedin", 118), (26, "linkedin", 15)):
         conn.execute(
             "INSERT INTO events (id, workspace_id, post_id, type, platform, detail, real, ts)"
             " VALUES (?,?,NULL,?,?,?,0,?)",

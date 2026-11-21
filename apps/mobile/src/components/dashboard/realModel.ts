@@ -1,7 +1,8 @@
 /** Pure helpers for the Dashboard of a real workspace (docs/REAL.md): which view to show, and the per-platform followers. */
 import { isConnected } from '@/src/connect';
 import type { AsyncState } from '@/src/hooks';
-import { PLATFORMS, type Connection, type Platform, type PlatformStats } from '@/src/types';
+import { LIVE_PLATFORMS } from '@/src/platforms';
+import { type Connection, type Platform, type PlatformStats } from '@/src/types';
 
 /**
  * What the Dashboard shows, decided by the connections request:
@@ -37,7 +38,7 @@ export function followerChips(
   only: Platform | null = null,
 ): FollowerChip[] {
   const chips: FollowerChip[] = [];
-  for (const platform of PLATFORMS) {
+  for (const platform of LIVE_PLATFORMS) {
     if (only && platform !== only) continue;
     const row = Array.isArray(byPlatform) ? byPlatform.find((p) => p.platform === platform) : undefined;
     const conn = Array.isArray(connections) ? connections.find((c) => c.platform === platform) : undefined;

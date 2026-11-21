@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from app.db import new_id, now_iso
-from app.models import Connection
+from app.platforms import ConnectionOut, platform_status
 from app.services import harvest
 from app.services.posts import create_post
 from app.services.seed import (
@@ -48,7 +48,7 @@ NOT_DEMO = "Demo sign-in only works in a demo workspace."
 
 class DemoSignInResult(BaseModel):
     platform: str
-    connection: Connection
+    connection: ConnectionOut
     followers: int
     views: int  # 30-day totals of the synthetic numbers just read
     engagements: int
@@ -218,9 +218,10 @@ def sign_in(conn: sqlite3.Connection, ws: sqlite3.Row, platform: str) -> DemoSig
         "SELECT * FROM connections WHERE workspace_id = ? AND platform = ?", (wid, platform)).fetchone()
     return DemoSignInResult(
         platform=platform,
-        connection=Connection(
+        connection=ConnectionOut(
             platform=connection["platform"], handle=connection["handle"], status=connection["status"],
             mode=connection["mode"], followers=connection["followers"], connected_at=connection["connected_at"],
+            availability=platform_status(connection["platform"]),
         ),
         followers=followers, views=views30, engagements=eng30, posts_added=posts_added, fresh=fresh,
         captured_at=now,

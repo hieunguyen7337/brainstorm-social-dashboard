@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { PLATFORMS } from '@/src/api';
+import { LIVE_PLATFORMS } from '@/src/platforms';
 import { autoReadAvailable } from '@/src/autoRead';
 import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import { useIsDemoWorkspace } from '@/src/session';
@@ -57,7 +57,7 @@ export function ConnectCta({ style }: { style?: StyleProp<ViewStyle> }) {
       <View style={styles.platforms}>
         <Text style={t.label}>Or start with</Text>
         <ChipRow style={styles.chips}>
-          {PLATFORMS.map((p) => (
+          {LIVE_PLATFORMS.map((p) => (
             <Chip key={p} small platform={p} label={platformMeta[p].label} onPress={() => open(p)} />
           ))}
         </ChipRow>

@@ -1,4 +1,5 @@
 /** Pure helpers for the wide Dashboard board (no React): funnel names, channel lanes, lift formatting, urls. */
+import { isLivePlatform, platformName } from '@/src/platforms';
 import { parseTs } from '@/src/format';
 import { colors } from '@/src/theme';
 import type { Connection, FunnelStageName, Platform, Post } from '@/src/types';
@@ -22,14 +23,21 @@ export interface Lane {
   threads?: boolean;
 }
 
-/** The five lanes on the whiteboard, left to right. */
-export const LANES: readonly Lane[] = [
+/** The lanes on the whiteboard, left to right. */
+const ALL_LANES: readonly Lane[] = [
   { key: 'reddit', label: 'Reddit', platforms: ['reddit'] },
   { key: 'linkedin', label: 'LinkedIn', platforms: ['linkedin'] },
   { key: 'meta', label: 'Instagram + TikTok', platforms: ['instagram', 'tiktok'] },
   { key: 'x', label: 'X + Threads', platforms: ['x'], threads: true },
   { key: 'facebook', label: 'Facebook', platforms: ['facebook'] },
 ];
+
+/** Lanes for live platforms only; a lane whose platforms are all "coming soon" is dropped. */
+export const LANES: readonly Lane[] = ALL_LANES.map((lane) => {
+  const live = lane.platforms.filter(isLivePlatform);
+  const label = lane.key === 'meta' && live.length === 1 ? platformName(live[0]) : lane.label;
+  return { ...lane, platforms: live, label };
+}).filter((lane) => lane.platforms.length > 0);
 
 export interface LaneCount {
   lane: Lane;

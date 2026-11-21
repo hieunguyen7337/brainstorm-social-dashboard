@@ -103,8 +103,9 @@ screenshot and vault flows are untouched.
 
 - **Creation.** `POST /api/workspaces` body gains `demo: bool = False` (`real` and `demo` together is a 422).
   `workspaces.data_mode` gains the value `'demo'`. The only thing in the app that creates one is the **Try the demo**
-  link under "Start my workspace" on onboarding. A demo workspace starts like a real one: six disconnected
-  connections (`mode 'sandbox'`), the 4 default themes, autopilot off, no posts, daily metrics, snapshots or events.
+  link under "Start my workspace" on onboarding. A demo workspace starts like a real one: disconnected connections
+  (`mode 'sandbox'`), the 4 default themes, autopilot off, no posts, daily metrics, snapshots or events. It offers
+  exactly the platforms the real app does (`app/platforms.py`): a "coming soon" platform answers 422 in the demo too.
 - **Synthetic sign-in.** `POST /api/connections/{platform}/demo` (no body, `data_mode 'demo'` only; 409 in a real or
   sample workspace) connects the platform as `sandbox` with a handle from the brand slug and backfills 60 days of
   deterministic daily metrics (same brand and platform, same numbers), three published posts

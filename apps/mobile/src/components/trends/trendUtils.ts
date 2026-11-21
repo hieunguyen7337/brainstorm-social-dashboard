@@ -1,9 +1,17 @@
 /** Pure helpers for the Trends screen: grouping, sorting, freshness, match wording and feed status. No React. */
 import type { Trend, TrendSource, TrendSourceStatus, TrendsStatus } from '@/src/api';
 import { parseTs, timeAgo } from '@/src/format';
+import { isLivePlatform } from '@/src/platforms';
 
 /** Group order in the default "All" view. */
 export const SOURCE_ORDER: readonly TrendSource[] = ['hackernews', 'reddit', 'google'];
+
+/** Reddit is a platform too: while it is "coming soon" its trends are not fetched and its chip says so. */
+export const sourceIsComingSoon = (source: TrendSource): boolean => source === 'reddit' && !isLivePlatform('reddit');
+
+/** The chip text: "Reddit · coming soon" instead of a bare count of 0. */
+export const sourceChipLabel = (source: TrendSource): string =>
+  sourceIsComingSoon(source) ? `${SOURCE_SHORT[source]} · coming soon` : SOURCE_SHORT[source];
 
 export type SourceFilter = 'all' | TrendSource;
 
@@ -64,7 +72,7 @@ export function buildGroups(trends: readonly Trend[]): TrendGroup[] {
   const seen = new Set<string>();
   const bySource = new Map<TrendSource, Trend[]>();
   for (const trend of trends) {
-    if (seen.has(trend.id)) continue;
+    if (seen.has(trend.id) || sourceIsComingSoon(trend.source)) continue;
     seen.add(trend.id);
     const list = bySource.get(trend.source);
     if (list) list.push(trend);

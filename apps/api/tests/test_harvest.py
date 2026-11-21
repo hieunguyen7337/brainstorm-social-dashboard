@@ -102,7 +102,7 @@ def test_put_profile_happy_path(auth, platform, url, stored):
     r = put_profile(client, h, platform, url)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == set(Connection.model_fields) | {"profile_url"}
+    assert set(body) == set(Connection.model_fields) | {"profile_url", "availability"}
     assert body["profile_url"] == stored
     assert {k: body[k] for k in before} == before  # handle, followers, status... untouched
     assert q("SELECT profile_url FROM connections WHERE workspace_id = ? AND platform = ?",
@@ -173,7 +173,7 @@ def test_put_profile_creates_missing_connection(auth, platform, url, handle):
     assert r.status_code == 200, r.text
     assert r.json() | {"connected_at": None} == {
         "platform": platform, "handle": handle, "status": "connected", "mode": "sandbox", "followers": 0,
-        "connected_at": None, "profile_url": url}
+        "connected_at": None, "profile_url": url, "availability": "live"}
     assert any(c["platform"] == platform for c in client.get("/api/connections", headers=h).json())
 
 

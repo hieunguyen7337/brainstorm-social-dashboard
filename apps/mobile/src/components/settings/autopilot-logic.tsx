@@ -3,7 +3,8 @@
  * helpers and the autosave engine (`ConfigSaver`). `autopilot-state.tsx` wires it to React.
  */
 import { parseTs, timeAgo } from '@/src/format';
-import { PLATFORMS, type AutopilotConfig, type Connection, type Platform } from '@/src/types';
+import { LIVE_PLATFORMS } from '@/src/platforms';
+import { type AutopilotConfig, type Connection, type Platform } from '@/src/types';
 
 /** The fields the user edits; `last_run_at` belongs to the server. */
 export type Editable = Pick<AutopilotConfig, 'enabled' | 'interval_min' | 'platforms' | 'require_approval'>;
@@ -53,11 +54,11 @@ export function lastRunLine(lastRunAt: string | null, now: number): string {
   return `Last run ${timeAgo(lastRunAt, Math.max(now, at))}`;
 }
 
-/** Platforms to switch on when autopilot is enabled with none chosen: the connected ones, else all six. */
+/** Platforms to switch on when autopilot is enabled with none chosen: the connected ones, else every live one. */
 export function defaultPlatforms(connections: readonly Connection[] | undefined): Platform[] {
   const connected = new Set((connections ?? []).filter((c) => c.status === 'connected').map((c) => c.platform));
-  const picked = PLATFORMS.filter((p) => connected.has(p));
-  return picked.length > 0 ? picked : [...PLATFORMS];
+  const picked = LIVE_PLATFORMS.filter((p) => connected.has(p));
+  return picked.length > 0 ? picked : [...LIVE_PLATFORMS];
 }
 
 /** The list after tapping `platform`, or null when the tap would clear the last selected platform. */
@@ -67,7 +68,7 @@ export function togglePlatform(current: readonly Platform[], platform: Platform)
   const next = new Set(current);
   if (has) next.delete(platform);
   else next.add(platform);
-  return PLATFORMS.filter((p) => next.has(p));
+  return LIVE_PLATFORMS.filter((p) => next.has(p));
 }
 
 const listKey = (list: readonly string[]): string => [...list].sort().join(',');

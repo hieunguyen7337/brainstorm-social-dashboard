@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { api, PLATFORMS, type Platform } from '@/src/api';
+import { api, type Platform } from '@/src/api';
+import { LIVE_PLATFORMS } from '@/src/platforms';
 import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import {
   ActivityCard,
@@ -22,13 +23,14 @@ import {
   pickLinkPost,
   sortedDays,
 } from '@/src/components/dashboard';
+import { InstallQr } from '@/src/components/share/InstallQr';
 import { TopBanners } from '@/src/components/dashboard/TopBanners';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
 import { useIsAccountsWorkspace, useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
-import { Card, Chip, ChipStrip, ErrorState, Screen } from '@/src/ui';
+import { Card, Chip, ComingSoonLine, ChipStrip, ErrorState, Screen } from '@/src/ui';
 
 /** After "Open a tracked link" fires, re-fetch quietly at these delays instead of waiting for the next 5 s poll. */
 const QUICK_REFRESH_MS = [900, 2600];
@@ -144,9 +146,14 @@ export default function DashboardScreen() {
         // A real workspace waits for its connections before drawing anything: no flash of charts, then a call to action.
         <DashboardSkeleton followers />
       ) : mode === 'empty' ? (
-        <Reveal index={0}>
-          <ConnectCta />
-        </Reveal>
+        <>
+          <Reveal index={0}>
+            <ConnectCta />
+          </Reveal>
+          <Reveal index={1}>
+            <InstallQr />
+          </Reveal>
+        </>
       ) : !summary ? (
         // First load: skeleton. If it failed, a retry (the skeleton shows again while the retry is in flight).
         dash.error && !dash.refreshing ? (
@@ -165,7 +172,7 @@ export default function DashboardScreen() {
           <Reveal index={0}>
             <ChipStrip>
               <Chip label="All" icon="apps" selected={platform === null} onPress={() => setPlatform(null)} />
-              {PLATFORMS.map((p) => (
+              {LIVE_PLATFORMS.map((p) => (
                 <Chip
                   key={p}
                   label={platformMeta[p].label}
@@ -175,6 +182,7 @@ export default function DashboardScreen() {
                 />
               ))}
             </ChipStrip>
+            <ComingSoonLine />
           </Reveal>
 
           <Reveal index={1}>
@@ -202,6 +210,10 @@ export default function DashboardScreen() {
                 notRead={summary.not_read}
               />
             )}
+          </Reveal>
+
+          <Reveal index={2}>
+            <InstallQr />
           </Reveal>
 
           <Reveal index={2}>

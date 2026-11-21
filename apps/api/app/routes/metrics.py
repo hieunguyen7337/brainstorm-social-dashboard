@@ -7,13 +7,14 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_workspace
 from app.db import PLATFORMS, get_db
-from app.models import Connection, Platform
+from app.models import Platform
+from app.platforms import ConnectionOut, platform_status, require_live
 from app.services import demo, harvest, vision
 
 router = APIRouter()
 
 
-class ConnectionProfile(Connection):
+class ConnectionProfile(ConnectionOut):
     profile_url: str | None
 
 
@@ -59,7 +60,8 @@ def put_profile(platform: str, body: ProfileBody, ws: sqlite3.Row = Depends(get_
                 conn: sqlite3.Connection = Depends(get_db)):
     demo.refuse_in_demo(ws)  # a demo workspace never takes real numbers
     row = harvest.set_profile(conn, ws["id"], platform, body.profile_url)
-    return {k: row[k] for k in ConnectionProfile.model_fields}
+    return {k: row[k] for k in ConnectionProfile.model_fields if k != "availability"} | {
+        "availability": platform_status(platform)}
 
 
 @router.post("/api/metrics/ingest", response_model=IngestResult)
@@ -97,6 +99,7 @@ def read_screenshot(platform: str, body: ScreenshotBody, ws: sqlite3.Row = Depen
     """
     if platform not in PLATFORMS:
         raise HTTPException(status_code=404, detail=f"unknown platform '{platform}'")
+    require_live(platform)
     demo.refuse_in_demo(ws)  # before any AI use: a demo workspace has nothing real to read
     if body.media_type not in vision.MEDIA_TYPES:
         raise HTTPException(

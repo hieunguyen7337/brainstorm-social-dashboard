@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_workspace
 from app.db import get_db, new_id, now_iso
 from app.models import AiUsage, GenerateRequest, GenerateResponse, Theme, ThemeCreate, ThemePatch
+from app.platforms import require_all_live
 from app.services import ai, classify
 
 log = logging.getLogger("pulse")
@@ -110,6 +111,7 @@ def generate(
     ws: sqlite3.Row = Depends(get_workspace),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> GenerateResponse:
+    require_all_live(body.platforms)
     _accept_generate(ws["id"])
     theme = _owned_theme(conn, ws, body.theme_id) if body.theme_id is not None else None
     trend = None

@@ -40,6 +40,8 @@ ALLOWED_PATHS = {"/api/browser/session": "phone browser heartbeat {active, url}:
 PUBLIC = {
     "GET /api/health": "health check",
     "GET /download/android": "APK redirect",
+    "GET /download/android/qr.svg": "install QR image of the public APK url: no input, no token",
+    "GET /get": "big-screen install page: no input, no token",
     "POST /api/workspaces": "sign-up: creates the workspace and its token",
     "GET /r/{code}": "tracked link click (counts a click on the post)",
     "GET /l/{code}": "tracked link landing page",
