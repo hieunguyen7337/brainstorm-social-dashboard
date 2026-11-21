@@ -31,6 +31,7 @@ ROUTERS = [
     ("app.routes.share", "router"),
     ("app.routes.autoread_trace", "router"),
     ("app.routes.browser", "router"),
+    ("app.routes.style", "router"),
 ]
 
 

@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 
 import { api, ApiError, PLATFORMS, type Platform, type Post } from '@/src/api';
 import { StartRoom } from '@/src/components/room/StartRoom';
+import { StyleBadge } from '@/src/components/settings/StyleBadge';
 import { timeAgo, truncate } from '@/src/format';
 import { colors, platformMeta, radius, space, type as t } from '@/src/theme';
 import { Button, Card, Chip, ChipRow, PlatformBadge, PlatformIcon, SectionHeader, Skeleton, TextField, haptic, useToast } from '@/src/ui';
@@ -86,7 +87,7 @@ export function GenerateCard({
       <StartRoom compact />
       <View style={styles.divider} />
 
-      <SectionHeader title="Generate" subtitle="Draft posts in one tap" />
+      <SectionHeader title="Generate" subtitle="Draft posts in one tap" right={<StyleBadge />} />
 
       <TextField
         value={brief}

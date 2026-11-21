@@ -191,6 +191,8 @@ COLUMNS_V2 = (
     ("workspaces", "data_mode", "TEXT NOT NULL DEFAULT 'sample'"),
     # the window (days) an account-level snapshot's views and engagements cover, when the person gave one
     ("metric_snapshots", "period_days", "INTEGER"),
+    # the person's learned writing style (WritingStyle as JSON; '' until they upload writing samples)
+    ("workspaces", "writing_style", "TEXT NOT NULL DEFAULT ''"),
 )
 
 
