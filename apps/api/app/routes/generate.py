@@ -10,7 +10,7 @@ from app.auth import get_workspace
 from app.db import get_db, new_id, now_iso
 from app.models import AiUsage, GenerateRequest, GenerateResponse, Theme, ThemeCreate, ThemePatch
 from app.platforms import require_all_live
-from app.services import ai, classify
+from app.services import ai, classify, vision
 
 log = logging.getLogger("pulse")
 
@@ -112,6 +112,12 @@ def generate(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> GenerateResponse:
     require_all_live(body.platforms)
+    # Checked before the rate limit, so a refused photo does not use up the person's turn.
+    photos: list[tuple[str, str]] = []
+    for photo in body.photos:
+        if photo.media_type not in vision.MEDIA_TYPES:
+            raise HTTPException(status_code=415, detail="photos must be PNG, JPEG or WebP")
+        photos.append((photo.media_type, vision.clean_image_base64(photo.image_base64)))
     _accept_generate(ws["id"])
     theme = _owned_theme(conn, ws, body.theme_id) if body.theme_id is not None else None
     trend = None
@@ -122,7 +128,7 @@ def generate(
 
     batch_id = new_id("b")
     variants, ai_used = ai.generate_variants(
-        conn, ws, platforms=body.platforms, theme=theme, trend=trend, brief=body.brief, tone=body.tone
+        conn, ws, platforms=body.platforms, theme=theme, trend=trend, brief=body.brief, tone=body.tone, photos=photos
     )
     posts = ai.save_variants(
         conn,

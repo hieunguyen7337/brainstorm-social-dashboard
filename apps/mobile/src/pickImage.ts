@@ -5,9 +5,16 @@
  * that was built before the module existed, and importing a missing native module throws. In that case this resolves
  * `{ status: 'unavailable' }` and the caller opens the web upload page in the browser instead.
  */
-import { base64Bytes, MAX_IMAGE_BYTES, type PickResult } from './pickImage.types';
+import {
+  base64Bytes,
+  MAX_IMAGE_BYTES,
+  MAX_PHOTOS,
+  type PickedImage,
+  type PickPhotosResult,
+  type PickResult,
+} from './pickImage.types';
 
-export type { PickedImage, PickResult } from './pickImage.types';
+export type { PickedImage, PickPhotosResult, PickResult } from './pickImage.types';
 
 type ImagePickerModule = typeof import('expo-image-picker');
 
@@ -20,6 +27,35 @@ function loadImagePicker(): ImagePickerModule | null {
     return require('expo-image-picker') as ImagePickerModule;
   } catch {
     return null;
+  }
+}
+
+/** Open the photo library and return up to `max` chosen photos as JPEG base64. Never throws. */
+export async function pickPhotos(max: number = MAX_PHOTOS): Promise<PickPhotosResult> {
+  const ImagePicker = loadImagePicker();
+  if (!ImagePicker || typeof ImagePicker.launchImageLibraryAsync !== 'function') return { status: 'unavailable' };
+  try {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: max,
+      allowsEditing: false,
+      quality: 0.7,
+      base64: true,
+      exif: false,
+    });
+    if (res.canceled) return { status: 'cancelled' };
+    const assets = res.assets ?? [];
+    const images: PickedImage[] = [];
+    for (const asset of assets) {
+      if (!asset.base64 || base64Bytes(asset.base64) > MAX_IMAGE_BYTES) continue;
+      images.push({ base64: asset.base64, mediaType: 'image/jpeg', uri: asset.uri, width: asset.width, height: asset.height });
+    }
+    if (images.length === 0) return { status: 'error', message: "Couldn't read those photos. Try others." };
+    return { status: 'ok', images: images.slice(0, max), skipped: assets.length - Math.min(images.length, max) };
+  } catch (e) {
+    if (MISSING_NATIVE.test(e instanceof Error ? e.message : String(e))) return { status: 'unavailable' };
+    return { status: 'error', message: "Couldn't open your photos. Try again." };
   }
 }
 

@@ -185,15 +185,33 @@ class _Call:
     response: Any = None  # the SDK response; None when the call failed before one came back
 
 
-def _call_model(channel_id: str, platforms: list[str], system: str, prompt: str) -> _Call:
-    """Runs in a worker thread: only the Anthropic client is touched here, never sqlite."""
+def _call_model(
+    channel_id: str, platforms: list[str], system: str, prompt: str, photos: list[tuple[str, str]] | None = None
+) -> _Call:
+    """Runs in a worker thread: only the Anthropic client is touched here, never sqlite.
+
+    `photos` are (media_type, clean base64) pairs the person attached; Claude sees them before the text.
+    """
+    content: Any = prompt
+    if photos:
+        content = [
+            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}}
+            for media_type, data in photos
+        ]
+        content.append(
+            {
+                "type": "text",
+                "text": f"The person attached {len(photos)} photo{'s' if len(photos) != 1 else ''} above. "
+                "Ground the posts in what the photos show, and do not invent details they do not.\n\n" + prompt,
+            }
+        )
     try:
         response = get_client().messages.parse(
             model=settings.ai_model,
             max_tokens=4000,
             output_config={"effort": "low"},
             system=system,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": content}],
             output_format=Variants,
         )
     except (
@@ -234,6 +252,7 @@ def generate_variants(
     trend: sqlite3.Row | None = None,
     brief: str = "",
     tone: str = "",
+    photos: list[tuple[str, str]] | None = None,
 ) -> tuple[list[Variant], bool]:
     """One variant per requested platform (de-duplicated, in order). Never raises for AI problems.
 
@@ -259,6 +278,7 @@ def generate_variants(
                 group,
                 channels.CHANNELS[channel_id].system_prompt(group),
                 build_prompt(ws, group, theme, trend, brief, tone, learning),
+                photos,
             )
             for channel_id, group in by_channel.items()
         ]

@@ -240,12 +240,23 @@ class Trend(BaseModel):
     fetched_at: str
 
 
+MAX_GENERATE_PHOTOS = 10
+
+
+class GeneratePhoto(BaseModel):
+    """One photo Claude looks at while it writes (never stored): base64 of a PNG, JPEG or WebP, 5 MB at most."""
+
+    image_base64: str = Field(max_length=12_000_000)
+    media_type: str = "image/jpeg"
+
+
 class GenerateRequest(BaseModel):
     platforms: list[Platform] = Field(min_length=1)
     theme_id: str | None = None
     trend_id: str | None = None
     brief: str = Field(default="", max_length=1000)
     tone: str = ""
+    photos: list[GeneratePhoto] = Field(default_factory=list, max_length=MAX_GENERATE_PHOTOS)
 
 
 class GenerateResponse(BaseModel):

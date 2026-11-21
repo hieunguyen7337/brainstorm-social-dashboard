@@ -21,6 +21,17 @@ export type PickResult =
   /** The image could not be read or is too large; `message` is for the person. */
   | { status: 'error'; message: string };
 
+/** Photos chosen for the Create page: one or several at once. */
+export type PickPhotosResult =
+  /** `images` are the ones that could be read; `skipped` counts those that could not (or did not fit under the limit). */
+  | { status: 'ok'; images: PickedImage[]; skipped: number }
+  | { status: 'cancelled' }
+  | { status: 'unavailable' }
+  | { status: 'error'; message: string };
+
+/** The most photos one Create request carries (the API's limit). */
+export const MAX_PHOTOS = 10;
+
 /** The API refuses images over 5 MB (413). Stay under it with room for the base64 overhead. */
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 

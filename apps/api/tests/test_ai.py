@@ -163,6 +163,41 @@ def test_model_drafts_are_saved_with_real_links(client, seed, monkeypatch):
     assert event[0]["detail"] == "3 drafts (AI)"
 
 
+def test_photos_are_sent_to_the_model_as_images(client, seed, monkeypatch):
+    headers, _ = seed()
+    calls = fake_model(monkeypatch, parsed=ai_variants("x", "linkedin", "reddit"))
+    photos = [{"image_base64": "ZmFrZQ==", "media_type": "image/jpeg"},
+              {"image_base64": "data:image/png;base64,ZmFrZQ==", "media_type": "image/png"}]
+
+    r = generate(client, headers, photos=photos)
+
+    assert r.status_code == 200, r.text
+    for call in calls:
+        content = call["messages"][0]["content"]
+        assert [b["type"] for b in content] == ["image", "image", "text"]
+        assert content[0]["source"] == {"type": "base64", "media_type": "image/jpeg", "data": "ZmFrZQ=="}
+        assert content[1]["source"]["data"] == "ZmFrZQ=="  # the data: prefix is stripped
+        assert "2 photos" in content[2]["text"]
+
+
+def test_no_photos_keeps_a_plain_text_prompt(client, seed, monkeypatch):
+    headers, _ = seed()
+    calls = fake_model(monkeypatch, parsed=ai_variants("x", "linkedin", "reddit"))
+    assert generate(client, headers).status_code == 200
+    assert all(isinstance(call["messages"][0]["content"], str) for call in calls)
+
+
+def test_photos_are_validated(client, seed, monkeypatch):
+    headers, _ = seed()
+    fake_model(monkeypatch, parsed=ai_variants("x", "linkedin", "reddit"))
+    bad_type = generate(client, headers, photos=[{"image_base64": "ZmFrZQ==", "media_type": "image/gif"}])
+    assert bad_type.status_code == 415
+    not_b64 = generate(client, headers, photos=[{"image_base64": "***", "media_type": "image/jpeg"}])
+    assert not_b64.status_code == 422
+    eleven = [{"image_base64": "ZmFrZQ==", "media_type": "image/jpeg"}] * 11
+    assert generate(client, headers, photos=eleven).status_code == 422
+
+
 def test_refusal_falls_back_to_templates(client, seed, monkeypatch):
     headers, ws_id = seed()
     fake_model(monkeypatch, parsed=None, stop_reason="refusal")

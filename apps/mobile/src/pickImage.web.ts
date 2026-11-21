@@ -7,9 +7,17 @@
  * chosen file is read with the browser's decoder, drawn onto a canvas with its longest side at most 2000 px and
  * re-encoded as JPEG 0.85; if the payload is still over 4 MB it shrinks further. The result is base64 for the API.
  */
-import { base64Bytes, MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, type PickResult } from './pickImage.types';
+import {
+  base64Bytes,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGE_SIDE,
+  MAX_PHOTOS,
+  type PickedImage,
+  type PickPhotosResult,
+  type PickResult,
+} from './pickImage.types';
 
-export type { PickedImage, PickResult } from './pickImage.types';
+export type { PickedImage, PickPhotosResult, PickResult } from './pickImage.types';
 
 const INPUT_ID = 'pulse-screenshot-input';
 /** Files this big are not screenshots; refuse before spending memory on decoding them. */
@@ -22,7 +30,7 @@ const ATTEMPTS: readonly (readonly [number, number])[] = [
   [0.5, 0.6],
 ];
 
-const failure = (message: string): PickResult => ({ status: 'error', message });
+const failure = (message: string) => ({ status: 'error' as const, message });
 const UNREADABLE = "Couldn't read that image. Try a PNG or JPEG screenshot.";
 
 /** Resolves the pick in flight, if any. */
@@ -143,6 +151,73 @@ function fileInput(): HTMLInputElement {
   input.addEventListener('cancel', () => settle({ status: 'cancelled' }));
   document.body.appendChild(input);
   return input;
+}
+
+const PHOTOS_INPUT_ID = 'pulse-photos-input';
+/** Resolves the multi-photo pick in flight, if any. */
+let pendingPhotos: ((files: File[]) => void) | null = null;
+
+function settlePhotos(files: File[]): void {
+  const done = pendingPhotos;
+  pendingPhotos = null;
+  done?.(files);
+}
+
+/** The hidden multi-select input for `pickPhotos`, created on first use. */
+function photosInput(): HTMLInputElement {
+  const existing = document.getElementById(PHOTOS_INPUT_ID);
+  if (existing instanceof HTMLInputElement) return existing;
+  const input = document.createElement('input');
+  input.id = PHOTOS_INPUT_ID;
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.hidden = true;
+  input.tabIndex = -1;
+  input.setAttribute('aria-hidden', 'true');
+  input.setAttribute('data-testid', 'photos-input');
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files ?? []);
+    input.value = ''; // so choosing the same photos again still fires `change`
+    settlePhotos(files);
+  });
+  input.addEventListener('cancel', () => settlePhotos([]));
+  document.body.appendChild(input);
+  return input;
+}
+
+/**
+ * Open the file picker (several files allowed) and resolve with up to `max` photos as JPEG base64, each downscaled like a
+ * screenshot. Never throws. Call it synchronously from a tap handler.
+ */
+export function pickPhotos(max: number = MAX_PHOTOS): Promise<PickPhotosResult> {
+  if (typeof document === 'undefined') return Promise.resolve({ status: 'unavailable' });
+  return new Promise<PickPhotosResult>((resolve) => {
+    settlePhotos([]);
+    pendingPhotos = (files) => {
+      if (files.length === 0) return resolve({ status: 'cancelled' });
+      void (async () => {
+        const images: PickedImage[] = [];
+        let skipped = 0;
+        for (const file of files) {
+          if (images.length >= max) {
+            skipped += 1;
+            continue;
+          }
+          const res = await prepare(file).catch(() => failure(UNREADABLE));
+          if (res.status === 'ok') images.push(res.image);
+          else skipped += 1;
+        }
+        resolve(images.length > 0 ? { status: 'ok', images, skipped } : failure("Couldn't read those photos. Try PNG or JPEG."));
+      })();
+    };
+    try {
+      photosInput().click();
+    } catch {
+      settlePhotos([]);
+      resolve(failure("Couldn't open the file picker. Try again."));
+    }
+  });
 }
 
 /**
