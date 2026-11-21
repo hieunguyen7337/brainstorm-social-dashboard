@@ -15,9 +15,7 @@ mac:
   category: public.app-category.productivity
   target:
     - target: dmg
-      arch: [arm64, x64]
-    - target: zip
-      arch: [arm64, x64]
+      arch: [x64]
   identity: null # no Developer ID: scripts/after-pack.cjs applies an ad-hoc signature instead
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -27,7 +25,7 @@ dmg:
 win:
   target:
     - target: nsis
-      arch: [x64, arm64]
+      arch: [x64]
   signAndEditExecutable: false
 nsis:
   oneClick: false

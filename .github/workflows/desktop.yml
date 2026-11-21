@@ -21,7 +21,6 @@ jobs:
             artifact: pulse-desktop-mac
             files: |
               apps/desktop/release/*.dmg
-              apps/desktop/release/*.zip
           - os: windows-latest
             script: dist:win
             artifact: pulse-desktop-win

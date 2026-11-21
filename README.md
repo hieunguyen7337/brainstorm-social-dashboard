@@ -23,7 +23,7 @@ No public download page exists yet. Get an installer from the latest
 [Desktop workflow run](.github/workflows/desktop.yml) (Actions tab, artifacts `pulse-desktop-mac` / `pulse-desktop-win`), or
 build one yourself (below).
 
-**macOS** (Apple Silicon: `Pulse-<version>-mac-arm64.dmg`, Intel: `Pulse-<version>-mac-x64.dmg`)
+**macOS** (`Pulse-<version>-mac-x64.dmg`; Apple Silicon Macs run this build through Rosetta 2)
 
 1. Open the `.dmg` and drag Pulse to Applications.
 2. The app is not notarized yet, so macOS blocks the first launch. Right-click Pulse in Applications, choose
@@ -32,7 +32,7 @@ build one yourself (below).
    xattr -cr /Applications/Pulse.app
    ```
 
-**Windows** (`Pulse-<version>-win-x64.exe`, or `-win-arm64.exe` for ARM PCs)
+**Windows** (`Pulse-<version>-win-x64.exe`)
 
 1. Run the installer. It installs for your user only, and you can pick the folder.
 2. The installer is not signed yet, so SmartScreen may warn. Click **More info**, then **Run anyway**.
@@ -80,8 +80,8 @@ npm run dev                            # build and start Pulse Desktop
 Installers (written to `apps/desktop/release/`):
 
 ```sh
-npm run dist:mac    # .dmg + .zip, Apple Silicon and Intel
-npm run dist:win    # NSIS installers, x64 and arm64 (builds on macOS too, no Wine needed)
+npm run dist:mac    # .dmg, x64 (runs on Apple Silicon via Rosetta 2)
+npm run dist:win    # NSIS installer, x64 (builds on macOS too, no Wine needed)
 npm run dist        # both
 ```
 

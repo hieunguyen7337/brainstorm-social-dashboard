@@ -80,8 +80,8 @@ holds only `dist/`, `renderer/` and `package.json`. Both commands work from macO
 
 Outputs (version from `package.json`, about 115-125 MB each):
 
-- macOS: `Pulse-<v>-mac-arm64.dmg`, `Pulse-<v>-mac-x64.dmg` and matching `.zip`.
-- Windows: `Pulse-<v>-win-x64.exe`, `Pulse-<v>-win-arm64.exe` and a combined `Pulse-<v>-win.exe` (both arches, bigger).
+- macOS: `Pulse-<v>-mac-x64.dmg` (x64 only; Apple Silicon Macs run it through Rosetta 2).
+- Windows: `Pulse-<v>-win-x64.exe`.
   NSIS, per-user install, choose the install folder, desktop and Start menu shortcuts.
 
 Nothing is signed with a purchased certificate:
