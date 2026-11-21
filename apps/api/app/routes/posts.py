@@ -3,7 +3,7 @@
 import json
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.auth import get_workspace
 from app.db import get_db
@@ -74,6 +74,15 @@ def patch_post(post_id: str, body: PostPatch, ws: sqlite3.Row = Depends(get_work
         conn.execute(f"UPDATE posts SET {cols} WHERE id = ?", (*changes.values(), post_id))
         conn.commit()
     return row_to_post(conn, get_post_row(conn, ws["id"], post_id))
+
+
+@router.get("/api/posts/{post_id}/card.jpg")
+def post_card(post_id: str, ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Connection = Depends(get_db)):
+    from app.services.card import render_card
+
+    row = _owned(conn, ws, post_id)
+    return Response(render_card(row["content"] or "", ws["brand_name"]), media_type="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.delete("/api/posts/{post_id}")
