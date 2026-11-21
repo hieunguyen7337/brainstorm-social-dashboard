@@ -8,7 +8,8 @@ const common = {
   platform: 'node',
   format: 'cjs',
   target: 'node24',
-  external: ['electron'],
+  // react-native: reached only through autoRead/runner.ts's lazy require('./trace'), which falls back without it.
+  external: ['electron', 'react-native'],
   alias: { '@': path.resolve(root, '../mobile') },
   sourcemap: true,
   logLevel: 'info',
