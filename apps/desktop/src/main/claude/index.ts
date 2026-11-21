@@ -33,7 +33,10 @@ export function registerClaude(ctx: AppContext): void {
   ctx.handle(IPC.claudeStop, (runId) => bridge.stop(runId));
   ctx.handle(IPC.claudeChoose, async (): Promise<ClaudeState> => {
     const win = ctx.getMainWindow();
-    const options = { title: 'Choose the claude binary', properties: ['openFile' as const] };
+    const filters = process.platform === 'win32'
+      ? [{ name: 'Claude Code (claude.exe, claude.cmd)', extensions: ['exe', 'cmd'] }, { name: 'All files', extensions: ['*'] }]
+      : undefined;
+    const options = { title: 'Choose the claude binary', properties: ['openFile' as const], ...(filters ? { filters } : {}) };
     const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     const file = picked.filePaths[0];
     if (picked.canceled || !file) return status();

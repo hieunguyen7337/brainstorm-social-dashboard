@@ -197,6 +197,11 @@ cwd: <app-data>/claude-workdir   (an empty folder, never the person's projects)
 - Binary: `CLAUDE_BIN` env, else `claude` on `PATH`, else common install paths (`~/.claude/local/claude`,
   `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`). Electron apps launched from Finder do not inherit the
   shell `PATH`, so resolve it once from the login shell (`$SHELL -ilc 'command -v claude'`).
+- Windows: `CLAUDE_BIN`, the saved choice, `where.exe claude` (prefers `.exe`), then `%USERPROFILE%\.local\bin\claude.exe`,
+  `%APPDATA%\npm\claude.cmd`, `%LOCALAPPDATA%\Programs\claude\claude.exe`. Never `shell: true`: an npm `claude.cmd`
+  shim is resolved to the `cli.js` it launches and run with Pulse's own Electron binary as Node
+  (`ELECTRON_RUN_AS_NODE=1`, so the `runAsNode` fuse must stay on); an `.exe` runs directly. Stop uses
+  `taskkill /T /F` so Claude's MCP child processes go too (`src/main/claude/launch.ts`, `bridge.ts`).
 - Status (owner decision: rely on the person's own Claude Code login, with clear prompts when it is missing):
   checked at launch and before each run with `claude --version` and `claude auth status --json`. The Assistant
   panel shows one of three states, each with a copy button and a "Check again" button:

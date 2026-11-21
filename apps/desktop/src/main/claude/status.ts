@@ -1,14 +1,23 @@
 import { execFile } from 'node:child_process';
 import type { ClaudeState } from '@/src/desktop/types';
+import { resolveLaunch } from './launch.ts';
+import type { Launch } from './launch.ts';
 
 export const MIN_VERSION = '2.0.0';
 
-function run(bin: string, args: string[], timeoutMs: number): Promise<{ ok: boolean; stdout: string }> {
+function run(launch: Launch, args: string[], timeoutMs: number): Promise<{ ok: boolean; stdout: string }> {
   return new Promise((resolve) => {
     execFile(
-      bin,
-      args,
-      { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] } as never,
+      launch.command,
+      [...launch.prefixArgs, ...args],
+      {
+        timeout: timeoutMs,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ...launch.env },
+        windowsHide: true,
+      } as never,
       (err, stdout) => resolve({ ok: !err, stdout: String(stdout ?? '') }),
     );
   });
@@ -44,13 +53,19 @@ export interface StatusOptions {
 
 export async function checkStatus(bin: string | null, opts: StatusOptions = {}): Promise<ClaudeState> {
   if (!bin) return { state: 'not_found' };
-  const v = await run(bin, ['--version'], opts.versionTimeoutMs ?? 8000);
+  let launch: Launch;
+  try {
+    launch = resolveLaunch(bin);
+  } catch {
+    return { state: 'not_found' }; // an npm shim we cannot unpack: the panel offers "Choose the claude binary"
+  }
+  const v = await run(launch, ['--version'], opts.versionTimeoutMs ?? 8000);
   const version = v.ok ? parseVersion(v.stdout) : null;
   if (!version) return { state: 'not_found' };
   const minimum = opts.minVersion ?? MIN_VERSION;
   if (compareVersions(version, minimum) < 0) return { state: 'too_old', version, minimum };
 
-  const a = await run(bin, ['auth', 'status', '--json'], opts.authTimeoutMs ?? 10000);
+  const a = await run(launch, ['auth', 'status', '--json'], opts.authTimeoutMs ?? 10000);
   let json: Record<string, unknown> | null = null;
   try {
     const parsed: unknown = JSON.parse(a.stdout);
