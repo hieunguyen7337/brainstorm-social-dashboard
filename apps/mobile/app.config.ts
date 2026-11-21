@@ -67,6 +67,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         microphonePermission: false,
       },
     ],
+    // Native-only (docs/VAULT.md). OTA-safe: src/vault probes for the native module, so an old APK just hides the feature.
+    [
+      'expo-secure-store',
+      { configureAndroidBackup: true, faceIDPermission: 'Allow Pulse to unlock your saved logins with Face ID.' },
+    ],
     [
       'expo-splash-screen',
       {
