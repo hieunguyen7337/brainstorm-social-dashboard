@@ -440,7 +440,37 @@ async function run() {
     }
   }
   if (!user) return finish('empty', { username: username, diag: diag });
-  finish('ok', { user: igUser(user, username) });
+  var out = igUser(user, username);
+  // Check the follower count against the profile page itself (2026-11-21: a tester's account with 1 follower was saved
+  // as 0 from the data call). The page's number wins when the call gave none, gave 0, or is off by more than the
+  // rounding of "1.2K"-style counts.
+  var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
+  diag.api = apiF === undefined ? -1 : apiF;
+  if (diag.t === undefined && remaining() > 1500) {
+    var tc = null;
+    if (pathIs('/' + lower(username))) tc = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
+    if (!tc) {
+      try {
+        var h2 = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
+        diag.h = h2.status;
+        if (h2.ok) tc = igCountsFromText(igMetaFromHtml(h2.text));
+      } catch (e) {}
+    }
+    if (tc) {
+      diag.txt = tc.followers;
+      var off = apiF === undefined || (apiF === 0 && tc.followers > 0) || Math.abs(tc.followers - apiF) > 0.06 * tc.followers;
+      if (off) {
+        out.edge_followed_by = { count: tc.followers };
+        diag.src = 'page';
+        if (tc.following !== undefined) out.edge_follow = { count: tc.following };
+        if (tc.posts !== undefined) {
+          if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
+          out.edge_owner_to_timeline_media.count = tc.posts;
+        }
+      }
+    }
+  }
+  finish('ok', { user: out, diag: diag });
 }
 `;
 
