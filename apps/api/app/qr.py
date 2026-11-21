@@ -35,9 +35,12 @@ _PAGE = """<!doctype html>
 :root{--bg:#0b1020;--card:#141a2e;--hi:#1b2340;--bd:#232b47;--tx:#f4f6ff;--dim:#a8b0cf;--mute:#6f7899;
 --ac:#7c5cff;--ac2:#ff5c8a;--ok:#2fe0a3;--info:#4cc3ff;--li:#0a66c2;--ig:#e1306c}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-background-image:radial-gradient(900px 500px at 85% -10%,rgba(124,92,255,.28),transparent 60%),
-radial-gradient(700px 420px at -10% 30%,rgba(255,92,138,.16),transparent 60%)}
+html{background:var(--bg)}
+body{margin:0;background:transparent;color:var(--tx);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+background:radial-gradient(900px 520px at 85% -10%,rgba(124,92,255,.28),transparent 60%),
+radial-gradient(700px 440px at -10% 35%,rgba(255,92,138,.15),transparent 60%)}
+.wrap{position:relative;z-index:0}
 .wrap{max-width:1080px;margin:0 auto;padding:28px 16px 56px}
 nav{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.3px}
 .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--ac),var(--ac2));
@@ -61,7 +64,7 @@ color:#fff;text-decoration:none;background:linear-gradient(135deg,var(--ac),var(
 .qr svg{width:100%;height:100%;display:block}
 .steps{color:var(--mute);font-size:13.5px;margin-top:16px}
 .phone{justify-self:center;width:300px;border-radius:40px;padding:12px;background:#05070f;border:1px solid var(--bd);
-box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 6px #121829}
+box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 6px #121829,0 0 140px 10px rgba(124,92,255,.28)}
 .screen{border-radius:30px;background:var(--bg);padding:20px 14px 18px;min-height:540px}
 .sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .sh b{font-size:22px;letter-spacing:-.4px}.sh span{font-size:11px;color:var(--ok);font-weight:700}
@@ -93,7 +96,7 @@ footer{margin-top:64px;color:var(--mute);font-size:13px;text-align:center}
 <nav><div class="logo">&#9889;</div>Pulse</nav>
 <section class="hero"><div>
 <span class="pill">Android app &middot; free</span>
-<h1>Your socials, <span class="grad">on autopilot.</span></h1>
+<h1>Your socials,<br><span class="grad" style="white-space:nowrap">on autopilot.</span></h1>
 <p class="lead">Pulse reads your real Instagram and LinkedIn numbers, writes the next post with AI, and publishes it for you in two taps. No copy and paste, no switching apps.</p>
 <div class="cta"><div class="btns"><a class="btn" href="/download/android"><i class="bi"><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22A11.5 11.5 0 0 0 12 8.08c-1.74 0-3.4.37-4.92 1.06L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg></i><span>Download for Android<small>APK for phones</small></span></a><a class="btn btn2" href="/download/desktop"><i class="bi"><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.5l7.5-1v7H3zM11.5 4.3L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3.1-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.2zM14 5.2c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z"/></svg></i><span>Download for Desktop<small>Windows and macOS</small></span></a></div><div class="qr"><div class="box" role="img" aria-label="QR code to download Pulse for Android">__QR__</div><div>Android phone nearby?<br>Scan to install.</div></div></div>
 <div class="alt">Or pick yours: <a href="/download/android">Android</a> &middot; <a href="/download/windows">Windows</a> &middot; <a href="/download/mac">macOS</a></div>
