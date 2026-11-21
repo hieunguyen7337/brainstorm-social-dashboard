@@ -19,6 +19,23 @@ async function run(opts: EnvOptions, ms = 20_000) {
   return env;
 }
 
+/** A profile page whose header words sit one per element, as Instagram draws them. */
+function header(words: string[]): string {
+  return `<!doctype html><html><body><header>${words.map((w) => `<div>${w}</div>`).join('')}</header></body></html>`;
+}
+
+/** jsdom has no innerText: give it the header's words one per line, as the phone's WebView does. */
+function withInnerText(env: ReturnType<typeof makeEnv>): void {
+  Object.defineProperty(env.dom.window.HTMLElement.prototype, 'innerText', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return Array.from(this.querySelectorAll('div'))
+        .map((d) => d.textContent)
+        .join('\n');
+    },
+  });
+}
+
 function expectNoSecrets(raw: string[]) {
   for (const s of SECRETS) for (const m of raw) expect(m).not.toContain(s);
 }
@@ -313,7 +330,7 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 7 });
     });
 
-    it('fixed: the profile page wins over a data call that says 0 followers (tester, 2026-11-21)', async () => {
+    it('true number or error: no visible header on the profile saves nothing from the data call or meta text', async () => {
       const page = '<meta property="og:description" content="1 Followers, 3 Following, 0 Posts - See Instagram photos" />';
       const env = await run({
         url: 'https://www.instagram.com/jane/',
@@ -323,9 +340,44 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
           ['/jane/', ok(page)],
         ],
       });
+      expect(env.posted[0].status).toBe('empty');
+      expect(env.posted[0].data.username).toBe('jane');
+      expect(env.posted[0].data.user).toBeUndefined();
+      expect(env.posted[0].data.diag).toMatchObject({ api: 0, vis: false });
+    });
+
+    it('fixed: the visible header wins over a data call that says 0 followers (tester, 2026-11-21)', async () => {
+      const env = makeEnv({
+        url: 'https://www.instagram.com/jane/',
+        html: header(['0', 'posts', '1', 'follower', '3', 'following']),
+        cookies: COOKIES,
+        routes: [
+          [CURRENT, ok({ user: { username: 'jane' } })],
+          [PROFILE, ok({ data: { user: { username: 'jane', edge_followed_by: { count: 0 }, edge_follow: { count: 3 } } } })],
+        ],
+      });
+      withInnerText(env);
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
       expect(env.posted[0].status).toBe('ok');
       expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1 });
-      expect(env.posted[0].data.diag).toMatchObject({ api: 0, txt: 1, src: 'page' });
+      expect(env.posted[0].data.diag).toMatchObject({ api: 0, txt: 1, src: 'page', vis: true });
+    });
+
+    it('an exact visible count beats a data call that is close but different', async () => {
+      const env = makeEnv({
+        url: 'https://www.instagram.com/jane/',
+        html: header(['9', 'posts', '1,234', 'followers', '3', 'following']),
+        cookies: COOKIES,
+        routes: [
+          [CURRENT, ok({ user: { username: 'jane' } })],
+          [PROFILE, ok({ data: { user: { username: 'jane', edge_followed_by: { count: 1230 } } } })],
+        ],
+      });
+      withInnerText(env);
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1234 });
     });
 
     it('fixed: the visible header wins over a stale meta description (vivo, 2026-11-21)', async () => {
@@ -341,32 +393,27 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
           [PROFILE, st(404)],
         ],
       });
-      // jsdom has no innerText: give it the header's words one per line, as the phone's WebView does.
-      Object.defineProperty(env.dom.window.HTMLElement.prototype, 'innerText', {
-        configurable: true,
-        get(this: HTMLElement) {
-          return Array.from(this.querySelectorAll('div'))
-            .map((d) => d.textContent)
-            .join('\n');
-        },
-      });
+      withInnerText(env);
       env.inject(readerScript('instagram', 1));
       await env.advance(20_000);
       expect(env.posted[0].status).toBe('ok');
       expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1 });
-      expect(env.posted[0].data.diag).toMatchObject({ api: 0, txt: 1, src: 'page', vis: true });
+      expect(env.posted[0].data.diag).toMatchObject({ txt: 1, vis: true });
     });
 
     it('an abbreviated page count does not replace the exact count from the data call', async () => {
-      const page = '<meta property="og:description" content="1.2K Followers, 3 Following, 9 Posts" />';
-      const env = await run({
+      const env = makeEnv({
         url: 'https://www.instagram.com/jane/',
+        html: header(['9', 'posts', '1.2K', 'followers', '3', 'following']),
+        cookies: COOKIES,
         routes: [
           [CURRENT, ok({ user: { username: 'jane' } })],
           [PROFILE, ok({ data: { user: { username: 'jane', edge_followed_by: { count: 1234 } } } })],
-          ['/jane/', ok(page)],
         ],
       });
+      withInnerText(env);
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
       expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1234 });
       expect(env.posted[0].data.diag.src).toBeUndefined();
     });

@@ -451,45 +451,37 @@ async function run() {
   // The person sees their own numbers on their profile page, so the app opens it and reads there (step 1). Step 0
   // still sends what it found, in case the profile page never loads (2026-11-21: the owner asked to see it go there).
   if (STEP === 0 && !pathIs('/' + lower(username))) return finish('ok', { user: out, diag: diag, go: username });
-  // Check the follower count against the profile page itself (2026-11-21: a tester's account with 1 follower was saved
-  // as 0 from the data call). The page's number wins when the call gave none, gave 0, or is off by more than the
-  // rounding of "1.2K"-style counts.
+  // Only what the person sees on their own profile is saved (owner, 2026-11-21: "either show the true correct number or
+  // come back as error"). The data calls and the meta description are Instagram's server copies and can lag: on the vivo
+  // both said 0 while the header said 1. So the visible header wins; without it this step comes back empty, and the app
+  // falls back to a screenshot of this page read by Claude, or reports an error. No number is ever guessed.
   var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
   diag.api = apiF === undefined ? -1 : apiF;
-  // The meta description is Instagram's server copy and can lag: on 2026-11-21 it said 0 followers while the header the
-  // person saw said 1. So on the profile page the visible header wins, and the meta text is only a fallback.
-  var onProfile = pathIs('/' + lower(username));
-  if ((diag.t === undefined || onProfile) && remaining() > 1500) {
-    var tc = null;
-    // On the profile page Instagram draws the header after load: give it a few seconds to show the counts.
-    var pageT0 = Date.now();
-    while (pathIs('/' + lower(username))) {
-      tc = igCountsFromText(igBodyText());
-      if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
-      await tick();
-    }
-    diag.vis = !!tc;
-    if (!tc && onProfile) tc = igCountsFromText(igMeta(document));
-    if (!tc && diag.t === undefined) {
-      try {
-        var h2 = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
-        diag.h = h2.status;
-        if (h2.ok) tc = igCountsFromText(igMetaFromHtml(h2.text));
-      } catch (e) {}
-    }
-    if (tc) {
-      diag.txt = tc.followers;
-      var off = apiF === undefined || (apiF === 0 && tc.followers > 0) || Math.abs(tc.followers - apiF) > 0.06 * tc.followers;
-      if (off) {
-        out.edge_followed_by = { count: tc.followers };
-        diag.src = 'page';
-        if (tc.following !== undefined) out.edge_follow = { count: tc.following };
-        if (tc.posts !== undefined) {
-          if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
-          out.edge_owner_to_timeline_media.count = tc.posts;
-        }
-      }
-    }
+  var tc = null;
+  var pageT0 = Date.now();
+  while (pathIs('/' + lower(username))) {
+    tc = igCountsFromText(igBodyText());
+    if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
+    await tick();
+  }
+  diag.vis = !!tc;
+  if (!tc) return finish('empty', { username: username, diag: diag });
+  diag.txt = tc.followers;
+  // A rounded count on the page ("1.2K" = 1200) keeps the data call's exact number only when that number rounds to it.
+  function shown(seen, exact) {
+    if (seen === undefined) return exact;
+    var rounded = seen >= 1000 && seen % 100 === 0;
+    return rounded && exact !== undefined && Math.abs(seen - exact) <= 0.06 * seen ? exact : seen;
+  }
+  var f = shown(tc.followers, apiF);
+  if (f !== apiF) diag.src = 'page';
+  out.edge_followed_by = { count: f };
+  var g = shown(tc.following, isObj(out.edge_follow) ? num(out.edge_follow.count) : undefined);
+  if (g !== undefined) out.edge_follow = { count: g };
+  var p = shown(tc.posts, isObj(out.edge_owner_to_timeline_media) ? num(out.edge_owner_to_timeline_media.count) : undefined);
+  if (p !== undefined) {
+    if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
+    out.edge_owner_to_timeline_media.count = p;
   }
   finish('ok', { user: out, diag: diag });
 }
