@@ -1,12 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, platformMeta, space, type as t } from '@/src/theme';
-import { PLATFORMS, type Platform } from '@/src/types';
+import { LIVE_PLATFORMS, UPCOMING_PLATFORMS } from '@/src/platforms';
+import { type Platform } from '@/src/types';
 import { Chip, ChipRow, haptic } from '@/src/ui';
 
 import { ACCENT_TEXT } from './logic';
 
-/** Multi-select platform chips with a "Select all" / "Clear" shortcut. The selection always follows `PLATFORMS` order. */
+/** Multi-select platform chips with a "Select all" / "Clear" shortcut. The selection always follows `LIVE_PLATFORMS` order. Upcoming platforms are greyed, say "Coming soon" and cannot be selected. */
 export function PlatformPicker({
   selected,
   onChange,
@@ -14,11 +15,11 @@ export function PlatformPicker({
   selected: readonly Platform[];
   onChange: (next: Platform[]) => void;
 }) {
-  const all = selected.length === PLATFORMS.length;
+  const all = selected.length === LIVE_PLATFORMS.length;
 
   const toggle = (p: Platform) => {
     const has = selected.includes(p);
-    onChange(PLATFORMS.filter((x) => (x === p ? !has : selected.includes(x))));
+    onChange(LIVE_PLATFORMS.filter((x) => (x === p ? !has : selected.includes(x))));
   };
 
   return (
@@ -31,7 +32,7 @@ export function PlatformPicker({
           hitSlop={8}
           onPress={() => {
             haptic.select();
-            onChange(all ? [] : [...PLATFORMS]);
+            onChange(all ? [] : [...LIVE_PLATFORMS]);
           }}
           style={({ pressed }) => [styles.action, pressed && styles.pressed]}
         >
@@ -39,13 +40,22 @@ export function PlatformPicker({
         </Pressable>
       </View>
       <ChipRow>
-        {PLATFORMS.map((p) => (
+        {LIVE_PLATFORMS.map((p) => (
           <Chip
             key={p}
             platform={p}
             label={platformMeta[p].label}
             selected={selected.includes(p)}
             onPress={() => toggle(p)}
+          />
+        ))}
+        {UPCOMING_PLATFORMS.map((p) => (
+          <Chip
+            key={p}
+            platform={p}
+            label={`${platformMeta[p].label} · Coming soon`}
+            selected={false}
+            disabled
           />
         ))}
       </ChipRow>

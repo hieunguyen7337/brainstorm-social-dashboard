@@ -3,7 +3,8 @@
  * sharing between polls, and the optimistic "overlay" that keeps a local change on screen until the server has
  * caught up with it (so a poll that was already in flight can never flip a card back for a moment).
  */
-import { PLATFORMS, type Post } from '@/src/api';
+import { PLATFORMS, type Post } from '@/src/types';
+import { isLivePlatform } from '@/src/platforms';
 import { parseTs } from '@/src/format';
 
 export type QueueTab = 'drafts' | 'scheduled' | 'published';
@@ -59,6 +60,8 @@ export function splitPosts(posts: readonly Post[]): QueueLists {
   const scheduled: Post[] = [];
   const published: Post[] = [];
   for (const p of posts) {
+    // Old rows for platforms that are "coming soon" are never listed (and so never get a Publish button).
+    if (!isLivePlatform(p.platform)) continue;
     if (p.status === 'published') published.push(p);
     else if (p.status === 'scheduled') scheduled.push(p);
     else drafts.push(p);

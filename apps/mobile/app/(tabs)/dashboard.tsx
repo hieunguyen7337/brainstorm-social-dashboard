@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { api, PLATFORMS, type Platform } from '@/src/api';
+import { api, type Platform } from '@/src/api';
+import { LIVE_PLATFORMS } from '@/src/platforms';
 import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import {
   ActivityCard,
@@ -29,7 +30,7 @@ import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
 import { useIsRealWorkspace, useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
-import { Card, Chip, ChipStrip, ErrorState, Screen } from '@/src/ui';
+import { Card, Chip, ComingSoonLine, ChipStrip, ErrorState, Screen } from '@/src/ui';
 
 /** After "Open a tracked link" fires, re-fetch quietly at these delays instead of waiting for the next 5 s poll. */
 const QUICK_REFRESH_MS = [900, 2600];
@@ -170,7 +171,7 @@ export default function DashboardScreen() {
           <Reveal index={0}>
             <ChipStrip>
               <Chip label="All" icon="apps" selected={platform === null} onPress={() => setPlatform(null)} />
-              {PLATFORMS.map((p) => (
+              {LIVE_PLATFORMS.map((p) => (
                 <Chip
                   key={p}
                   label={platformMeta[p].label}
@@ -180,6 +181,7 @@ export default function DashboardScreen() {
                 />
               ))}
             </ChipStrip>
+            <ComingSoonLine />
           </Reveal>
 
           <Reveal index={1}>

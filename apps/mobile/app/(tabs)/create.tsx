@@ -20,7 +20,8 @@ import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
 import { useSession } from '@/src/session';
 import { colors, space } from '@/src/theme';
-import { PLATFORMS, type Platform, type Trend } from '@/src/types';
+import { LIVE_PLATFORMS } from '@/src/platforms';
+import { type Platform, type Trend } from '@/src/types';
 import { Button, Card, ErrorState, Screen, confirm, haptic } from '@/src/ui';
 
 type Phase = 'form' | 'generating' | 'result';
@@ -68,7 +69,7 @@ export default function CreateScreen() {
     [connections.data],
   );
   const platforms = useMemo<Platform[]>(
-    () => picked ?? (connected.length > 0 ? PLATFORMS.filter((p) => connected.includes(p)) : [...PLATFORMS]),
+    () => picked ?? (connected.length > 0 ? LIVE_PLATFORMS.filter((p) => connected.includes(p)) : [...LIVE_PLATFORMS]),
     [picked, connected],
   );
 

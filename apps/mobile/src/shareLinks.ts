@@ -4,6 +4,7 @@
  * `GET /api/posts/{id}/share` is the source of truth once it exists; this builder backs the mock and is the
  * fallback when that endpoint answers 404 (or is unreachable), so the buttons work either way.
  */
+import { isLivePlatform } from './platforms';
 import type { Platform, Post, ShareInfo } from './types';
 
 const enc = encodeURIComponent;
@@ -30,7 +31,7 @@ function splitTitle(content: string): { title: string; body: string } {
 }
 
 /** Platforms whose card offers a "Post on ..." button (X cards also offer Threads). */
-export const SHAREABLE: readonly Platform[] = ['linkedin', 'x', 'reddit', 'facebook'];
+export const SHAREABLE: readonly Platform[] = (['linkedin', 'x', 'reddit', 'facebook'] as const).filter(isLivePlatform);
 
 export function buildShareInfo(post: Post): ShareInfo {
   const caption = captionFor(post);

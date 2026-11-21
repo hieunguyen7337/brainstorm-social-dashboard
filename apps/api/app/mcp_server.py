@@ -146,7 +146,7 @@ def _token(ctx: Context) -> str:
 def _platform_name(platform: str) -> str:
     name = (platform or "").strip().lower()
     if not name:
-        raise PulseToolError("platform is empty: use one of linkedin, instagram, x, tiktok, reddit, facebook.")
+        raise PulseToolError("platform is empty: use linkedin or instagram (X, TikTok, Facebook and Reddit are coming soon to Pulse).")
     return name
 
 
@@ -209,7 +209,7 @@ def mount_mcp(app: FastAPI) -> None:
     async def get_dashboard(ctx: Context, days: int = 30, platform: str | None = None) -> str:
         """Summarise the workspace dashboard: totals, sales funnel (views -> engagements -> clicks ->
         conversions), views share by platform and the top 3 posts. `days` is the window (default 30);
-        `platform` optionally filters to one of linkedin, instagram, x, tiktok, reddit, facebook."""
+        `platform` optionally filters to linkedin or instagram (X, TikTok, Facebook, Reddit: coming soon)."""
         params: dict[str, Any] = {"days": days}
         if platform:
             params["platform"] = platform
@@ -237,7 +237,7 @@ def mount_mcp(app: FastAPI) -> None:
         hashtags: list[str] | None = None,
         status: str = "draft",
     ) -> str:
-        """Create a post on one platform (linkedin, instagram, x, tiktok, reddit, facebook) with the
+        """Create a post on one live platform (linkedin or instagram; the others are coming soon and refused) with the
         given text and hashtags. `status` is normally "draft"; use publish_post to publish it."""
         body = {"platform": platform, "content": content, "hashtags": hashtags or [], "status": status}
         return _compact(_trim_post(await call(ctx, "POST", "/api/posts", body=body)))

@@ -2,6 +2,7 @@ export { AnimatedNumber } from './AnimatedNumber';
 export { Badge, type BadgeTone } from './Badge';
 export { Button, IconButton, type ButtonProps } from './Button';
 export { Card, SectionHeader, type CardProps } from './Card';
+export { ComingSoonLine } from './ComingSoon';
 export { Chip, ChipRow, ChipStrip, Segmented, type ChipProps, type SegmentedOption } from './Chip';
 export { Logo } from './Logo';
 export { PlatformBadge, PlatformIcon, PlatformLabel } from './PlatformIcon';

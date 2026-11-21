@@ -13,7 +13,8 @@ import { useAsync } from '@/src/hooks';
 import { autopilotOffHint, autopilotSubtitle } from '@/src/realCopy';
 import { useIsRealWorkspace } from '@/src/session';
 import { colors, platformMeta, space, type as t, withAlpha } from '@/src/theme';
-import { PLATFORMS, type AutopilotRun, type Platform as PlatformId, type Theme, type Trend } from '@/src/types';
+import { LIVE_PLATFORMS } from '@/src/platforms';
+import { type AutopilotRun, type Platform as PlatformId, type Theme, type Trend } from '@/src/types';
 import {
   Button,
   Card,
@@ -160,7 +161,7 @@ export function AutopilotSection() {
   const enabled = cfg.enabled;
   const interval = cfg.interval_min;
   const selected = new Set(cfg.platforms);
-  const hasDisconnected = connected !== null && PLATFORMS.some((p) => !connected.has(p));
+  const hasDisconnected = connected !== null && LIVE_PLATFORMS.some((p) => !connected.has(p));
 
   const setEnabled = (next: boolean) => {
     // Never leave autopilot on with nothing to post to: fill the platforms in the same save.
@@ -259,7 +260,7 @@ export function AutopilotSection() {
       <Card>
         <Text style={t.label}>Post to</Text>
         <ChipRow style={styles.chips}>
-          {PLATFORMS.map((p) => (
+          {LIVE_PLATFORMS.map((p) => (
             <Chip
               key={p}
               platform={p}

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_workspace
 from app.db import PLATFORMS, get_db
 from app.models import ActivityItem, DashboardSummary
+from app.platforms import live_sql_list, require_live
 from app.services import metrics
 from app.services.posts import row_to_post
 
@@ -127,11 +128,15 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
               ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Connection = Depends(get_db)):
     if platform is not None and platform not in PLATFORMS:
         raise HTTPException(status_code=422, detail="unknown platform")
+    if platform is not None:
+        require_live(platform)
     metrics.tick(conn, ws["id"])
     today = metrics._now().date()
     start = today - timedelta(days=days - 1)
     prev_start = start - timedelta(days=days)
-    plat_sql, plat_args = (" AND platform = ?", (platform,)) if platform else ("", ())
+    plat_sql, plat_args = (
+        (" AND platform = ?", (platform,)) if platform else (f" AND platform IN ({live_sql_list()})", ())
+    )  # upcoming platforms never count towards "All"
 
     daily = conn.execute(
         "SELECT platform, day, views, engagements, clicks, conversions FROM daily_metrics"
@@ -157,7 +162,8 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
                 prev_tot[k] += r[k]
 
     followers = {c["platform"]: c["followers"] for c in conn.execute(
-        "SELECT platform, followers FROM connections WHERE workspace_id = ? AND status = 'connected'", (ws["id"],))}
+        "SELECT platform, followers FROM connections WHERE workspace_id = ? AND status = 'connected'"
+        f" AND platform IN ({live_sql_list()})", (ws["id"],))}
     connected = [p for p in followers if platform is None or p == platform]
     for p in connected:
         per_plat.setdefault(p, dict.fromkeys(KEYS, 0))
@@ -228,7 +234,8 @@ def activity(limit: int = Query(30, ge=1, le=200), ws: sqlite3.Row = Depends(get
              conn: sqlite3.Connection = Depends(get_db)):
     metrics.tick(conn, ws["id"])
     rows = conn.execute(
-        "SELECT * FROM events WHERE workspace_id = ? ORDER BY ts DESC, rowid DESC LIMIT ?",
+        "SELECT * FROM events WHERE workspace_id = ? AND (platform IS NULL OR platform IN "
+        f"({live_sql_list()})) ORDER BY ts DESC, rowid DESC LIMIT ?",
         (ws["id"], limit),
     ).fetchall()
     return [

@@ -3,12 +3,13 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
-import { PLATFORMS, type Connection, type HarvestStatus, type Platform } from '@/src/api';
+import { type Connection, type HarvestStatus, type Platform } from '@/src/api';
 import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import { followersLabel, latestIso, updatedLabel } from '@/src/connect';
 import { fmtCompact, timeAgo } from '@/src/format';
 import { colors, platformMeta, radius, space, type as t, withAlpha } from '@/src/theme';
 import { Badge, Button, Card, PlatformBadge, SectionHeader, Skeleton } from '@/src/ui';
+import { LIVE_PLATFORMS } from '@/src/platforms';
 import { FEATURED_CONNECTORS, isConnected, orderConnectors, safeWebUrl, shortUrl } from './boardModel';
 
 const GAP = space.md;
@@ -65,7 +66,7 @@ export function ConnectorsCard({
     for (const h of Array.isArray(harvest) ? harvest : []) map.set(h.platform, h);
     return map;
   }, [harvest]);
-  const order = orderConnectors(PLATFORMS);
+  const order = orderConnectors(LIVE_PLATFORMS);
   const featured = order.slice(0, FEATURED_CONNECTORS.length);
   const others = order.slice(FEATURED_CONNECTORS.length);
 

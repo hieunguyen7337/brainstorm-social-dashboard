@@ -3,12 +3,13 @@ import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { api, ApiError, PLATFORMS, type Platform, type Post } from '@/src/api';
+import { api, ApiError, type Platform, type Post } from '@/src/api';
+import { LIVE_PLATFORMS } from '@/src/platforms';
 import { InstallQr } from '@/src/components/share/InstallQr';
 import { StyleBadge } from '@/src/components/settings/StyleBadge';
 import { timeAgo, truncate } from '@/src/format';
 import { colors, platformMeta, radius, space, type as t } from '@/src/theme';
-import { Button, Card, Chip, ChipRow, PlatformBadge, PlatformIcon, SectionHeader, Skeleton, TextField, haptic, useToast } from '@/src/ui';
+import { Button, Card, Chip, ComingSoonLine, ChipRow, PlatformBadge, PlatformIcon, SectionHeader, Skeleton, TextField, haptic, useToast } from '@/src/ui';
 import { laneCounts, latestDrafts, type LaneCount } from './boardModel';
 import { firstLine } from './model';
 
@@ -52,7 +53,7 @@ export function GenerateCard({
   const requesting = useRef(false);
 
   const toggle = (p: Platform) =>
-    setPlatforms((cur) => PLATFORMS.filter((x) => (x === p ? !cur.includes(p) : cur.includes(x))));
+    setPlatforms((cur) => LIVE_PLATFORMS.filter((x) => (x === p ? !cur.includes(p) : cur.includes(x))));
 
   const generate = async () => {
     if (requesting.current || platforms.length === 0) return;
@@ -99,7 +100,7 @@ export function GenerateCard({
         onSubmitEditing={() => void generate()}
       />
       <ChipRow style={styles.chips}>
-        {PLATFORMS.map((p) => (
+        {LIVE_PLATFORMS.map((p) => (
           <Chip
             key={p}
             small
@@ -110,6 +111,7 @@ export function GenerateCard({
           />
         ))}
       </ChipRow>
+      <ComingSoonLine />
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {error}

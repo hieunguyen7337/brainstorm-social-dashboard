@@ -25,6 +25,7 @@ import httpx
 
 from app.config import settings
 from app.db import now_iso
+from app.platforms import is_live
 
 log = logging.getLogger("pulse.trends")
 
@@ -146,6 +147,10 @@ async def _get(client: httpx.AsyncClient, name: str, url: str, parser, as_json: 
     return items
 
 
+async def _none() -> list[Item]:
+    return []  # Reddit is "coming soon": not fetched (app/platforms.py)
+
+
 async def fetch_all(client: httpx.AsyncClient | None = None) -> dict[str, list[Item]]:
     own = client is None
     if own:
@@ -155,7 +160,7 @@ async def fetch_all(client: httpx.AsyncClient | None = None) -> dict[str, list[I
     try:
         hn, rd, gg = await asyncio.gather(
             _get(client, "hackernews", HN_URL, parse_hn, True),
-            _get(client, "reddit", REDDIT_URL, parse_reddit, True),
+            _get(client, "reddit", REDDIT_URL, parse_reddit, True) if is_live("reddit") else _none(),
             _get(client, "google", GOOGLE_URL, parse_google, False),
         )
     finally:
@@ -312,9 +317,9 @@ def match(title: str, profile: dict[str, tuple[float, str]]) -> tuple[float | No
 
 
 def ranked(conn: sqlite3.Connection, ws: sqlite3.Row, limit: int) -> list[dict]:
-    """Trends sorted by match (unknown match last), then buzz, then title."""
+    """Trends sorted by match (unknown match last), then buzz, then title. Upcoming sources (Reddit) are left out."""
     profile = brand_profile(conn, ws)
-    rows = conn.execute("SELECT * FROM trends").fetchall()
+    rows = [r for r in conn.execute("SELECT * FROM trends").fetchall() if r["source"] != "reddit" or is_live("reddit")]
     out = []
     for r in rows:
         rel, terms = match(r["title"], profile)

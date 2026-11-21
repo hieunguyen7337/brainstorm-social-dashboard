@@ -10,8 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fmtDay } from '@/src/format';
 import { useWide } from '@/src/layout';
 import { colors, platformMeta, radius, space, type as t } from '@/src/theme';
-import { PLATFORMS, type Platform } from '@/src/types';
-import { Button, Card, PlatformLabel, SectionHeader, TextField, confirm, useToast } from '@/src/ui';
+import { LIVE_PLATFORMS } from '@/src/platforms';
+import { type Platform } from '@/src/types';
+import { Button, Card, ComingSoonLine, PlatformLabel, SectionHeader, TextField, confirm, useToast } from '@/src/ui';
 import { MAX_FIELD, deleteLogin, saveLogin, useVaultStatus } from '@/src/vault';
 
 export function VaultSection() {
@@ -55,7 +56,7 @@ export function VaultSection() {
     <View style={styles.section}>
       {header}
       <Card style={styles.list}>
-        {PLATFORMS.map((p) => {
+        {LIVE_PLATFORMS.map((p) => {
           const info = saved[p];
           return (
             <View key={p} style={styles.row}>
@@ -76,6 +77,7 @@ export function VaultSection() {
             </View>
           );
         })}
+        <ComingSoonLine />
       </Card>
       {editing ? (
         <LoginSheet key={editing} platform={editing} replacing={!!saved[editing]} onClose={() => setEditing(null)} />

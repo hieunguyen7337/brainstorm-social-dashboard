@@ -20,6 +20,7 @@ import { api } from '@/src/api';
 import { canSharePhoto, openInstagramApp, pickPostPhoto, sharePhoto, type PostPhoto } from '@/src/igPost/device';
 import { igAutoPostAvailable, type IgPostOutcome } from '@/src/igPost/IgPostSheet';
 import { IG_AUTOPOST, igButtonMode, igFailureText, igNote } from '@/src/igPost/logic';
+import { isLivePlatform } from '@/src/platforms';
 import { buildShareInfo, captionFor } from '@/src/shareLinks';
 import { platformMeta } from '@/src/theme';
 import type { Platform, Post, ShareInfo } from '@/src/types';
@@ -43,6 +44,7 @@ export interface ShareAction {
 
 /** The buttons a card of this platform gets, in order. */
 export function shareActionsFor(platform: Platform, os: string = RNPlatform.OS): ShareAction[] {
+  if (!isLivePlatform(platform)) return []; // X, TikTok, Facebook, Reddit are "coming soon": no share targets
   const label = platformMeta[platform].label;
   switch (platform) {
     case 'instagram':

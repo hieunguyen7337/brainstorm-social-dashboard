@@ -2,7 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Animated, Platform as RNPlatform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { api, ApiError, PLATFORMS, type Connection, type Platform } from '@/src/api';
+import { api, ApiError, type Connection, type Platform } from '@/src/api';
+import { LIVE_PLATFORMS, UPCOMING_PLATFORMS } from '@/src/platforms';
 import { fmtCompact } from '@/src/format';
 import { useAsync } from '@/src/hooks';
 import { useSession } from '@/src/session';
@@ -192,14 +193,16 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
     <View style={styles.section}>
       {header}
       <Card padded={false}>
-        {PLATFORMS.map((platform, index) => {
+        {[...LIVE_PLATFORMS, ...UPCOMING_PLATFORMS].map((platform, index) => {
+          const upcoming = !LIVE_PLATFORMS.includes(platform);
           const conn = byPlatform.get(platform) ?? null;
           const formOpen = form?.platform === platform;
           return (
             <ConnectorRow
               key={platform}
               platform={platform}
-              conn={conn}
+              upcoming={upcoming}
+              conn={upcoming ? null : conn}
               pending={busy[platform] ?? null}
               formOpen={formOpen}
               first={index === 0}
@@ -240,6 +243,8 @@ export function ConnectorsSection({ handleRef }: { handleRef?: Ref<ConnectorsHan
 
 interface RowProps {
   platform: Platform;
+  /** "Coming soon": a badge instead of a Connect button. */
+  upcoming?: boolean;
   conn: Connection | null;
   pending: Pending | null;
   formOpen: boolean;
@@ -249,7 +254,7 @@ interface RowProps {
   children?: ReactNode;
 }
 
-function ConnectorRow({ platform, conn, pending, formOpen, first, onConnect, onDisconnect, children }: RowProps) {
+function ConnectorRow({ platform, upcoming = false, conn, pending, formOpen, first, onConnect, onDisconnect, children }: RowProps) {
   const label = platformMeta[platform].label;
   const active = conn && conn.status === 'connected' ? conn : null;
   const summary = active
@@ -275,7 +280,9 @@ function ConnectorRow({ platform, conn, pending, formOpen, first, onConnect, onD
             <Text style={[styles.name, !active && styles.nameOff]} numberOfLines={1}>
               {label}
             </Text>
-            {active ? (
+            {upcoming ? (
+              <Badge label="Coming soon" tone="neutral" style={styles.badge} />
+            ) : active ? (
               active.mode === 'live' ? (
                 <Badge label="live" tone="success" style={styles.badge} />
               ) : (
@@ -290,12 +297,12 @@ function ConnectorRow({ platform, conn, pending, formOpen, first, onConnect, onD
               </Text>
               {pending ? null : <Text style={t.small}>{followersText(active.followers)}</Text>}
             </>
-          ) : (
+          ) : upcoming ? null : (
             <Text style={styles.handleOff}>Not connected</Text>
           )}
         </View>
 
-        {formOpen ? null : (
+        {formOpen || upcoming ? null : (
           <Button
             small
             variant={pending || active ? 'secondary' : 'primary'}
@@ -359,7 +366,7 @@ function ConnectForm({
 function ConnectorsSkeleton() {
   return (
     <Card padded={false}>
-      {PLATFORMS.map((platform, index) => (
+      {LIVE_PLATFORMS.map((platform, index) => (
         <View key={platform} style={[styles.rowWrap, index > 0 && styles.divider]}>
           <View style={styles.row}>
             <Skeleton width={40} height={40} rounded={20} />

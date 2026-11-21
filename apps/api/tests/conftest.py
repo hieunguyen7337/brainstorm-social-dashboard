@@ -26,3 +26,16 @@ def auth(client):
     assert r.status_code == 200, r.text
     ws = r.json()
     return client, {"Authorization": f"Bearer {ws['token']}"}, ws
+
+
+@pytest.fixture(autouse=True)
+def all_platforms_live(request, monkeypatch):
+    """Older tests exercise every platform's pipeline (templates, share links, harvest...), so they run with all six
+    platforms live. Tests that check the real gating (tests/test_platform_gating.py) are marked `gating`."""
+    if request.node.get_closest_marker("gating"):
+        return
+    from app import platforms
+    from app.db import PLATFORMS
+
+    monkeypatch.setattr(platforms, "LIVE_PLATFORMS", PLATFORMS)
+    monkeypatch.setattr(platforms, "UPCOMING_PLATFORMS", ())

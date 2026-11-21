@@ -1,3 +1,4 @@
+import { isLivePlatform } from '@/src/platforms';
 import { FacebookPreview } from './FacebookPreview';
 import { InstagramPreview } from './InstagramPreview';
 import { LinkedInPreview } from './LinkedInPreview';
@@ -8,6 +9,7 @@ import type { PreviewProps } from './types';
 
 /** Platform-native post card for `props.platform`; every prop is passed straight through. */
 export function PostPreview(props: PreviewProps) {
+  if (!isLivePlatform(props.platform)) return null; // "coming soon": no preview is reachable
   switch (props.platform) {
     case 'x':
       return <XPreview {...props} />;

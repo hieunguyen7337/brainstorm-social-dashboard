@@ -10,6 +10,8 @@ import { TrendsIntro } from '@/src/components/trends/TrendsIntro';
 import { TrendsSkeleton } from '@/src/components/trends/TrendsSkeleton';
 import {
   SOURCE_ORDER,
+  sourceChipLabel,
+  sourceIsComingSoon,
   SOURCE_SHORT,
   buildGroups,
   feedProblem,
@@ -252,10 +254,11 @@ export default function TrendsScreen() {
           {SOURCE_ORDER.map((source) => (
             <Chip
               key={source}
-              label={SOURCE_SHORT[source]}
-              count={counts[source]}
+              label={sourceChipLabel(source)}
+              count={sourceIsComingSoon(source) ? undefined : counts[source]}
               color={trendSourceMeta[source].color}
               selected={filter === source}
+              disabled={sourceIsComingSoon(source)}
               onPress={() => selectFilter(source)}
               style={styles.chip}
             />

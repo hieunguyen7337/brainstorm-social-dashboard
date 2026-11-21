@@ -33,6 +33,7 @@ import { pickScreenshot } from '@/src/pickImage';
 import { colors, space, type as t } from '@/src/theme';
 import type { Connection, HarvestStatus, IngestRequest, IngestResult, Platform, ScreenshotRead } from '@/src/types';
 import { Button, Card, ErrorState, Skeleton } from '@/src/ui';
+import { isLivePlatform } from '@/src/platforms';
 import { PlatformCard, type CardNote } from './PlatformCard';
 import { useConnectSheet } from './sheetContext';
 import { useLoader } from './useLoader';
@@ -51,7 +52,7 @@ export interface ConnectAccountsProps {
 }
 
 /** The order the contract lists the platforms in. */
-const ORDER: readonly Platform[] = ['instagram', 'linkedin', 'tiktok', 'x', 'reddit', 'facebook'];
+const ORDER: readonly Platform[] = (['instagram', 'linkedin', 'tiktok', 'x', 'reddit', 'facebook'] as const).filter(isLivePlatform);
 
 type Flow =
   | { platform: Platform; step: 'reading'; thumb: string }

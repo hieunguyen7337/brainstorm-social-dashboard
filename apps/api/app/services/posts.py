@@ -8,6 +8,7 @@ import zlib
 from app.config import settings
 from app.db import new_id, now_iso
 from app.models import Post
+from app.platforms import require_live
 
 _ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
@@ -108,6 +109,7 @@ def publish_post(conn: sqlite3.Connection, workspace_id: str, post_id: str) -> P
     if row is None:
         return None
     if row["status"] != "published":
+        require_live(row["platform"])
         now = now_iso()
         conn.execute(
             "UPDATE posts SET status='published', published_at=?, last_tick_at=?, scheduled_at=NULL WHERE id=?",

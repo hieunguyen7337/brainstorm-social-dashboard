@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_workspace
 from app.db import get_db
 from app.models import Platform, Post, PostCreate, PostPatch, PostStatus
+from app.platforms import live_sql_list, require_live
 from app.services import metrics
 from app.services.posts import create_post, get_post_row, publish_post, row_to_post
 
@@ -33,6 +34,8 @@ def list_posts(status: PostStatus | None = None, platform: Platform | None = Non
     if platform:
         sql += " AND platform = ?"
         args.append(platform)
+    else:
+        sql += f" AND platform IN ({live_sql_list()})"  # upcoming platforms: ask for one explicitly
     sql += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
     args.append(limit)
     return [row_to_post(conn, r) for r in conn.execute(sql, args).fetchall()]
@@ -41,6 +44,7 @@ def list_posts(status: PostStatus | None = None, platform: Platform | None = Non
 @router.post("/api/posts", response_model=Post)
 def add_post(body: PostCreate, ws: sqlite3.Row = Depends(get_workspace),
              conn: sqlite3.Connection = Depends(get_db)):
+    require_live(body.platform)
     return create_post(
         conn, ws["id"], platform=body.platform, content=body.content, hashtags=body.hashtags,
         media_prompt=body.media_prompt, theme_id=body.theme_id, trend_id=body.trend_id,
@@ -53,6 +57,8 @@ def patch_post(post_id: str, body: PostPatch, ws: sqlite3.Row = Depends(get_work
                conn: sqlite3.Connection = Depends(get_db)):
     row = _owned(conn, ws, post_id)
     changes = body.model_dump(exclude_unset=True)
+    if changes.get("status") == "scheduled":
+        require_live(row["platform"])
     if changes.get("status") and row["status"] == "published":
         raise HTTPException(status_code=409, detail="published posts cannot go back to draft")
     if "hashtags" in changes:
@@ -82,6 +88,9 @@ def delete_post(post_id: str, ws: sqlite3.Row = Depends(get_workspace),
 @router.post("/api/posts/{post_id}/publish", response_model=Post)
 def publish(post_id: str, ws: sqlite3.Row = Depends(get_workspace),
             conn: sqlite3.Connection = Depends(get_db)):
+    row = get_post_row(conn, ws["id"], post_id)
+    if row is not None:
+        require_live(row["platform"])
     post = publish_post(conn, ws["id"], post_id)
     if post is None:
         raise HTTPException(status_code=404, detail="post not found")
