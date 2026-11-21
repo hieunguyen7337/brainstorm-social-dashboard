@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
 
-import { api, ApiError, type Trend, type TrendSource } from '@/src/api';
+import { api, ApiError, type Trend, type TrendSource, type TrendsStatus } from '@/src/api';
 import { SourceHeader } from '@/src/components/trends/SourceBadge';
 import { TrendGrid } from '@/src/components/trends/TrendGrid';
 import { TrendRow } from '@/src/components/trends/TrendRow';
@@ -12,8 +12,10 @@ import {
   SOURCE_ORDER,
   SOURCE_SHORT,
   buildGroups,
-  latestFetchedAt,
+  feedProblem,
+  oldestFetchedAt,
   safeUrl,
+  sourceEmptyMessage,
   type SourceFilter,
   type TrendGroup,
 } from '@/src/components/trends/trendUtils';
@@ -30,6 +32,15 @@ const ANIMATED_ROWS = 12;
 /** First load only: row n fades in n * STAGGER_MS after the first, capped so the tail never makes you wait. */
 const STAGGER_MS = 45;
 const STAGGER_CAP = 10;
+
+/** Feed status is extra: an old server (404) or a failed call must never break the list, so any error reads as "unknown". */
+async function loadStatus(): Promise<TrendsStatus | null> {
+  try {
+    return (await api.trendsStatus()) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** http(s) links only. On the web it must run inside the tap handler (popup blockers), hence no `await` before it. */
 async function openSource(url: string): Promise<boolean> {
@@ -60,6 +71,13 @@ export default function TrendsScreen() {
     reload,
     setData,
   } = useAsync(() => api.listTrends({ limit: LIMIT }), []);
+  /** null = status unknown (not loaded yet, an old server, or the call failed). */
+  const {
+    data: statusData,
+    reload: reloadStatus,
+    setData: setStatus,
+  } = useAsync<TrendsStatus | null>(loadStatus, []);
+  const status = statusData ?? null;
 
   const [filter, setFilter] = useState<SourceFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -72,7 +90,6 @@ export default function TrendsScreen() {
 
   const trends = useMemo<Trend[]>(() => (Array.isArray(data) ? data : []), [data]);
   const groups = useMemo(() => buildGroups(trends), [trends]);
-  const updatedAt = useMemo(() => latestFetchedAt(trends), [trends]);
   const counts = useMemo(() => {
     const c: Record<SourceFilter, number> = { all: 0, hackernews: 0, reddit: 0, google: 0 };
     for (const g of groups) {
@@ -94,6 +111,14 @@ export default function TrendsScreen() {
     }
     return out;
   }, [groups, filter]);
+
+  // Freshness is the OLDEST row on screen (the chosen source, or every source for "All"), so the header never claims
+  // a fresher time than some trend on screen has. Falls back to every row when the chosen source has none.
+  const shownTrends = useMemo(() => sections.flatMap(({ group }) => group.items), [sections]);
+  const updatedAt = useMemo(
+    () => oldestFetchedAt(shownTrends.length > 0 ? shownTrends : trends),
+    [shownTrends, trends],
+  );
 
   // Row entrance runs on the first load only: later mounts (filter changes, new rows after a refresh) just appear.
   const introPlayed = useRef(false);
@@ -120,12 +145,17 @@ export default function TrendsScreen() {
    */
   const forceRefresh = useCallback(async () => {
     if (!latest.current.hasData) {
-      await reload(); // nothing on screen yet: a refresh is just a (re)load
+      // Nothing on screen yet: a refresh is just a (re)load of the list and its status.
+      await Promise.all([reload(), reloadStatus()]);
       return;
     }
     if (busy.current) return;
     busy.current = true;
     setForcing(true);
+    // The status is read after the server re-pulled the feeds; it runs alongside the list and never throws.
+    const statusRefresh = loadStatus().then((next) => {
+      if (alive.current) setStatus(next);
+    });
     try {
       const fresh = await api.listTrends({ refresh: true, limit: LIMIT });
       if (!alive.current) return;
@@ -138,9 +168,10 @@ export default function TrendsScreen() {
       if (alive.current && !(e instanceof ApiError && e.status === 401)) show("Couldn't refresh trends", 'error');
     } finally {
       busy.current = false;
+      await statusRefresh;
       if (alive.current) setForcing(false);
     }
-  }, [reload, setData, show]);
+  }, [reload, reloadStatus, setData, setStatus, show]);
 
   // ---- row actions (stable, so memoised rows do not re-render when only the refresh state changes) ---
   const onToggle = useCallback((id: string) => {
@@ -194,11 +225,16 @@ export default function TrendsScreen() {
         />
       );
   } else if (trends.length === 0) {
+    const problem = feedProblem(status);
     body = (
       <EmptyState
         icon="trending-up-outline"
         title="No trends yet"
-        message={`The feeds have not returned anything yet. Fetch them now and they will be ranked for ${brand}.`}
+        message={
+          problem
+            ? sourceEmptyMessage(problem.source, status)
+            : `The feeds have not returned anything yet. Fetch them now and they will be ranked for ${brand}.`
+        }
         action={refreshButton}
       />
     );
@@ -230,7 +266,7 @@ export default function TrendsScreen() {
           <EmptyState
             icon="search-outline"
             title={`Nothing from ${SOURCE_SHORT[emptySource]} right now`}
-            message="That feed came back empty. Refresh to try again, or look at every source."
+            message={sourceEmptyMessage(emptySource, status)}
             action={<Button title="Show all trends" variant="secondary" onPress={() => selectFilter('all')} />}
           />
         ) : wide ? (
@@ -281,6 +317,7 @@ export default function TrendsScreen() {
         ready={hasData && trends.length > 0}
         refreshing={forcing}
         offline={offline}
+        status={status}
         onRefresh={forceRefresh}
         inline={wide}
       />

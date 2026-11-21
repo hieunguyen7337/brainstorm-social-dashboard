@@ -4,9 +4,10 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import type { TrendsStatus } from '@/src/api';
 import { colors, gradient, space, type as t, withAlpha } from '@/src/theme';
 import { Button, Card } from '@/src/ui';
-import { agoFromMs } from './trendUtils';
+import { agoFromMs, safeAgo, sourceFailureNote } from './trendUtils';
 
 /** Older than this and the status dot turns amber (the server re-pulls feeds every ~15 minutes). */
 const STALE_MS = 30 * 60_000;
@@ -24,12 +25,11 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
-/** "Updated 3m ago" with a status dot, or "Refreshing feeds…" while a forced refresh runs. */
-function UpdatedLine({ updatedAt, refreshing }: { updatedAt: number | null; refreshing: boolean }) {
-  const now = useNow(30_000);
+/** "Fetched 3m ago" with a status dot, or "Refreshing feeds…" while a forced refresh runs. */
+function UpdatedLine({ updatedAt, now, refreshing }: { updatedAt: number | null; now: number; refreshing: boolean }) {
   const stale = updatedAt !== null && now - updatedAt > STALE_MS;
   const dot = refreshing ? colors.accent : stale ? colors.warn : colors.success;
-  const text = refreshing ? 'Refreshing feeds…' : updatedAt === null ? 'Trends loaded' : `Updated ${agoFromMs(updatedAt, now)}`;
+  const text = refreshing ? 'Refreshing feeds…' : updatedAt === null ? 'Trends loaded' : `Fetched ${agoFromMs(updatedAt, now)}`;
   return (
     <View style={styles.status}>
       <View style={[styles.dot, { backgroundColor: dot }]} />
@@ -41,7 +41,7 @@ function UpdatedLine({ updatedAt, refreshing }: { updatedAt: number | null; refr
 }
 
 export interface TrendsIntroProps {
-  /** Newest `fetched_at` across the list (epoch ms); null when unknown. */
+  /** Oldest `fetched_at` across the trends on screen (epoch ms); null when unknown. */
   updatedAt: number | null;
   /** The list is on screen: show the "updated" line and the Refresh button. */
   ready: boolean;
@@ -49,13 +49,26 @@ export interface TrendsIntroProps {
   refreshing: boolean;
   /** The latest background load failed while an older list is still showing. */
   offline: boolean;
+  /** GET /api/trends/status; null when unknown (old server, or the call failed). */
+  status: TrendsStatus | null;
   onRefresh: () => void;
   /** Wide layout: the copy on the left, freshness and Refresh on the right, in one row. */
   inline?: boolean;
 }
 
 /** Short intro, freshness and a Refresh button that forces the server to re-pull the feeds. */
-export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh, inline = false }: TrendsIntroProps) {
+export function TrendsIntro({
+  updatedAt,
+  ready,
+  refreshing,
+  offline,
+  status,
+  onRefresh,
+  inline = false,
+}: TrendsIntroProps) {
+  const now = useNow(30_000);
+  const failed = Array.isArray(status?.sources) ? status.sources.filter((s) => s && s.ok === false) : [];
+
   return (
     <Card style={[styles.card, inline && styles.cardInline]}>
       <View style={[styles.top, inline && styles.topInline]}>
@@ -70,7 +83,7 @@ export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh, 
 
       {ready ? (
         <View style={[styles.bottom, inline && styles.bottomInline]}>
-          <UpdatedLine updatedAt={updatedAt} refreshing={refreshing} />
+          <UpdatedLine updatedAt={updatedAt} now={now} refreshing={refreshing} />
           <Button
             title={refreshing ? 'Refreshing' : 'Refresh'}
             icon="refresh"
@@ -82,6 +95,15 @@ export function TrendsIntro({ updatedAt, ready, refreshing, offline, onRefresh, 
           />
         </View>
       ) : null}
+
+      {failed.map((entry) => (
+        <View key={entry.source} style={styles.failure}>
+          <Ionicons name="alert-circle-outline" size={15} color={colors.warn} />
+          <Text style={[t.small, styles.offlineText]}>
+            {sourceFailureNote(entry, entry.count > 0 ? safeAgo(entry.fetched_at, now) || null : null)}
+          </Text>
+        </View>
+      ))}
 
       {offline ? (
         <View style={styles.offline}>
@@ -125,4 +147,13 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.warn, 0.1),
   },
   offlineText: { flex: 1, minWidth: 0, color: colors.textDim },
+  failure: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: space.sm + 2,
+    borderRadius: 10,
+    backgroundColor: withAlpha(colors.warn, 0.1),
+  },
 });

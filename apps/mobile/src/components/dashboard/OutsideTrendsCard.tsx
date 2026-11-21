@@ -3,13 +3,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { SET_UP_BRAND_TEXT, knownRelevance, toPct } from '@/src/components/trends/trendUtils';
 import { colors, space, trendSourceMeta, type as t, withAlpha } from '@/src/theme';
 import type { Trend } from '@/src/types';
 import { Button, Card, SectionHeader, Skeleton } from '@/src/ui';
 
 const MAX_TRENDS = 5;
-
-const pctOf = (v: number): number => Math.round(Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0)) * 100);
 
 /** Same hand-off as the Trends tab: Create opens with this trend already chosen. */
 const createFrom = (trend: Trend) =>
@@ -76,7 +75,9 @@ export function OutsideTrendsCard({
 
 function TrendLine({ trend, rank, last }: { trend: Trend; rank: number; last: boolean }) {
   const meta = trendSourceMeta[trend.source] ?? trendSourceMeta.hackernews;
-  const match = pctOf(trend.relevance);
+  /** null when the workspace has no brand profile: the match is not shown at all. */
+  const relevance = knownRelevance(trend);
+  const match = relevance === null ? null : toPct(relevance);
   return (
     <View style={[styles.row, !last && styles.divider]}>
       <View style={[styles.rank, { backgroundColor: withAlpha(meta.color, 0.14) }]}>
@@ -87,9 +88,13 @@ function TrendLine({ trend, rank, last }: { trend: Trend; rank: number; last: bo
           {trend.title}
         </Text>
         <View style={styles.meta}>
-          <View style={styles.source} accessibilityLabel={`${meta.label}, ${match}% match`} accessible>
+          <View
+            style={styles.source}
+            accessibilityLabel={match === null ? meta.label : `${meta.label}, ${match}% match`}
+            accessible
+          >
             <FontAwesome6 name={meta.icon} size={11} color={meta.color} brand />
-            <Text style={styles.match}>{`${match}% match`}</Text>
+            <Text style={styles.match}>{match === null ? SET_UP_BRAND_TEXT : `${match}% match`}</Text>
           </View>
           <Pressable
             accessibilityRole="button"

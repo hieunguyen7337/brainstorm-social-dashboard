@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 
 import { fmtChange, parseTs, timeAgo } from '@/src/format';
 import { colors, platformMeta } from '@/src/theme';
-import type { ActivityItem, DayStats, FunnelStageName, Platform, Post, Totals } from '@/src/types';
+import type { ActivityItem, DashboardSummary, DayStats, FunnelStageName, Platform, Post, Totals } from '@/src/types';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 export type MetricKey = keyof Totals;
@@ -48,6 +48,39 @@ export function changeView(changePct: number, real: boolean): ChangeView {
   }
   return { tone: colors.textMute, icon: 'remove', label: fmtChange(pct), spoken: 'unchanged versus the previous period' };
 }
+
+/** What one KPI tile draws. */
+export interface KpiTileView {
+  /** The number on the tile; null = never read from the platform: the tile shows "—" and `reason`. */
+  value: number | null;
+  /** Why there is no number (only when `value` is null). */
+  reason: string | null;
+  /** Draw the change pill ("+12%" / "new"). Never for a number that was not read. */
+  showBadge: boolean;
+  /** Draw the 30-day sparkline (the tile still needs two or more days to draw one). Never for a number that was not read. */
+  showSparkline: boolean;
+}
+
+/** The parts of the summary a KPI tile reads. `tiles` / `not_read` are absent on servers older than the "not read" state. */
+export type KpiSource = Pick<DashboardSummary, 'totals'> & Partial<Pick<DashboardSummary, 'tiles' | 'not_read'>>;
+
+export const NOT_READ_FALLBACK = 'Not read yet';
+
+/**
+ * The owner's rule: a dashboard number is either the true number read from the platform or an explicit "not read" state,
+ * never a placeholder 0. Only `tiles[key] === null` switches a tile to that state; otherwise (sample workspace, old server
+ * without `tiles`, or a number, a real 0 included) the tile shows `totals[key]` with its pill and sparkline as before.
+ */
+export function kpiTile(src: KpiSource, key: MetricKey): KpiTileView {
+  if (src.tiles?.[key] === null) {
+    const reason = src.not_read?.[key]?.trim();
+    return { value: null, reason: reason || NOT_READ_FALLBACK, showBadge: false, showSparkline: false };
+  }
+  return { value: src.totals[key], reason: null, showBadge: true, showSparkline: true };
+}
+
+/** The em dash a tile shows for a number that was not read. */
+export const NOT_READ_MARK = '\u2014';
 
 export interface MetricDef {
   key: MetricKey;

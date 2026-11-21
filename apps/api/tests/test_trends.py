@@ -114,13 +114,13 @@ def test_one_source_failing(tclient, feeds):
     assert {t["source"] for t in r.json()} == {"hackernews", "google"}
 
 
-def test_all_fail_uses_fallback(tclient, feeds):
+def test_all_fail_serves_no_invented_trends(tclient, feeds):
     _, cfg = feeds
     cfg["fail"] = ("www.reddit.com", "hn.algolia.com", "trends.google.com")
     c, h = tclient
     data = c.get("/api/trends", headers=h).json()
-    assert len(data) == 12
-    assert {t["source"] for t in data} <= {"hackernews", "reddit", "google"}
+    assert data == []
+    assert all("example.com" not in t["url"] for t in data)
 
 
 def test_row_cap():
@@ -130,3 +130,150 @@ def test_row_cap():
     svc.store(conn, [{"source": "reddit", "title": f"t{i}", "url": f"u{i}", "score": 0.5, "region": ""}
                      for i in range(250)])
     assert conn.execute("SELECT COUNT(*) FROM trends").fetchone()[0] == 200
+
+
+# ---- match, buzz, freshness (Unit H) -------------------------------------------------------------
+
+BRAND_ROW = ("Brew & Bloom", "coffee lovers and plant parents", "coffee and plants")
+
+
+def _profile_ws(conn, *, brand, audience="", offer="", themes=()):
+    wid = new_id("ws_")
+    conn.execute(
+        "INSERT INTO workspaces (id, token, name, brand_name, brand_voice, audience, offer, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?)",
+        (wid, "tokx", "Demo", brand, "", audience, offer, now_iso()),
+    )
+    for name, desc in themes:
+        conn.execute(
+            "INSERT INTO themes (id, workspace_id, name, description, created_at) VALUES (?,?,?,?,?)",
+            (new_id(), wid, name, desc, now_iso()),
+        )
+    conn.commit()
+    return conn.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
+
+
+def _mem_conn():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    init_db(conn)
+    return conn
+
+
+def test_match_separates_related_from_unrelated():
+    conn = _mem_conn()
+    ws = _profile_ws(conn, brand=BRAND_ROW[0], audience=BRAND_ROW[1], offer=BRAND_ROW[2],
+                     themes=[("Plant care", "houseplants tips")])
+    profile = svc.brand_profile(conn, ws)
+    rel_coffee, terms = svc.match("Cold brew coffee hits record sales this summer", profile)
+    assert rel_coffee == 1.0 and "brew" in terms and "coffee" in terms
+    rel_plant, terms_plant = svc.match("House plants everyone is buying", profile)
+    assert 0.5 <= rel_plant <= 0.7 and terms_plant == ["plants"]
+    rel_none, terms_none = svc.match("Linux 7.0 released", profile)
+    assert rel_none == 0.0 and terms_none == []
+    # A generic theme word must not make an unrelated headline a match.
+    assert svc.match("My self care sunday routine", profile)[0] == 0.0
+    # Synonym hits count less than direct hits.
+    syn, syn_terms = svc.match("Show HN: a tiny espresso timer", profile)
+    assert 0 < syn < rel_coffee and syn_terms == ["espresso"]
+
+
+def test_match_is_continuous_not_a_step():
+    conn = _mem_conn()
+    ws = _profile_ws(conn, brand=BRAND_ROW[0], audience=BRAND_ROW[1], offer=BRAND_ROW[2])
+    profile = svc.brand_profile(conn, ws)
+    values = {svc.match(t, profile)[0] for t in [
+        "Brew guide for beginners", "Coffee prices rise", "Plants in the office", "Latte art contest",
+        "Linux kernel news",
+    ]}
+    # brand name hit (0.67), a synonym of a brand word (0.4), nothing (0): levels that follow the words, not one 50%.
+    assert values == {0.0, 0.4, 0.6667}
+
+
+def test_no_brand_profile_means_no_match():
+    conn = _mem_conn()
+    ws = _profile_ws(conn, brand="")
+    profile = svc.brand_profile(conn, ws)
+    assert profile == {}
+    assert svc.match("Cold brew coffee hits record sales", profile) == (None, [])
+
+
+def test_buzz_is_spread_across_the_batch():
+    hn = svc.parse_hn(json.loads((FIX / "hn.json").read_text()))
+    scores = [i["score"] for i in hn]
+    assert len(set(scores)) == len(scores) and max(scores) == 1.0 and min(scores) == 0.0
+    rd = svc.parse_reddit(json.loads((FIX / "reddit.json").read_text()))
+    assert {i["score"] for i in rd} == {0.0, 1.0}
+    assert svc._spread([5.0]) == [0.5]
+
+
+def test_ranking_is_match_then_buzz():
+    conn = _mem_conn()
+    ws = _profile_ws(conn, brand=BRAND_ROW[0], audience=BRAND_ROW[1], offer=BRAND_ROW[2])
+    svc.store(conn, [
+        {"source": "reddit", "title": "Linux kernel news", "url": "u1", "score": 1.0, "region": ""},
+        {"source": "hackernews", "title": "Coffee prices rise", "url": "u2", "score": 0.2, "region": ""},
+        {"source": "google", "title": "Cold brew recipes", "url": "u3", "score": 0.5, "region": ""},
+    ])
+    order = [r["title"] for r in svc.ranked(conn, ws, 10)]
+    assert order[:2] == ["Cold brew recipes", "Coffee prices rise"]
+    assert order[-1] == "Linux kernel news"
+
+
+def test_status_reports_per_source_failure_reason(tclient, feeds):
+    _, cfg = feeds
+    cfg["fail"] = ("www.reddit.com",)
+    svc._LAST.clear()
+    c, h = tclient
+    c.get("/api/trends", headers=h)
+    st = c.get("/api/trends/status", headers=h).json()
+    by = {s["source"]: s for s in st["sources"]}
+    assert [s["source"] for s in st["sources"]] == ["hackernews", "reddit", "google"]
+    assert by["hackernews"]["ok"] is True and by["hackernews"]["count"] > 0
+    assert by["reddit"]["ok"] is False and by["reddit"]["count"] == 0
+    assert by["reddit"]["error"] == "Blocked by Reddit (HTTP 403)"
+    assert by["hackernews"]["error"] is None
+    assert st["newest_fetched_at"] and st["oldest_fetched_at"]
+
+
+def test_status_requires_auth(client):
+    assert client.get("/api/trends/status").status_code == 401
+
+
+def test_list_exposes_match_terms_and_null_relevance_without_profile(client):
+    conn = connect()
+    init_db(conn)
+    wid = new_id("ws_")
+    conn.execute(
+        "INSERT INTO workspaces (id, token, name, brand_name, brand_voice, audience, offer, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?)",
+        (wid, "tokempty", "Blank", "", "", "", "", now_iso()),
+    )
+    conn.commit()
+    conn.close()
+    h = {"Authorization": "Bearer tokempty"}
+    svc._LAST.clear()
+    svc.store(connect(), [{"source": "reddit", "title": "Cold brew coffee", "url": "ux", "score": 0.4,
+                           "region": ""}])
+    data = client.get("/api/trends", headers=h).json()
+    assert data and data[0]["relevance"] is None and data[0]["match_terms"] == []
+
+
+def test_describe_error_reasons():
+    req = httpx.Request("GET", "https://www.reddit.com/r/popular/hot.json")
+    assert svc.describe_error("reddit", httpx.HTTPStatusError("x", request=req, response=httpx.Response(429, request=req))) == "Rate-limited by Reddit (HTTP 429)"
+    assert svc.describe_error("reddit", httpx.HTTPStatusError("x", request=req, response=httpx.Response(403, request=req))) == "Blocked by Reddit (HTTP 403)"
+    assert svc.describe_error("hackernews", httpx.ConnectError("boom", request=req)) == "Could not reach Hacker News"
+    assert svc.describe_error("google", httpx.ReadTimeout("slow", request=req)) == "Timed out waiting for Google Trends"
+
+
+def test_leftover_example_rows_are_purged(feeds):
+    import asyncio
+    conn = _mem_conn()
+    conn.execute("INSERT INTO trends (id, source, title, url, score, region, fetched_at) VALUES "
+                 "('x1', 'google', 'morning coffee rituals', 'https://example.com/evergreen/x', 0.9, '', '')")
+    conn.commit()
+    _, cfg = feeds
+    cfg["fail"] = ("www.reddit.com", "hn.algolia.com", "trends.google.com")
+    asyncio.run(svc.ensure_fresh(conn, refresh=True))
+    assert conn.execute("SELECT COUNT(*) FROM trends").fetchone()[0] == 0

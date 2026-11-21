@@ -221,6 +221,10 @@ export interface DashboardSummary {
   data_mode?: DataMode;
   /** Followers across the connected platforms. Absent on servers older than docs/REAL.md. */
   followers_total?: number;
+  /** The number each KPI tile shows; null = never read from the platform (show "—" and the reason). Absent on older servers: fall back to today's values. */
+  tiles?: Partial<Record<keyof Totals, number | null>>;
+  /** Short reason per metric whose `tiles` value is null, e.g. "Instagram does not share views for photo posts", "Not read yet: open Connect to read". */
+  not_read?: Partial<Record<keyof Totals, string>>;
 }
 
 export interface ActivityItem {
@@ -264,11 +268,36 @@ export interface Trend {
   source: TrendSource;
   title: string;
   url: string;
-  /** Source popularity 0..1. */
+  /** Source popularity 0..1, ranked within its source's batch (so values spread across the range). */
   score: number;
-  /** Match to this workspace's brand 0..1. */
-  relevance: number;
+  /** Match to this workspace's brand 0..1. `null` = the workspace has no brand profile yet: show no percentage. */
+  relevance: number | null;
+  /** Words in the title that overlap the brand profile (lowercase, at most 5). Absent on servers older than this field. */
+  match_terms?: string[];
+  /** When this row was last fetched from its source (ISO, UTC). */
   fetched_at: string;
+  platform?: Platform;
+}
+
+/** One source's last fetch attempt (GET /api/trends/status). */
+export interface TrendSourceStatus {
+  source: TrendSource;
+  /** Result of the last fetch attempt; null = not attempted since the server started. */
+  ok: boolean | null;
+  attempted_at: string | null;
+  /** When rows of this source were last stored (null if never). */
+  fetched_at: string | null;
+  /** Rows stored for this source. */
+  count: number;
+  /** Why the last attempt failed when `ok` is false, e.g. "Blocked by Reddit (HTTP 403)". */
+  error: string | null;
+}
+
+/** GET /api/trends/status: always three sources, in hackernews, reddit, google order. */
+export interface TrendsStatus {
+  sources: TrendSourceStatus[];
+  newest_fetched_at: string | null;
+  oldest_fetched_at: string | null;
 }
 
 export interface GenerateRequest {
@@ -585,6 +614,8 @@ export interface PulseApi {
   runAutopilot(): Promise<AutopilotRun>;
 
   listTrends(query?: TrendsQuery): Promise<Trend[]>;
+  /** GET /api/trends/status: per source, when it was last fetched and why it failed (if it did). Old servers may 404. */
+  trendsStatus(): Promise<TrendsStatus>;
 
   /** POST /api/connections/{platform}/screenshot: Claude reads a profile or insights screenshot. Saves nothing. 503 = AI off or capped. */
   readScreenshot(platform: Platform, body: ScreenshotRequest): Promise<ScreenshotRead>;

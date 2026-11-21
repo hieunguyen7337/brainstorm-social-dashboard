@@ -7,7 +7,17 @@ import { colors, space, trendSourceMeta, type as t, withAlpha } from '@/src/them
 import { Button, Card, IconButton } from '@/src/ui';
 import { BuzzBar, RelevanceBar } from './Bars';
 import { SourceBadge } from './SourceBadge';
-import { HOT_SCORE, buzzWord, clamp01, fitWord, hostOf, safeUrl, toPct } from './trendUtils';
+import {
+  HOT_SCORE,
+  SET_UP_BRAND_TEXT,
+  buzzWord,
+  clamp01,
+  fitWord,
+  hostOf,
+  knownRelevance,
+  safeUrl,
+  toPct,
+} from './trendUtils';
 
 export interface TrendCardProps {
   trend: Trend;
@@ -35,12 +45,12 @@ export const TrendCard = memo(function TrendCard({
   onOpen,
 }: TrendCardProps) {
   const meta = trendSourceMeta[trend.source];
-  const relevance = clamp01(trend.relevance);
+  /** null when the workspace has no brand profile: no percentage, no bar. */
+  const relevance = knownRelevance(trend);
   const buzz = clamp01(trend.score);
   const hot = buzz >= HOT_SCORE;
   const host = hostOf(trend.url);
   const canOpen = safeUrl(trend.url) !== null;
-  const pct = toPct(relevance);
 
   // Entrance: fade + rise, staggered by `enterDelay`; decided once at mount so re-renders never replay it.
   const enter = useRef(enterDelay).current;
@@ -88,20 +98,26 @@ export const TrendCard = memo(function TrendCard({
         </Text>
 
         <View style={styles.meters}>
-          <View style={styles.meter}>
-            <View style={styles.meterHead}>
-              <Text style={styles.meterLabel} numberOfLines={1}>
-                <Text style={styles.meterNum}>{`${pct}%`}</Text>
-                {' match'}
-              </Text>
-              <Text style={styles.meterWord} numberOfLines={1}>
-                {fitWord(relevance)}
-              </Text>
+          {relevance === null ? (
+            <Text style={styles.setUp} numberOfLines={2}>
+              {SET_UP_BRAND_TEXT}
+            </Text>
+          ) : (
+            <View style={styles.meter}>
+              <View style={styles.meterHead}>
+                <Text style={styles.meterLabel} numberOfLines={1}>
+                  <Text style={styles.meterNum}>{`${toPct(relevance)}%`}</Text>
+                  {' match'}
+                </Text>
+                <Text style={styles.meterWord} numberOfLines={1}>
+                  {fitWord(relevance)}
+                </Text>
+              </View>
+              <View style={styles.barRow}>
+                <RelevanceBar value={relevance} animate={animateBars} delay={barDelay} />
+              </View>
             </View>
-            <View style={styles.barRow}>
-              <RelevanceBar value={relevance} animate={animateBars} delay={barDelay} />
-            </View>
-          </View>
+          )}
 
           <View style={styles.buzzRow}>
             <Text style={[styles.meterWord, hot && { color: colors.warn }]} numberOfLines={1}>
@@ -140,6 +156,7 @@ const styles = StyleSheet.create({
   meterLabel: { flexShrink: 0, fontSize: 12.5, color: colors.textDim, fontVariant: ['tabular-nums'] },
   meterNum: { color: colors.text, fontWeight: '800' },
   meterWord: { flexShrink: 1, fontSize: 12.5, fontWeight: '600', color: colors.textDim },
+  setUp: { fontSize: 12.5, fontWeight: '600', color: colors.textMute },
   barRow: { flexDirection: 'row', alignItems: 'center' },
   buzzRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   create: { alignSelf: 'stretch' },

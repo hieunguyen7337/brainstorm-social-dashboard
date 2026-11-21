@@ -26,8 +26,8 @@ import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
   DemoSignInResult, HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
-  PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, Workspace,
-  WritingStyle,
+  PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, TrendsStatus,
+  TrendSourceStatus, Workspace, WritingStyle,
 } from './types';
 
 // ---- small helpers ------------------------------------------------------------------------------
@@ -974,7 +974,35 @@ function makePosts(s: State, b: Batch): { batch: string; recs: PostRec[] } {
 
 // ---- autopilot ----------------------------------------------------------------------------------------
 
-const byRelevance = (a: Trend, b: Trend): number => b.relevance - a.relevance || b.score - a.score;
+/** Match first (a missing match sorts last), then buzz, then title: the same order the API and the app use. */
+const byRelevance = (a: Trend, b: Trend): number =>
+  (b.relevance ?? -1) - (a.relevance ?? -1) || b.score - a.score || a.title.localeCompare(b.title);
+
+const SOURCES_IN_ORDER: readonly Trend['source'][] = ['hackernews', 'reddit', 'google'];
+const MOCK_STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'what', 'your', 'you', 'how', 'why', 'are', 'this', 'that', 'from', 'about', 'its', 'not', 'all', 'new', 'more', 'than', 'one', 'who']);
+
+/** Words of a headline that also appear in the brand profile (lowercase, at most 5), as the API reports them. */
+function matchTermsFor(title: string, ws: State['ws']): string[] {
+  const profile = new Set(`${ws.brand_name} ${ws.audience} ${ws.offer} ${ws.brand_voice}`.toLowerCase().match(/[a-z]{3,}/g) ?? []);
+  const out: string[] = [];
+  for (const word of title.toLowerCase().match(/[a-z]{3,}/g) ?? []) {
+    if (out.length === 5) break;
+    if (!MOCK_STOP_WORDS.has(word) && profile.has(word) && !out.includes(word)) out.push(word);
+  }
+  return out;
+}
+
+/** Buzz is ranked within each source, as the API does, so the mock's scores spread across 0..1 too. Returns copies. */
+function rankBuzz(list: Trend[]): Trend[] {
+  const out = list.map((t) => ({ ...t }));
+  for (const source of SOURCES_IN_ORDER) {
+    const same = out.filter((t) => t.source === source).sort((a, b) => b.score - a.score);
+    same.forEach((t, i) => {
+      t.score = round2((same.length - i) / same.length);
+    });
+  }
+  return out;
+}
 
 /** One cycle: the most relevant trend (rotating through the top three) plus an active theme. Null when nothing to post to. */
 function autopilotCycle(s: State, now: number): AutopilotRun | null {
@@ -1364,10 +1392,26 @@ export const mockApi: PulseApi = {
         for (const t of s.trends) {
           t.fetched_at = iso(now);
           t.score = round2(clamp(t.score + (s.rng() - 0.5) * 0.1, 0.02, 0.99));
-          t.relevance = round2(clamp(t.relevance + (s.rng() - 0.5) * 0.06, 0.02, 0.99));
+          t.relevance = round2(clamp((t.relevance ?? 0.5) + (s.rng() - 0.5) * 0.06, 0.02, 0.99));
         }
       }
-      return [...s.trends].sort(byRelevance).slice(0, int(q?.limit, 20, 1, 100));
+      const shown = [...s.trends].sort(byRelevance).slice(0, int(q?.limit, 20, 1, 100));
+      return rankBuzz(shown).map((t) => ({ ...t, match_terms: matchTermsFor(t.title, s.ws) }));
+    }),
+
+  trendsStatus: () =>
+    authed((s): TrendsStatus => {
+      const sources: TrendSourceStatus[] = SOURCES_IN_ORDER.map((source) => {
+        const rows = s.trends.filter((t) => t.source === source).map((t) => t.fetched_at).sort();
+        const fetched = rows.length ? rows[rows.length - 1] : null;
+        return { source, ok: true, attempted_at: fetched, fetched_at: fetched, count: rows.length, error: null };
+      });
+      const all = s.trends.map((t) => t.fetched_at).sort();
+      return {
+        sources,
+        newest_fetched_at: all.length ? all[all.length - 1] : null,
+        oldest_fetched_at: all.length ? all[0] : null,
+      };
     }),
 
   readScreenshot: (platform, b) =>

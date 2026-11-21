@@ -23,7 +23,6 @@ import {
   sortedDays,
 } from '@/src/components/dashboard';
 import { TopBanners } from '@/src/components/dashboard/TopBanners';
-import { StartRoom } from '@/src/components/room/StartRoom';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
@@ -145,15 +144,9 @@ export default function DashboardScreen() {
         // A real workspace waits for its connections before drawing anything: no flash of charts, then a call to action.
         <DashboardSkeleton followers />
       ) : mode === 'empty' ? (
-        <>
-          <Reveal index={0}>
-            <ConnectCta />
-          </Reveal>
-          {/* Not a number or a chart, so it stays: the crowd room works without any account connected. */}
-          <Reveal index={1}>
-            <StartRoom />
-          </Reveal>
-        </>
+        <Reveal index={0}>
+          <ConnectCta />
+        </Reveal>
       ) : !summary ? (
         // First load: skeleton. If it failed, a retry (the skeleton shows again while the retry is in flight).
         dash.error && !dash.refreshing ? (
@@ -194,6 +187,8 @@ export default function DashboardScreen() {
                   timeseries={days}
                   context={dataContext}
                   real={realNumbers}
+                  tiles={summary.tiles}
+                  notRead={summary.not_read}
                 />
               </View>
             ) : (
@@ -203,12 +198,10 @@ export default function DashboardScreen() {
                 timeseries={days}
                 context={dataContext}
                 real={realNumbers}
+                tiles={summary.tiles}
+                notRead={summary.not_read}
               />
             )}
-          </Reveal>
-
-          <Reveal index={2}>
-            <StartRoom />
           </Reveal>
 
           <Reveal index={2}>

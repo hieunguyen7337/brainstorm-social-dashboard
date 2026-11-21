@@ -157,3 +157,56 @@ export const profileJson = (username: string, followers = 1234, following = 56, 
     },
   },
 });
+
+/**
+ * A `/api/v1/feed/user/<name>/username/?count=12` response in Instagram's shape (2026-11), with the fields a real one
+ * carries that the reader must NOT pass on (image urls, the owner object, ids, tagged users, tracking tokens).
+ */
+export const feedJson = (username: string) => ({
+  num_results: 3,
+  more_available: true,
+  next_max_id: 'NEXTMAXSECRET',
+  status: 'ok',
+  user: { pk: '4242424242', username, full_name: 'Jane Private', profile_pic_url: 'https://cdn.example/p.jpg' },
+  items: [
+    {
+      id: '111_4242424242',
+      pk: '111',
+      code: 'REELCODE',
+      taken_at: 1_700_000_000,
+      media_type: 2,
+      product_type: 'clips',
+      like_count: 40,
+      comment_count: 3,
+      play_count: 900,
+      ig_play_count: 800,
+      caption: { text: 'reel caption ' + 'x'.repeat(400), user: { username, pk: '4242424242' } },
+      image_versions2: { candidates: [{ url: 'https://cdn.example/IMAGEURL.jpg' }] },
+      organic_tracking_token: 'TRACKINGSECRET',
+      user: { pk: '4242424242', username },
+    },
+    {
+      id: '222_4242424242',
+      code: 'VIDCODE',
+      taken_at: 1_700_086_400,
+      media_type: 2,
+      product_type: 'feed',
+      like_count: 5,
+      comment_count: 1,
+      view_count: 70,
+      caption: null,
+      usertags: { in: [{ user: { username: 'tagged_friend' } }] },
+    },
+    {
+      id: '333_4242424242',
+      code: 'PICCODE',
+      taken_at: 1_700_172_800,
+      media_type: 1,
+      product_type: 'feed',
+      like_and_view_counts_disabled: true,
+      like_count: 12,
+      comment_count: 0,
+      caption: { text: 'photo' },
+    },
+  ],
+});

@@ -201,6 +201,80 @@ describe('parseInstagramJson', () => {
     });
   });
 
+  describe('feed posts (the reader\'s feed/user fallback)', () => {
+    const reel = { like_count: 40, comment_count: 3, play_count: 900, ig_play_count: 800, taken_at: 1_700_000_000, media_type: 2, product_type: 'clips', caption: { text: 'reel' } };
+    const video = { like_count: 5, comment_count: 1, view_count: 70, taken_at: 1_700_086_400, media_type: 2, product_type: 'feed' };
+    const photo = { like_count: 12, comment_count: 0, taken_at: 1_700_172_800, media_type: 1, caption: { text: 'pic' } };
+    const withFeed = (feed: unknown, u: Record<string, unknown> = { username: 'jane.doe', edge_followed_by: { count: 1 } }) =>
+      parseInstagramJson({ user: u, feed, diag: { f: 200 } });
+
+    it('reads a reel, a video and a photo: likes, comments, views (photos none), date and caption', () => {
+      const p = withFeed([reel, video, photo]);
+      expect(p).toMatchObject({ handle: 'jane.doe', followers: 1 });
+      expect(p.posts).toEqual([
+        { content: 'reel', views: 900, likes: 40, comments: 3, shares: null, posted_at: '2023-11-14' },
+        { content: null, views: 70, likes: 5, comments: 1, shares: null, posted_at: '2023-11-15' },
+        { content: 'pic', views: null, likes: 12, comments: 0, shares: null, posted_at: '2023-11-16' },
+      ]);
+      expect(hasNumbers(p)).toBe(true);
+    });
+
+    it('views are the first present of play_count, ig_play_count, view_count', () => {
+      expect(withFeed([{ ...video, view_count: 70, ig_play_count: 66 }]).posts![0].views).toBe(66);
+      expect(withFeed([{ ...video, ig_play_count: undefined, view_count: 70 }]).posts![0].views).toBe(70);
+      expect(withFeed([{ ...reel, play_count: -1 }]).posts![0].views).toBeNull(); // hidden -1 does not fall through
+    });
+
+    it('hidden counts stay null, never 0: like_and_view_counts_disabled, a missing or a negative like_count', () => {
+      const hidden = withFeed([{ ...reel, like_and_view_counts_disabled: true }]).posts![0];
+      expect(hidden).toMatchObject({ likes: null, views: null, comments: 3 });
+      expect(withFeed([{ ...photo, like_count: undefined }]).posts![0].likes).toBeNull();
+      expect(withFeed([{ ...photo, like_count: -1 }]).posts![0].likes).toBeNull();
+      expect(withFeed([{ ...photo, comment_count: undefined }]).posts![0].comments).toBeNull();
+      expect(withFeed([{ ...reel, like_and_view_counts_disabled: false }]).posts![0].likes).toBe(40);
+    });
+
+    it('captions are clipped to 200 characters; taken_at in ms or garbage gives posted_at null', () => {
+      expect(withFeed([{ ...photo, caption: { text: 'x'.repeat(500) } }]).posts![0].content).toBe('x'.repeat(200));
+      expect(withFeed([{ ...photo, caption: null }]).posts![0].content).toBeNull();
+      for (const t of [1_700_000_000_000, 0, -5, 'soon', null]) expect(withFeed([{ ...photo, taken_at: t }]).posts![0].posted_at).toBeNull();
+    });
+
+    it('garbage items are skipped and garbage feeds never throw', () => {
+      expect(withFeed([null, 5, 'x', [], {}, { media_type: 1 }, photo]).posts).toHaveLength(1);
+      for (const g of [null, 5, 'x', {}, { items: 3 }, [null]]) {
+        const p = withFeed(g);
+        expect(p.posts).toBeUndefined();
+        expect(p.followers).toBe(1);
+      }
+      const evil = [{ get like_count(): number { throw new Error('boom'); } }];
+      expect(() => withFeed(evil)).not.toThrow();
+    });
+
+    it('at most 12 posts', () => {
+      expect(withFeed(Array.from({ length: 30 }, () => photo)).posts).toHaveLength(12);
+    });
+
+    it('web_profile_info posts are preferred: the feed is used only when the edges gave none', () => {
+      const edges = { count: 9, edges: [{ node: { taken_at_timestamp: 1_700_000_000, edge_liked_by: { count: 99 } } }] };
+      const both = withFeed([photo, video], { username: 'j', edge_owner_to_timeline_media: edges });
+      expect(both.posts).toHaveLength(1);
+      expect(both.posts![0].likes).toBe(99);
+      const garbageEdges = withFeed([photo], { username: 'j', edge_owner_to_timeline_media: { count: 9, edges: [{ node: {} }] } });
+      expect(garbageEdges.posts).toEqual([expect.objectContaining({ likes: 12, comments: 0 })]);
+    });
+
+    it('a raw feed response ({ items, user }) is read too', () => {
+      const p = parseInstagramJson({ items: [reel], user: { username: 'jane.doe' }, num_results: 1 });
+      expect(p).toEqual({ handle: 'jane.doe', posts: [expect.objectContaining({ likes: 40, views: 900 })] });
+    });
+
+    it('the toScreenshotRead result carries the feed posts', () => {
+      const r = toScreenshotRead('instagram', withFeed([reel, photo]), 'high');
+      expect(r.posts.map((x) => [x.likes, x.comments, x.views])).toEqual([[40, 3, 900], [12, 0, null]]);
+    });
+  });
+
   describe('toScreenshotRead', () => {
     it('fills every contract field, nulls for what was not read, ai_used false', () => {
       const r = toScreenshotRead('instagram', parseInstagramJson({ user: user() }), 'high');

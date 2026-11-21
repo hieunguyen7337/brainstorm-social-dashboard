@@ -5,11 +5,11 @@ import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Sparkline } from '@/src/charts';
 import { fmtCompact } from '@/src/format';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
-import type { DayStats, Totals } from '@/src/types';
+import type { DashboardSummary, DayStats, Totals } from '@/src/types';
 import { Card } from '@/src/ui';
 import { FOLLOWERS_COLOR, FollowerChips, followersSpoken } from './FollowersTile';
 import { LiveNumber, useStable } from './live';
-import { changeView, METRICS, type MetricDef } from './model';
+import { changeView, kpiTile, METRICS, NOT_READ_MARK, type KpiTileView, type MetricDef } from './model';
 import { platformsLabel, type FollowerChip } from './realModel';
 
 /** Below this tile width the label shrinks and loses its dot, so "ENGAGEMENTS" still fits on the ~800px board. */
@@ -32,6 +32,8 @@ export function BoardKpis({
   context,
   real = false,
   followers,
+  tiles: shown,
+  notRead,
 }: {
   totals: Totals;
   change: Totals;
@@ -43,6 +45,10 @@ export function BoardKpis({
   real?: boolean;
   /** The summary's `followers_total` and where those followers are. Omit (old server, sample workspace) for four tiles. */
   followers?: { total: number; chips: readonly FollowerChip[] };
+  /** The summary's `tiles`: a null there means never read, and that tile shows "—" and its reason. Absent on old servers. */
+  tiles?: DashboardSummary['tiles'];
+  /** The summary's `not_read`: why a tile has no number. */
+  notRead?: DashboardSummary['not_read'];
 }) {
   const [rowWidth, setRowWidth] = useState(0);
   const onRowLayout = useCallback((e: LayoutChangeEvent) => {
@@ -54,7 +60,7 @@ export function BoardKpis({
     <BoardKpiTile
       key={m.key}
       metric={m}
-      value={totals[m.key]}
+      tile={kpiTile({ totals, tiles: shown, not_read: notRead }, m.key)}
       changePct={change[m.key]}
       values={timeseries.map((d) => d[m.key])}
       context={context}
@@ -135,14 +141,14 @@ function BoardFollowersTile({ total, chips, context }: { total: number; chips: r
 
 function BoardKpiTile({
   metric,
-  value,
+  tile,
   changePct,
   values,
   context,
   real,
 }: {
   metric: MetricDef;
-  value: number;
+  tile: KpiTileView;
   changePct: number;
   values: number[];
   context: string;
@@ -166,29 +172,38 @@ function BoardKpiTile({
   const series = useStable(values, values.join(','));
   const view = changeView(changePct, real);
   const tight = width > 0 && width < TIGHT_AT;
+  const { value, reason } = tile;
+  const spoken =
+    value === null ? `${metric.label} not read, ${reason ?? ''}` : `${metric.label} ${fmtCompact(value)}, ${view.spoken}`;
 
   return (
     <Card padded={false} style={styles.tile}>
       <View onLayout={onLayout} style={styles.measure}>
-        <View
-          onLayout={onTopLayout}
-          style={styles.top}
-          accessible
-          accessibilityLabel={`${metric.label} ${fmtCompact(value)}, ${view.spoken}`}
-        >
+        <View onLayout={onTopLayout} style={styles.top} accessible accessibilityLabel={spoken}>
           <View style={styles.labelRow}>
             {tight ? null : <View style={[styles.dot, { backgroundColor: metric.color }]} />}
             <Text style={[t.label, tight && styles.labelTight]} numberOfLines={1}>
               {metric.label}
             </Text>
           </View>
-          <LiveNumber value={value} format={fmtCompact} fromZero context={context} style={styles.number} />
-          <View style={[styles.pill, { backgroundColor: withAlpha(view.tone, 0.14) }]}>
-            <Ionicons name={view.icon} size={11} color={view.tone} />
-            <Text style={[styles.pillText, { color: view.tone }]}>{view.label}</Text>
-          </View>
+          {value === null ? (
+            <Text style={[styles.number, styles.notRead]}>{NOT_READ_MARK}</Text>
+          ) : (
+            <LiveNumber value={value} format={fmtCompact} fromZero context={context} style={styles.number} />
+          )}
+          {tile.showBadge ? (
+            <View style={[styles.pill, { backgroundColor: withAlpha(view.tone, 0.14) }]}>
+              <Ionicons name={view.icon} size={11} color={view.tone} />
+              <Text style={[styles.pillText, { color: view.tone }]}>{view.label}</Text>
+            </View>
+          ) : null}
+          {reason !== null ? (
+            <Text style={t.small} numberOfLines={3}>
+              {reason}
+            </Text>
+          ) : null}
         </View>
-        {width > 0 && series.length >= 2 ? (
+        {tile.showSparkline && width > 0 && series.length >= 2 ? (
           <Sparkline
             values={series}
             color={metric.color}
@@ -228,6 +243,7 @@ const styles = StyleSheet.create({
   labelTight: { fontSize: 10.5, letterSpacing: 0.3 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   number: { color: colors.text, fontSize: 28, lineHeight: 34, fontWeight: '800', letterSpacing: -0.8 },
+  notRead: { color: colors.textMute },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

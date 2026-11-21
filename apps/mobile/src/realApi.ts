@@ -99,6 +99,7 @@ export const realApi: PulseApi = {
 
   listTrends: (q) =>
     request('GET', '/api/trends', { query: { refresh: q?.refresh ? 'true' : undefined, limit: q?.limit ?? 20 } }),
+  trendsStatus: () => request('GET', '/api/trends/status'),
 
   getShare: async (postId) =>
     normalizeShare(await request<unknown>('GET', `/api/posts/${encodeURIComponent(postId)}/share`), 'linkedin'),

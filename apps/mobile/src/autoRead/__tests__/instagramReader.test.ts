@@ -1,5 +1,5 @@
 import { readerScript, READER_DEADLINE_MS } from '../readers';
-import { makeEnv, navBar, page, profileJson, stories, type EnvOptions, type FetchHandler } from './igHarness';
+import { feedJson, makeEnv, navBar, page, profileJson, stories, type EnvOptions, type FetchHandler } from './igHarness';
 
 const UID = '4242424242';
 const SECRETS = ['SECRETCSRF', 'SECRETSESSION', UID];
@@ -469,6 +469,172 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       // Fix: `if (a.status === 0 || a.status === 429 || a.status >= 500)`.
       const env = await run({ routes: [[CURRENT, { status: 200, hang: true }]] });
       expect(env.posted[0].status).toBe('error');
+    });
+  });
+
+  describe('feed call on the profile page (web_profile_info gave no posts)', () => {
+    const FEEDURL = 'feed/user/';
+    const HEADER = ['3', 'posts', '1,234', 'followers', '56', 'following'];
+
+    async function onProfile(routes: EnvOptions['routes'], step = 1, deadlineMs?: number, ms = 20_000) {
+      const env = makeEnv({ url: 'https://www.instagram.com/jane/', html: header(HEADER), cookies: COOKIES, routes });
+      withInnerText(env);
+      env.inject(readerScript('instagram', step, undefined, deadlineMs ? { deadlineMs } : undefined));
+      await env.advance(ms);
+      return env;
+    }
+    const base = (profile: FetchHandler): NonNullable<EnvOptions['routes']> => [
+      [CURRENT, ok({ user: { username: 'jane' } })],
+      [PROFILE, profile],
+    ];
+
+    it('web_profile_info 429: calls the feed same-origin with credentials and the app id, posts pruned items', async () => {
+      const env = await onProfile([...base(st(429)), [FEEDURL, ok(feedJson('jane'))]]);
+      const feedCalls = env.calls.filter((c) => c.url.includes(FEEDURL));
+      expect(feedCalls).toHaveLength(1);
+      expect(feedCalls[0].url).toBe('/api/v1/feed/user/jane/username/?count=12');
+      expect(feedCalls[0].init.credentials).toBe('include');
+      expect(feedCalls[0].init.headers['x-ig-app-id']).toBe('936619743392459');
+      expect(feedCalls[0].init.headers['x-csrftoken']).toBe('SECRETCSRF');
+      expect(env.posted).toHaveLength(1);
+      const m = env.posted[0];
+      expect(m.status).toBe('ok');
+      expect(m.data.user.edge_followed_by).toEqual({ count: 1234 });
+      expect(m.data.diag.f).toBe(200);
+      expect(m.data.feed).toEqual([
+        {
+          like_count: 40,
+          comment_count: 3,
+          play_count: 900,
+          ig_play_count: 800,
+          taken_at: 1_700_000_000,
+          media_type: 2,
+          product_type: 'clips',
+          caption: { text: ('reel caption ' + 'x'.repeat(400)).slice(0, 200) },
+        },
+        { like_count: 5, comment_count: 1, view_count: 70, taken_at: 1_700_086_400, media_type: 2, product_type: 'feed' },
+        {
+          like_count: 12,
+          comment_count: 0,
+          taken_at: 1_700_172_800,
+          media_type: 1,
+          product_type: 'feed',
+          like_and_view_counts_disabled: true,
+          caption: { text: 'photo' },
+        },
+      ]);
+      for (const leak of ['IMAGEURL', 'TRACKINGSECRET', 'NEXTMAXSECRET', 'Jane Private', 'tagged_friend', 'REELCODE', '111_'])
+        expect(env.rawPosted[0]).not.toContain(leak);
+      expectNoSecrets(env.rawPosted);
+    });
+
+    it('url-encodes the username and caps the items at 12', async () => {
+      const many = { items: Array.from({ length: 30 }, (_, i) => ({ like_count: i, taken_at: 1_700_000_000 + i })) };
+      const env = makeEnv({
+        url: 'https://www.instagram.com/a.b_c/',
+        html: header(HEADER),
+        routes: [[CURRENT, ok({ user: { username: 'a.b_c' } })], [PROFILE, st(404)], [FEEDURL, ok(many)]],
+      });
+      withInnerText(env);
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
+      expect(env.calls.map((c) => c.url)).toContain('/api/v1/feed/user/a.b_c/username/?count=12');
+      expect(env.posted[0].data.feed).toHaveLength(12);
+    });
+
+    it('web_profile_info ok but without edges: the feed is still asked', async () => {
+      const noEdges = ok({ data: { user: { username: 'jane', edge_followed_by: { count: 1234 }, edge_owner_to_timeline_media: { count: 3 } } } });
+      const env = await onProfile([...base(noEdges), [FEEDURL, ok(feedJson('jane'))]]);
+      expect(env.posted[0].data.feed).toHaveLength(3);
+      expect(env.posted[0].data.user.edge_owner_to_timeline_media).toEqual({ count: 3 });
+    });
+
+    it('web_profile_info gave posts: no feed call, no feed field', async () => {
+      const env = await onProfile([...base(ok(profileJson('jane', 1234))), [FEEDURL, ok(feedJson('jane'))]]);
+      expect(env.calls.some((c) => c.url.includes(FEEDURL))).toBe(false);
+      expect(env.posted[0].data.feed).toBeUndefined();
+      expect(env.posted[0].data.diag.f).toBeUndefined();
+      expect(env.posted[0].data.user.edge_owner_to_timeline_media.edges).toHaveLength(1);
+    });
+
+    it('feed 429: still ok with the followers, diag.f = 429, no feed and no body text', async () => {
+      const env = await onProfile([...base(st(429)), [FEEDURL, st(429, { message: 'Please wait a few minutes BODYTEXT', status: 'fail' })]]);
+      expect(env.posted).toHaveLength(1);
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1234 });
+      expect(env.posted[0].data.diag.f).toBe(429);
+      expect(env.posted[0].data.feed).toBeUndefined();
+      expect(env.rawPosted[0]).not.toContain('BODYTEXT');
+      expect(env.rawPosted[0]).not.toContain('Please wait');
+      expectNoSecrets(env.rawPosted);
+    });
+
+    it('feed 200 with a non-JSON body or no items: ok without feed, the body is not posted', async () => {
+      for (const body of ['<html>BODYTEXT login</html>', { items: 'BODYTEXT' }, { nope: 1 }]) {
+        const env = await onProfile([...base(st(429)), [FEEDURL, st(200, body)]]);
+        expect(env.posted[0].status).toBe('ok');
+        expect(env.posted[0].data.diag.f).toBe(200);
+        expect(env.posted[0].data.feed).toBeUndefined();
+        expect(env.rawPosted[0]).not.toContain('BODYTEXT');
+      }
+    });
+
+    it('feed hangs: diag.f = -1 and the reader still posts the followers by its deadline', async () => {
+      const env = await onProfile([...base(st(429)), [FEEDURL, { status: 200, hang: true }]], 1, undefined, READER_DEADLINE_MS);
+      expect(env.posted).toHaveLength(1);
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.diag.f).toBe(-1);
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1234 });
+    });
+
+    it('feed throwing (network failure): diag.f = -1, still ok', async () => {
+      const env = await onProfile([
+        ...base(st(429)),
+        [
+          FEEDURL,
+          () => {
+            throw new Error('net down');
+          },
+        ],
+      ]);
+      expect(env.posted[0]).toMatchObject({ status: 'ok', data: { diag: { f: -1 } } });
+    });
+
+    it('slow current_user and web_profile_info, then a hung feed: still posts within a short deadline', async () => {
+      const env = await onProfile(
+        [
+          [CURRENT, { status: 200, hang: true }],
+          [INFO, ok({ user: { username: 'jane' } })],
+          [PROFILE, { status: 200, hang: true }],
+          [FEEDURL, { status: 200, hang: true }],
+        ],
+        1,
+        6000,
+        6000,
+      );
+      expect(env.posted).toHaveLength(1);
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.diag.f).toBe(-1);
+    });
+
+    it('step 0 on the feed asks for the profile without calling the feed', async () => {
+      const env = await run({ cookies: COOKIES, routes: [...base(st(429)), [FEEDURL, ok(feedJson('jane'))]] });
+      expect(env.posted[0].data.go).toBe('jane');
+      expect(env.calls.some((c) => c.url.includes(FEEDURL))).toBe(false);
+    });
+
+    it('step 0 already on the own profile reads the feed too', async () => {
+      const env = await onProfile([...base(st(404)), [FEEDURL, ok(feedJson('jane'))]], 0);
+      expect(env.posted[0].data.go).toBeUndefined();
+      expect(env.posted[0].data.feed).toHaveLength(3);
+    });
+
+    it('no visible header: empty as before, the feed result is not waited for or sent', async () => {
+      const env = makeEnv({ url: 'https://www.instagram.com/jane/', cookies: COOKIES, routes: [...base(st(429)), [FEEDURL, ok(feedJson('jane'))]] });
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
+      expect(env.posted[0].status).toBe('empty');
+      expect(env.posted[0].data.feed).toBeUndefined();
     });
   });
 

@@ -4,7 +4,6 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { api, ApiError, PLATFORMS, type Platform, type Post } from '@/src/api';
-import { StartRoom } from '@/src/components/room/StartRoom';
 import { StyleBadge } from '@/src/components/settings/StyleBadge';
 import { timeAgo, truncate } from '@/src/format';
 import { colors, platformMeta, radius, space, type as t } from '@/src/theme';
@@ -26,7 +25,7 @@ const messageOf = (e: unknown): string =>
   e instanceof ApiError && e.message ? e.message : 'Something went wrong. Please try again.';
 
 /**
- * The "Generate" column of the wide board: "Start a room" on top, a quick-generate box (brief + platform chips +
+ * The "Generate" column of the wide board: a quick-generate box (brief + platform chips +
  * Generate), the newest drafts, and the five channel lanes with their draft / published counts.
  */
 export function GenerateCard({
@@ -84,9 +83,6 @@ export function GenerateCard({
 
   return (
     <Card style={[styles.card, style]}>
-      <StartRoom compact />
-      <View style={styles.divider} />
-
       <SectionHeader title="Generate" subtitle="Draft posts in one tap" right={<StyleBadge />} />
 
       <TextField
