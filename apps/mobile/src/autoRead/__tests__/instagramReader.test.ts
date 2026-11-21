@@ -425,7 +425,7 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
     });
 
     it('readerScript throws for an unknown step', () => {
-      expect(() => readerScript('instagram', 1)).toThrow('no such reader');
+      expect(() => readerScript('instagram', 2)).toThrow('no such reader');
     });
 
     it('the deadline option is respected', async () => {

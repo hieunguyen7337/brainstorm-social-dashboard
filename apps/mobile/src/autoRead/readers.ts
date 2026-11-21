@@ -451,7 +451,13 @@ async function run() {
   diag.api = apiF === undefined ? -1 : apiF;
   if (diag.t === undefined && remaining() > 1500) {
     var tc = null;
-    if (pathIs('/' + lower(username))) tc = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
+    // On the profile page Instagram draws the header after load: give it a few seconds to show the counts.
+    var pageT0 = Date.now();
+    while (pathIs('/' + lower(username))) {
+      tc = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
+      if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
+      await tick();
+    }
     if (!tc) {
       try {
         var h2 = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
