@@ -157,10 +157,23 @@ const instagram: Flow = (() => {
     direct: anyPage,
     script: (ctx) => readerScript('instagram', 0, ctx),
     finish: (data) => {
+      const go = str(rec(data).go);
+      if (go && IG_NAME.test(go)) return { kind: 'next', ctx: { handle: go } };
       const parsed = parseInstagramJson(data);
       return hasNumbers(parsed) ? read(parsed, 'high') : { kind: 'empty', hint: { username: parsed.handle ?? null } };
     },
-    showsNumbers: false, // the home feed shows no numbers; the profile page (fallbackUrl) does
+    showsNumbers: false, // the home feed shows no numbers; the profile page (step 1, fallbackUrl) does
+  });
+  // Step 1: the person's own profile, opened in view, where the reader checks the API numbers against the page's own.
+  base.steps.push({
+    url: (ctx) => `https://www.instagram.com/${ctx.handle ?? ''}/`,
+    matches: (u, ctx) => !!ctx.handle && u.path.toLowerCase().replace(/\/+$/, '') === `/${ctx.handle.toLowerCase()}`,
+    script: (ctx) => readerScript('instagram', 1, ctx),
+    finish: (data) => {
+      const parsed = parseInstagramJson(data);
+      return hasNumbers(parsed) ? read(parsed, 'high') : { kind: 'empty', hint: { username: parsed.handle ?? null } };
+    },
+    showsNumbers: true,
   });
   return base;
 })();

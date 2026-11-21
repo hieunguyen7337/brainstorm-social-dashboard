@@ -441,6 +441,9 @@ async function run() {
   }
   if (!user) return finish('empty', { username: username, diag: diag });
   var out = igUser(user, username);
+  // The person sees their own numbers on their profile page, so the app opens it and reads there (step 1). Step 0
+  // still sends what it found, in case the profile page never loads (2026-11-21: the owner asked to see it go there).
+  if (STEP === 0 && !pathIs('/' + lower(username))) return finish('ok', { user: out, diag: diag, go: username });
   // Check the follower count against the profile page itself (2026-11-21: a tester's account with 1 follower was saved
   // as 0 from the data call). The page's number wins when the call gave none, gave 0, or is off by more than the
   // rounding of "1.2K"-style counts.
@@ -888,6 +891,7 @@ function readerFor(platform: unknown, step: unknown): ReaderDef | null {
   if (typeof platform !== 'string' || typeof step !== 'number') return null;
   switch (platform + ':' + step) {
     case 'instagram:0':
+    case 'instagram:1':
       return { hosts: ['instagram.com'], net: true, body: INSTAGRAM_0 };
     case 'tiktok:0':
       return { hosts: ['tiktok.com'], net: true, body: TIKTOK_0 };

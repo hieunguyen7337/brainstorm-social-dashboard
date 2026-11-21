@@ -134,6 +134,29 @@ describe('instagram flow: platforms', () => {
 
 describe('instagram runner', () => {
   describe('happy path', () => {
+    it('feed says go: opens the profile page and saves what is read there', async () => {
+      const { runner, log, adv } = setup();
+      runner.start();
+      runner.navigated(LOGIN, false);
+      runner.navigated(FEED, false);
+      runner.loadEnded(FEED);
+      await adv(INJECT_DELAY_MS + 10);
+      expect(log.injects).toHaveLength(1);
+      runner.message(msg('ok', { ...okData, go: 'jane.doe' }));
+      await adv(10);
+      expect(log.results).toHaveLength(0);
+      expect(log.loads[log.loads.length - 1]).toBe(PROFILE);
+      runner.navigated(PROFILE, false);
+      runner.loadEnded(PROFILE);
+      await adv(INJECT_DELAY_MS + 10);
+      expect(log.injects).toHaveLength(2);
+      const page = { user: { username: 'jane.doe', edge_followed_by: { count: 1 }, edge_follow: { count: 5 } } };
+      runner.message(msg('ok', page, { step: 1 }));
+      await adv(10);
+      expect(log.results).toHaveLength(1);
+      expect(log.results[0]).toMatchObject({ handle: 'jane.doe', followers: 1, confidence: 'high' });
+    });
+
     it('login page, then the feed: injects once and emits the numbers exactly once', async () => {
       const { runner, log, adv } = setup();
       runner.start();
