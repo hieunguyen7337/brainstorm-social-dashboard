@@ -284,6 +284,33 @@ function igHeaders() {
   if (csrf) h['x-csrftoken'] = csrf;
   return h;
 }
+var IG_RESERVED = ['explore', 'reels', 'reel', 'direct', 'accounts', 'stories', 'p', 'tv', 'about', 'legal', 'web', 'developer', 'challenge'];
+// The signed-in account's name from the navigation bar (the bar holding the Explore and Reels links): its last link to a
+// one-segment path that is not one of Instagram's own pages. Story avatars sit outside that bar, so they are never taken.
+function igNavUsername() {
+  var out = { name: '', signedIn: false };
+  try {
+    var anchor = document.querySelector('a[href="/explore/"]') || document.querySelector('a[href="/reels/"]');
+    if (!anchor) return out;
+    out.signedIn = !!document.querySelector('a[href^="/direct/"]');
+    var box = anchor.parentElement;
+    for (var up = 0; box && up < 8; up++) {
+      if (box.querySelectorAll('a[href]').length >= 4) break;
+      box = box.parentElement;
+    }
+    if (!box) return out;
+    var links = box.querySelectorAll('a[href]');
+    for (var i = links.length - 1; i >= 0; i--) {
+      var m = /^\/([A-Za-z0-9._]{1,30})\/?$/.exec(links[i].getAttribute('href') || '');
+      if (m && IG_RESERVED.indexOf(m[1].toLowerCase()) < 0) {
+        out.name = m[1];
+        out.signedIn = true;
+        break;
+      }
+    }
+  } catch (e) {}
+  return out;
+}
 async function igJson(path) {
   try {
     var r = await fetchText(path, igHeaders());
@@ -306,10 +333,14 @@ async function run() {
       if (typeof info.username === 'string') username = info.username;
     }
   }
+  // Third way: the profile tab of the page's own navigation bar links to /<username>/ (2026-11-21: on a signed-in phone
+  // both calls above gave no username and the sheet looped on the feed).
+  var nav = igNavUsername();
+  if (!username && nav.name) username = nav.name;
   if (!username) {
     if (a.status === 429 || a.status >= 500) return finish('error');
-    // Signed out only when the page has no account cookie at all; otherwise we are signed in but could not read.
-    return finish(uid ? 'empty' : 'signed_out');
+    // Signed out only when the page has no account cookie and no signed-in navigation bar.
+    return finish(uid || nav.signedIn ? 'empty' : 'signed_out');
   }
   var user = null;
   try {
