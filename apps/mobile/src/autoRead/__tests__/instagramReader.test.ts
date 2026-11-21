@@ -328,6 +328,35 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expect(env.posted[0].data.diag).toMatchObject({ api: 0, txt: 1, src: 'page' });
     });
 
+    it('fixed: the visible header wins over a stale meta description (vivo, 2026-11-21)', async () => {
+      const html =
+        '<!doctype html><html><head><meta property="og:description" content="0 Followers, 0 Following, 0 Posts - See Instagram photos" /></head>' +
+        '<body><header><div>0</div><div>posts</div><div>1</div><div>follower</div><div>0</div><div>following</div></header></body></html>';
+      const env = makeEnv({
+        url: 'https://www.instagram.com/jane/',
+        html,
+        cookies: COOKIES,
+        routes: [
+          [CURRENT, ok({ user: { username: 'jane' } })],
+          [PROFILE, st(404)],
+        ],
+      });
+      // jsdom has no innerText: give it the header's words one per line, as the phone's WebView does.
+      Object.defineProperty(env.dom.window.HTMLElement.prototype, 'innerText', {
+        configurable: true,
+        get(this: HTMLElement) {
+          return Array.from(this.querySelectorAll('div'))
+            .map((d) => d.textContent)
+            .join('\n');
+        },
+      });
+      env.inject(readerScript('instagram', 1));
+      await env.advance(20_000);
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1 });
+      expect(env.posted[0].data.diag).toMatchObject({ api: 0, txt: 1, src: 'page', vis: true });
+    });
+
     it('an abbreviated page count does not replace the exact count from the data call', async () => {
       const page = '<meta property="og:description" content="1.2K Followers, 3 Following, 9 Posts" />';
       const env = await run({

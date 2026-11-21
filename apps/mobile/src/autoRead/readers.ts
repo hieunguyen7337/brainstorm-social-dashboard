@@ -340,6 +340,13 @@ function igCountsFromText(text) {
   if (fol === undefined) return null;
   return { followers: fol, following: one('following'), posts: one('posts?') };
 }
+function igBodyText() {
+  try {
+    return String((document.body && document.body.innerText) || '');
+  } catch (e) {
+    return '';
+  }
+}
 function igMeta(doc) {
   var out = [];
   try {
@@ -421,7 +428,7 @@ async function run() {
   // serves even when its data calls answer 400/429/404 (2026-11-21, on the owner's phone).
   if (!user) {
     var counts = null;
-    if (pathIs('/' + lower(username))) counts = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
+    if (pathIs('/' + lower(username))) counts = igCountsFromText(igBodyText()) || igCountsFromText(igMeta(document));
     if (!counts && remaining() > 1500) {
       try {
         var h = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
@@ -449,16 +456,21 @@ async function run() {
   // rounding of "1.2K"-style counts.
   var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
   diag.api = apiF === undefined ? -1 : apiF;
-  if (diag.t === undefined && remaining() > 1500) {
+  // The meta description is Instagram's server copy and can lag: on 2026-11-21 it said 0 followers while the header the
+  // person saw said 1. So on the profile page the visible header wins, and the meta text is only a fallback.
+  var onProfile = pathIs('/' + lower(username));
+  if ((diag.t === undefined || onProfile) && remaining() > 1500) {
     var tc = null;
     // On the profile page Instagram draws the header after load: give it a few seconds to show the counts.
     var pageT0 = Date.now();
     while (pathIs('/' + lower(username))) {
-      tc = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
+      tc = igCountsFromText(igBodyText());
       if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
       await tick();
     }
-    if (!tc) {
+    diag.vis = !!tc;
+    if (!tc && onProfile) tc = igCountsFromText(igMeta(document));
+    if (!tc && diag.t === undefined) {
       try {
         var h2 = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
         diag.h = h2.status;
