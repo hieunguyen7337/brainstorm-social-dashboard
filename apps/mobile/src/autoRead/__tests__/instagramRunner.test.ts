@@ -182,7 +182,8 @@ describe('instagram runner', () => {
 
   describe('SPA navigation events from the feed', () => {
     it('the same url reported by navigation + load events injects once', async () => {
-      const { runner, log, adv } = await onFeed();
+      const { runner, log, adv } = setup();
+      runner.start();
       runner.navigated(FEED, false);
       runner.loadEnded(FEED);
       runner.navigated(FEED, false);
