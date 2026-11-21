@@ -10,7 +10,8 @@ import { Animated, Easing, Platform } from 'react-native';
 import { api, openTrackedLink } from '@/src/api';
 import { fmtDateTime, fmtInt } from '@/src/format';
 import { publishedAllToast, publishedToast } from '@/src/realCopy';
-import { useIsRealWorkspace } from '@/src/session';
+import { demoPostedAllToast, demoPostedToast } from '@/src/demo/logic';
+import { useIsDemoWorkspace, useIsRealWorkspace } from '@/src/session';
 import { platformMeta } from '@/src/theme';
 import type { Connection, Post, PostPatch } from '@/src/types';
 import { confirm, copyText, haptic, useToast } from '@/src/ui';
@@ -58,6 +59,7 @@ export function useEaseIn() {
 export function useResultState({ batch, connections, brandName, onBack }: ResultStateInput) {
   const toast = useToast();
   const real = useIsRealWorkspace();
+  const demo = useIsDemoWorkspace();
 
   const [posts, setPosts] = useState<Post[]>(batch.posts);
   const [edits, setEdits] = useState<Edits>({});
@@ -172,7 +174,7 @@ export function useResultState({ batch, connections, brandName, onBack }: Result
         if (out.status === 'failed') throw new UiError(`Couldn't publish to ${label}. Try again.`);
         if (!quiet) {
           haptic.success();
-          toast.show(publishedToast(label, real, post.platform));
+          toast.show(demo ? demoPostedToast(label, out) : publishedToast(label, real, post.platform));
         }
       },
       { quiet },
@@ -246,7 +248,7 @@ export function useResultState({ batch, connections, brandName, onBack }: Result
     }
     if (published === todo.length) {
       haptic.success();
-      toast.show(publishedAllToast(published, real, true));
+      toast.show(demo ? demoPostedAllToast(published, true) : publishedAllToast(published, real, true));
     } else {
       haptic.warn();
       toast.show(`Published ${published} of ${todo.length}. Check the cards that need attention.`, 'error');

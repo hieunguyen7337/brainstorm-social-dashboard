@@ -25,6 +25,7 @@ const tintOf = (action: ShareAction): string => platformMeta[action.key === 'thr
 
 function ActionIcon({ action, size, color }: { action: ShareAction; size: number; color: string }) {
   if (action.mode === 'copy') return <Ionicons name="copy-outline" size={size} color={color} />;
+  if (action.mode === 'demo-refresh') return <Ionicons name="refresh-outline" size={size} color={color} />;
   if (action.key === 'threads') return <FontAwesome6 name="threads" size={size} color={color} brand />;
   return <PlatformIcon platform={action.key} size={size} color={color} />;
 }

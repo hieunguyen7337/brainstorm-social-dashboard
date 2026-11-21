@@ -9,7 +9,7 @@ from app.auth import get_workspace
 from app.db import PLATFORMS, get_db
 from app.models import ActivityItem, DashboardSummary
 from app.platforms import live_sql_list, require_live
-from app.services import metrics
+from app.services import demo, metrics
 from app.services.posts import row_to_post
 
 router = APIRouter()
@@ -264,7 +264,11 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
         "followers_total": sum(x["followers"] for x in by_platform),
         "tiles": tiles,
         "not_read": not_read,
-        "engagement_split": _engagement_split(conn, ws["id"], days, platform, per_plat) if real_mode else None,
+        "engagement_split": (
+            _engagement_split(conn, ws["id"], days, platform, per_plat) if real_mode
+            else demo.engagement_split(per_plat) if ws["data_mode"] == "demo"
+            else None
+        ),
     }
 
 
