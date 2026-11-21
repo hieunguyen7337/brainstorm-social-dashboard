@@ -9,6 +9,7 @@ import { ConnectSheetProvider } from '@/src/components/connect/ConnectSheet';
 import { SessionProvider, useSession, type SessionStatus } from '@/src/session';
 import { colors } from '@/src/theme';
 import { ToastProvider } from '@/src/ui';
+import { applyUpdateOnLaunch } from '@/src/updateOnLaunch';
 import { IosInstallHint } from '@/src/ui/IosInstallHint';
 
 // Web production builds load each route as its own chunk (asyncRoutes in app.config.ts). These two are what every
@@ -114,6 +115,9 @@ function Gate() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    void applyUpdateOnLaunch();
+  }, []);
   return (
     <SessionProvider>
       <ToastProvider>

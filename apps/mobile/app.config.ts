@@ -20,7 +20,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   runtimeVersion: { policy: 'appVersion' },
   ...(EAS_PROJECT_ID
     ? {
-        updates: { url: `https://u.expo.dev/${EAS_PROJECT_ID}` },
+        // Wait up to 10 s at a cold start for a newer update, so a fresh install starts on the latest fixes.
+        updates: { url: `https://u.expo.dev/${EAS_PROJECT_ID}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 10000 },
       }
     : {}),
   assetBundlePatterns: ['**/*'],
