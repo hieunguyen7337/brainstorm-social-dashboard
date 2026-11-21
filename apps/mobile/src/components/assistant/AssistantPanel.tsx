@@ -6,33 +6,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { getDesktop } from '@/src/desktop';
-import { colors, radius, space, type as t } from '@/src/theme';
+import { colors, space, type as t } from '@/src/theme';
 import { Button, Card, Chip, TextField } from '@/src/ui';
-import { addUser, emptyChat, foldEvent, type ChatItem } from './events';
+import { ChatItemView } from './ChatItemView';
+import { addUser, emptyChat, foldEvent } from './events';
 
 const STARTERS = ["Draft an Instagram post about today's top trend", 'Read my Instagram numbers', 'How is my dashboard doing?'];
-
-function Item({ item }: { item: ChatItem }) {
-  if (item.kind === 'user') {
-    return (
-      <View style={[styles.bubble, styles.user]}>
-        <Text style={t.body} selectable>
-          {item.text}
-        </Text>
-      </View>
-    );
-  }
-  if (item.kind === 'text') {
-    return (
-      <Text style={t.body} selectable>
-        {item.text}
-      </Text>
-    );
-  }
-  if (item.kind === 'tool') return <Text style={[t.small, styles.tool]}>{item.text}</Text>;
-  if (item.kind === 'stderr') return <Text style={[t.mono, styles.stderr]}>{item.text}</Text>;
-  return <Text style={[t.small, styles.result]}>{item.text}</Text>;
-}
 
 export function AssistantPanel() {
   const [chat, setChat] = useState(emptyChat);
@@ -104,7 +83,7 @@ export function AssistantPanel() {
             </View>
           </View>
         ) : (
-          chat.items.map((item) => <Item key={item.id} item={item} />)
+          chat.items.map((item) => <ChatItemView key={item.id} item={item} />)
         )}
         {running ? <Text style={t.small}>Claude is working...</Text> : null}
       </ScrollView>
@@ -139,11 +118,6 @@ const styles = StyleSheet.create({
   logContent: { gap: space.sm, paddingVertical: space.xs },
   starters: { gap: space.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  bubble: { padding: space.md, borderRadius: radius.sm, alignSelf: 'flex-end', maxWidth: '85%' },
-  user: { backgroundColor: colors.cardHi },
-  tool: { color: colors.info },
-  stderr: { color: colors.danger },
-  result: { color: colors.textMute, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.xs },
   error: { color: colors.danger },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

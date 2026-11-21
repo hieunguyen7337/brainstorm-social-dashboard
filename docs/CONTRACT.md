@@ -107,7 +107,8 @@ column, it says so in its report instead of editing `db.py`.
 ## AI (U2)
 - `claude-sonnet-5-5` through the official `anthropic` SDK, structured output via
   `client.messages.parse(..., output_format=<pydantic model>)` -> `response.parsed_output`, `max_tokens` 4000,
-  `output_config={"effort": "low"}`. Key from `ANTHROPIC_API_KEY` (never logged, never committed).
+  `output_config={"effort": "low"}`. Key from `ANTHROPIC_API_KEY` (never logged, never committed). Server calls only: the
+  phone Assistant uses the person's own key, stored on-device, and never the server key.
 - Caps: `AI_WORKSPACE_LIMIT` generations per workspace (default 30), `AI_GLOBAL_CAP_USD` total (default 60),
   cost = input $2/MTok + output $10/MTok from `response.usage`, recorded in `ai_usage`.
 - No key, cap reached or API error -> deterministic template fallback (`ai_used: false` in the response), so
