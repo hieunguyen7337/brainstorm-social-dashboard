@@ -77,10 +77,28 @@ test('interactive and still on a login page after the grace period: the window i
   s.status('login');
   s.fire(100);
   assert.equal(s.calls.filter((c) => c === 'show').length, 1);
-  s.status('reading'); // the person logged in: hidden again
-  assert.ok(s.calls.includes('hide'));
+  s.status('reading'); // past login, but not confirmed signed in yet: stays visible
+  assert.ok(!s.calls.includes('hide'));
   s.deps().emitResult({} as never);
   assert.equal((await s.result).ok, true);
+  assert.ok(s.calls.includes('hide')); // confirmed: hidden
+});
+
+test('confirmation step: once shown, the window is never hidden until a successful result', async () => {
+  const s = setup({ interactive: true, startedVisible: false });
+  s.status('login');
+  s.fire(100);
+  for (let i = 0; i < 4; i++) {
+    s.status('reading');
+    s.status('login');
+  }
+  s.status('reading');
+  assert.equal(s.calls.filter((c) => c === 'show').length, 1);
+  assert.equal(s.calls.filter((c) => c === 'hide').length, 0);
+  s.deps().emitResult({} as never);
+  assert.equal((await s.result).ok, true);
+  assert.equal(s.calls.filter((c) => c === 'show').length, 1);
+  assert.equal(s.calls.filter((c) => c === 'hide').length, 1);
 });
 
 test('background and signed out (login page after the grace period): never shown, signed_out', async () => {

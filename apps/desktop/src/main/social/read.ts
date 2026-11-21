@@ -8,7 +8,9 @@
  *  - Still on a login page after the grace period, or back on one after reading began (signed out / checkpoint / 2FA):
  *    interactive runs show the window so the person can handle it; background runs never show it and end with
  *    `{ ok: false, reason: SIGNED_OUT }`.
- *  - When the runner moves past login, a window we showed is hidden again.
+ *  - Once the window has been shown it stays visible: later non-login statuses (a checkpoint/2FA page that classifies
+ *    as past login, a signed_out blip) do not hide it. It is hidden only when the run finishes with a confirmed
+ *    signed-in result (`ok`); other outcomes are left to the task-end teardown.
  *  - Closing a visible window ends the run with `{ ok: false }` (no reason).
  */
 import type { ConnectResult, DeviceRead, Platform } from '@/src/desktop/types';
@@ -116,6 +118,10 @@ export function readInWindow(o: ReadOptions): Promise<ConnectResult> {
       stopPoll();
       stopGrace();
       stopCap();
+      if (result.ok && shown) {
+        shown = false;
+        o.host.hide();
+      }
       runner?.dispose();
       resolve(result);
     };
@@ -145,10 +151,6 @@ export function readInWindow(o: ReadOptions): Promise<ConnectResult> {
       sawNonLogin = true;
       stopPoll();
       stopGrace();
-      if (shown) {
-        shown = false;
-        o.host.hide();
-      }
     };
 
     o.host.onClosed(() => finish({ ok: false }));

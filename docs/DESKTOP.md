@@ -49,9 +49,10 @@ Rules for option A:
 - **Sign in once, then invisible.** The partition is stored on disk, so the login survives app restarts until the
   platform expires it or the person signs out. The person sees a platform window only (a) the first time, to log
   in, (b) when the platform asks for something only a human can do (checkpoint, 2FA, captcha), and (c) when they
-  click "Show Instagram". All other reads and posts run in a hidden window (`show: false`) that is created for the
-  task and destroyed when it ends: at most one hidden social window exists at a time, and none when idle. There
-  is never a pile of open windows on the person's desktop.
+  click "Show Instagram". Once a platform window is shown during a run (login, checkpoint, 2FA, captcha), it stays
+  visible until sign-in is confirmed; it is not hidden again on intermediate pages. All other reads and posts run in
+  a hidden window (`show: false`) that is created for the task and destroyed when it ends: at most one hidden social
+  window exists at a time, and none when idle. There is never a pile of open windows on the person's desktop.
 - When a hidden task finds the person signed out (`signed_out` from the reader), it does not pop a window by
   itself: the connect card switches to "Sign in again" and the Claude tool returns "Instagram needs you to sign in
   again in Pulse".
