@@ -1,0 +1,4 @@
+dist/
+renderer/
+release/
+node_modules/
