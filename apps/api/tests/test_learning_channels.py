@@ -279,7 +279,7 @@ def test_linkedin_template_is_long_form_for_any_link_length(name):
 @pytest.mark.parametrize("name", INPUTS)
 def test_instagram_template_is_a_caption_with_a_visual_plan(name):
     variant = channels.template_variant("instagram", input_ctx(name))
-    assert 8 <= len(variant.hashtags) <= 15
+    assert 3 <= len(variant.hashtags) <= 5  # Instagram keeps at most 5
     assert channels.final_length(variant.content, 120) <= 2200
     assert "\n\n" in variant.content and any(ord(ch) > 0x2000 for ch in variant.content)  # line breaks, emojis
     slides = re.findall(r"Slide (\d+):", variant.media_prompt)
@@ -291,7 +291,7 @@ def test_instagram_template_is_a_caption_with_a_visual_plan(name):
 @pytest.mark.parametrize("name", INPUTS)
 def test_tiktok_template_is_a_script_with_a_timed_shot_list(name):
     variant = channels.template_variant("tiktok", input_ctx(name))
-    assert 8 <= len(variant.hashtags) <= 15
+    assert 3 <= len(variant.hashtags) <= 5  # Instagram keeps at most 5
     lines = variant.content.split("\n")
     assert lines[0].startswith("Hook (0-3s):")
     assert [line.split(" (")[0] for line in lines[1:4]] == ["Beat 1", "Beat 2", "Beat 3"]
@@ -489,7 +489,7 @@ def test_ai_output_is_repaired_to_each_channels_limits(client, seed_ws, monkeypa
     for platform in ALL_PLATFORMS:
         assert tag_problems(platform, by[platform]) == [], platform
         assert by[platform].content.count("{link}") == 1, platform
-    assert len(by["instagram"].hashtags) == 15 and by["instagram"].hashtags[0] == "#tag0"
+    assert len(by["instagram"].hashtags) == 5 and by["instagram"].hashtags[0] == "#tag0"
     assert channels.has_visual_plan("instagram", by["instagram"].media_prompt)  # "a photo" was replaced
     assert by["tiktok"].hashtags[:2] == ["#one", "#two"] and len(by["tiktok"].hashtags) >= 3  # topped up
     assert channels.final_length(by["x"].content, link_len) <= 270
