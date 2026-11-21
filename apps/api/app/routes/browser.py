@@ -19,7 +19,7 @@ import sqlite3
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote_plus, urlparse, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -58,6 +58,35 @@ _BARE_HOST = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+(/|$)", re.IGNORECASE)
 NOT_CONNECTED = (
     "No phone is connected. Ask the user to open the Pulse app on their Android phone, go to Settings > "
     "'Let Claude use your phone's browser' and tap Start, then try again."
+)
+SENSITIVE_SUFFIXES = ("token", "secret", "password", "passwd", "otp", "code", "signature", "sig", "key", "jwt")
+# Query keys whose values can be a one-time code, token, password or signature (OAuth and magic-link redirects put
+# them in the URL). Matched against the lowercased, percent-decoded key; the value is replaced, the key is kept.
+SENSITIVE_KEYS = frozenset(
+    {
+        "code",
+        "token",
+        "access_token",
+        "id_token",
+        "refresh_token",
+        "otp",
+        "passcode",
+        "pin",
+        "password",
+        "pass",
+        "pwd",
+        "secret",
+        "session",
+        "sessionid",
+        "sid",
+        "auth",
+        "signature",
+        "sig",
+        "api_key",
+        "key",
+        "verification_code",
+        "one_time_code",
+    }
 )
 
 
@@ -144,6 +173,32 @@ def _https_url(value: Any) -> str:
     if p.scheme != "https" or not p.hostname or len(url) > 2000:
         raise bad
     return url
+
+
+def _sensitive_key(name: str) -> bool:
+    """Exact names above, or any name ending in a credential word (oauth_token, reset-token, api_key, jwt...)."""
+    key = unquote_plus(name).lower().replace("-", "_")
+    return key in SENSITIVE_KEYS or key.endswith(SENSITIVE_SUFFIXES)
+
+
+def _public_url(url: str) -> str:
+    """The page URL the server may store and show the agent: no userinfo, no fragment, no sensitive query values.
+
+    Redaction runs before any length cap, so a secret can never survive by being cut in half. Input that is empty,
+    not text, or cannot be parsed gives "".
+    """
+    if not isinstance(url, str) or not url:
+        return ""
+    try:
+        parts = urlsplit(url)
+        netloc = parts.netloc.rsplit("@", 1)[-1]  # drops user:password@ (up to the last @)
+        pieces = []
+        for piece in parts.query.split("&"):
+            name = piece.split("=", 1)[0]
+            pieces.append(name + "=REDACTED" if _sensitive_key(name) else piece)
+        return urlunsplit((parts.scheme, netloc, parts.path, "&".join(pieces) if parts.query else "", ""))
+    except ValueError:
+        return ""
 
 
 def _num(args: dict[str, Any], key: str, lo: float, hi: float) -> float | None:
@@ -343,6 +398,8 @@ async def post_result(
     result: dict[str, Any] = {"ok": body.ok}
     for key in ("url", "title", "error"):
         v = getattr(body, key)
+        if key == "url":
+            v = _public_url(v)
         if v:
             result[key] = v[:2000]
     if body.text is not None:
@@ -354,7 +411,7 @@ async def post_result(
     if body.data is not None:
         result["data"] = body.data
     if body.url:
-        s.url = body.url[:2000]
+        s.url = _public_url(body.url)[:2000]
     _finish(cmd, now, result)
     return {"ok": True}
 
@@ -365,7 +422,7 @@ async def session(body: SessionIn, request: Request, ws: sqlite3.Row = Depends(g
     s = _session(request, ws)
     now = time.monotonic()
     if body.url:
-        s.url = body.url[:2000]
+        s.url = _public_url(body.url)[:2000]
     if body.active:
         s.last_seen = now
     else:
