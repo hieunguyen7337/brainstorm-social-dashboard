@@ -7,6 +7,7 @@ import { publicBaseUrl } from '@/src/api';
 import { AccountsSection } from '@/src/components/settings/AccountsSection';
 import { AutopilotSection } from '@/src/components/settings/AutopilotSection';
 import { BrandSection } from '@/src/components/settings/BrandSection';
+import { BrowserControlCard } from '@/src/components/settings/BrowserControlCard';
 import { ClaudeMcpCard } from '@/src/components/settings/ClaudeMcpCard';
 import { ConnectorsSection, type ConnectorsHandle } from '@/src/components/settings/ConnectorsSection';
 import { GetTheAppCard } from '@/src/components/settings/GetTheAppCard';
@@ -68,6 +69,7 @@ export default function SettingsScreen() {
             {accounts}
             {real ? <VaultSection /> : null}
             <ClaudeMcpCard />
+            <BrowserControlCard />
             <GetTheAppCard />
           </Col>
         </Grid>
@@ -94,6 +96,7 @@ export default function SettingsScreen() {
       <AutopilotSection />
 
       <ClaudeMcpCard />
+      <BrowserControlCard />
       <GetTheAppCard />
       <ResetCard />
       <Footer />

@@ -30,6 +30,7 @@ write-only: nobody can view a saved login again, only replace or delete it.
 | Server or database leak | Nothing is stored there. |
 | Malicious redirect | The fill script re-checks `location.hostname` inside the page, and `canFill` binds each login to its own site list. |
 | Wrong password | At most 2 fill attempts per sheet session, so the account is not locked out. Challenge and 2FA pages are never filled. |
+| Claude's remote phone browser (`browser_*` MCP tools) | It is a separate WebView (`app/browser.tsx`). The vault only ever fills the sign-in sheet's WebView, never the remote browser. Claude's `type` refuses password and one-time-code fields, and `read_text`/`elements` never return password values. A vault sign-in leaves session cookies the remote browser can use, but never the password. |
 | Lost phone | Keystore/Keychain, this-device-only, locked when the phone is locked, biometric prompt where available. |
 | Android backup | `configureAndroidBackup: true` excludes the secure-store data from auto backup. |
 

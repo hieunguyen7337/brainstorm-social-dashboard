@@ -318,6 +318,136 @@ export function parseLinkedInText(text: string): ParsedRead {
   return guard(() => readLinkedIn(text));
 }
 
+// ---- LinkedIn: the person's own profile, and the reader's combined data ----------------------------------------------
+
+/** A count as the profile shows it ("500+", "1,234", "1.2k"), with whether it ended in "+". */
+interface ShownCount {
+  n: number;
+  plus: boolean;
+}
+
+const COUNT_TOKEN = '(\\d[\\d.,]*(?:\\s?[kmb])?\\+?)';
+
+function shownCount(token: string): ShownCount | null {
+  const n = parseCount(token);
+  return n === null ? null : { n, plus: token.trim().replace(/[.,]$/, '').endsWith('+') };
+}
+
+/** The label patterns the profile parser knows, each a lower-case regex source matched at a word boundary. */
+const PROFILE_LABELS = {
+  followers: 'followers?',
+  connections: 'connections?',
+  impressions: '(?:post )?impressions?',
+  profileViews: 'profile (?:views?|viewers?)',
+  searches: 'search appearances?',
+} as const;
+type ProfileLabel = keyof typeof PROFILE_LABELS;
+
+const labelOnly = (label: ProfileLabel) => new RegExp(`^${PROFILE_LABELS[label]}(?![a-z])`);
+const isPureCount = (line: string) => line.length <= MAX_COUNT_CHARS && shownCount(line) !== null;
+
+/**
+ * The layout check, as for the dashboard: the count may be taken from the line before a label only when the first
+ * label-only line in the text has a count right before it (number-first layout). In a label-first layout ("Followers"
+ * then "1,234") the line before a label is the previous label's value, so only "<n> label" on one line is read.
+ */
+function profileNumberFirst(lines: readonly string[]): boolean {
+  const all = (Object.keys(PROFILE_LABELS) as ProfileLabel[]).map(labelOnly);
+  for (let i = 0; i < lines.length; i++) {
+    if (all.some((re) => re.test(lines[i]))) return i > 0 && isPureCount(lines[i - 1]);
+  }
+  return true;
+}
+
+/** The first count shown for `label`: "<n> label" on one line, else (number-first layout only) "<n>" then "label". */
+function profileCount(lines: readonly string[], label: ProfileLabel, numberFirst: boolean): ShownCount | null {
+  const same = new RegExp(`(?:^|[^0-9a-z.,+])${COUNT_TOKEN}\\s+${PROFILE_LABELS[label]}(?![a-z])`);
+  const only = labelOnly(label);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.length > 400) continue;
+    const m = same.exec(line);
+    if (m) {
+      const c = shownCount(m[1]);
+      if (c) return c;
+    }
+    if (numberFirst && i > 0 && only.test(line) && line.length <= 60 && isPureCount(lines[i - 1])) {
+      return shownCount(lines[i - 1]);
+    }
+  }
+  return null;
+}
+
+interface LinkedInProfileRead {
+  read: ParsedRead;
+  connections: ShownCount | null;
+}
+
+function readLinkedInProfile(input: unknown): LinkedInProfileRead {
+  const text = textOf(input);
+  if (text === null) return { read: {}, connections: null };
+  const lines = normalisedLines(text);
+  const nf = profileNumberFirst(lines);
+  const followers = profileCount(lines, 'followers', nf);
+  const views = profileCount(lines, 'impressions', nf);
+  const profileViews = profileCount(lines, 'profileViews', nf);
+  const searches = profileCount(lines, 'searches', nf);
+  const out: ParsedRead = {};
+  if (followers) out.followers = followers.n;
+  if (views) out.views = views.n;
+  if (profileViews) out.profile_views = profileViews.n;
+  const notes: string[] = [];
+  if (searches) notes.push(`Search appearances: ${withCommas(searches.n)}.`);
+  if (notes.length > 0) out.notes = notes.join(' ');
+  return { read: out, connections: profileCount(lines, 'connections', nf) };
+}
+
+/**
+ * `innerText` of the person's own LinkedIn profile: "1,234 followers", "500+ connections" (the count on the same line
+ * or the line before), and, when the profile's private analytics show them, "<n> post impressions", "<n> profile
+ * views" and "<n> search appearances" (notes only). Connections have no field of their own: they go in `notes`.
+ * Label-first layouts read only what sits on one line.
+ */
+export function parseLinkedInProfileText(text: string): ParsedRead {
+  return guard(() => {
+    const r = readLinkedInProfile(text);
+    return withConnections(r.read, r.connections);
+  });
+}
+
+function withConnections(read: ParsedRead, c: ShownCount | null): ParsedRead {
+  if (!c) return read;
+  const note = `Connections: ${withCommas(c.n)}${c.plus ? '+' : ''}.`;
+  return { ...read, notes: read.notes ? `${note} ${read.notes}` : note };
+}
+
+/**
+ * The `data` of a LinkedIn reader message: `{ publicId?, followers?, connections?, page?: 'dashboard' | 'profile',
+ * text? }`. Counts from LinkedIn's own API (`followers`, `connections`) win over counts read from the page text.
+ */
+export function parseLinkedInData(data: unknown): ParsedRead {
+  return guard(() => {
+    if (!isObj(data)) return {};
+    const text = textOf(data.text);
+    let read: ParsedRead = {};
+    let conns: ShownCount | null = null;
+    if (text !== null && data.page === 'dashboard') {
+      read = readLinkedIn(text);
+    } else if (text !== null && data.page === 'profile') {
+      const r = readLinkedInProfile(text);
+      read = r.read;
+      conns = r.connections;
+    }
+    const apiFollowers = data.followers === undefined || data.followers === null ? null : parseCount(data.followers);
+    if (apiFollowers !== null) read.followers = apiFollowers;
+    const apiConns = data.connections === undefined || data.connections === null ? null : parseCount(data.connections);
+    if (apiConns !== null) conns = { n: apiConns, plus: false };
+    const handle = cleanHandle(data.publicId);
+    if (handle) read.handle = handle;
+    return withConnections(read, conns);
+  });
+}
+
 // ---- TikTok: __UNIVERSAL_DATA_FOR_REHYDRATION__ or the pruned { userInfo } ------------------------------------------
 
 function isUserInfo(v: unknown): v is Obj {
