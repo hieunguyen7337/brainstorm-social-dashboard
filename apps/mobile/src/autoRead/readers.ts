@@ -262,19 +262,71 @@ function igUser(u, fallbackName) {
   }
   return o;
 }
+// A cookie the page can read ('' when absent). ds_user_id (the signed-in account's id) and csrftoken are readable.
+function igCookie(name) {
+  var parts = String(document.cookie || '').split(';');
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i].replace(/^ +/, '');
+    if (p.indexOf(name + '=') === 0) {
+      try {
+        return decodeURIComponent(p.slice(name.length + 1));
+      } catch (e) {
+        return '';
+      }
+    }
+  }
+  return '';
+}
+// Instagram's own web app sends these; without them current_user can answer 400/403 to a signed-in page (2026-11-21).
+function igHeaders() {
+  var h = { 'x-ig-app-id': IG_HEADERS['x-ig-app-id'], 'x-requested-with': 'XMLHttpRequest', 'x-asbd-id': '129477' };
+  var csrf = igCookie('csrftoken');
+  if (csrf) h['x-csrftoken'] = csrf;
+  return h;
+}
+async function igJson(path) {
+  try {
+    var r = await fetchText(path, igHeaders());
+    return { status: r.status, json: r.ok ? asJson(r.text) : null };
+  } catch (e) {
+    return { status: 0, json: null };
+  }
+}
 async function run() {
-  var a = await fetchText('/api/v1/accounts/current_user/?edit=true', IG_HEADERS);
-  if (a.status === 429 || a.status >= 500) return finish('error');
-  var aj = a.ok ? asJson(a.text) : null;
+  var a = await igJson('/api/v1/accounts/current_user/?edit=true');
+  var aj = a.json;
   var username = aj && isObj(aj.user) && typeof aj.user.username === 'string' ? aj.user.username : '';
-  if (!username) return finish('signed_out');
+  // Second way to the username: the account id cookie and that account's info.
+  var info = null;
+  var uid = igCookie('ds_user_id');
+  if (!username && /^[0-9]{1,30}$/.test(uid)) {
+    var c = await igJson('/api/v1/users/' + uid + '/info/');
+    if (c.json && isObj(c.json.user)) {
+      info = c.json.user;
+      if (typeof info.username === 'string') username = info.username;
+    }
+  }
+  if (!username) {
+    if (a.status === 429 || a.status >= 500) return finish('error');
+    // Signed out only when the page has no account cookie at all; otherwise we are signed in but could not read.
+    return finish(uid ? 'empty' : 'signed_out');
+  }
   var user = null;
   try {
-    var b = await fetchText('/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username), IG_HEADERS);
-    var bj = b.ok ? asJson(b.text) : null;
+    var b = await igJson('/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username));
+    var bj = b.json;
     if (bj && isObj(bj.data) && isObj(bj.data.user)) user = bj.data.user;
   } catch (e) {
     user = null;
+  }
+  // The account info already carries the counts in a flat shape: use them when the profile call fails.
+  if (!user && info && num(info.follower_count) !== undefined) {
+    user = {
+      username: username,
+      edge_followed_by: { count: num(info.follower_count) },
+      edge_follow: { count: num(info.following_count) },
+      edge_owner_to_timeline_media: { count: num(info.media_count) },
+    };
   }
   if (!user) return finish('empty', { username: username });
   finish('ok', { user: igUser(user, username) });
