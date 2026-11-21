@@ -20,7 +20,7 @@ const REDACTED = '[redacted]';
 
 // Free-form text is kept only under these keys (the ones the trace uses); a string under any other key is dropped,
 // because a typed value cannot be told from a diagnostic by its shape.
-const STRING_KEYS = new Set(['e', 'host', 'path', 'status', 'phase', 'from', 'p', 'src', 'os', 'osv', 'update', 'channel', 'created']);
+const STRING_KEYS = new Set(['e', 'host', 'path', 'status', 'phase', 'from', 'p', 'src', 'os', 'osv', 'update', 'channel', 'created', 'via']);
 // A field named like a secret keeps only a yes/no (the readers send `csrf: true`, never the value).
 const SECRET_KEY = /pass|pwd|secret|token|cookie|csrf|xsrf|sess|auth|bearer|otp|code|credential|key|html|body|text|value|input|query|search/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

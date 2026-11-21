@@ -65,7 +65,7 @@ _recent: deque[dict[str, Any]] = deque(maxlen=300)
 # Free-form text is kept only under these keys (the ones the app's trace uses); a string under any other key is dropped,
 # because a typed value cannot be told from a diagnostic by its shape.
 _STRING_KEYS = frozenset(
-    {"e", "host", "path", "status", "phase", "from", "p", "src", "os", "osv", "update", "channel", "created"}
+    {"e", "host", "path", "status", "phase", "from", "p", "src", "os", "osv", "update", "channel", "created", "via"}
 )
 # A field named like a secret keeps only a yes/no (the readers send `csrf: true`, never the value).
 _SECRET_KEY = re.compile(

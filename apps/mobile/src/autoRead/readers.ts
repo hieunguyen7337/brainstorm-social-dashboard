@@ -389,13 +389,14 @@ function igHasPosts(u) {
   }
   return false;
 }
-// The account's last 12 posts, pruned: { status, items }. status is -1 on a timeout or failure; no body is kept.
-async function igFeed(username) {
+// One feed call: { status, items }. No body is kept, not even Instagram's error text.
+async function igFeedCall(url) {
   var out = { status: -1, items: [] };
   try {
-    var r = await fetchText('/api/v1/feed/user/' + encodeURIComponent(username) + '/username/?count=12', igHeaders());
+    var r = await fetchText(url, igHeaders());
     out.status = r.status;
-    var j = r.ok ? asJson(r.text) : null;
+    if (!r.ok) return out;
+    var j = asJson(r.text);
     var list = j && Array.isArray(j.items) ? j.items : [];
     for (var i = 0; i < list.length && out.items.length < 12; i++) {
       if (isObj(list[i])) out.items.push(igFeedItem(list[i]));
@@ -404,6 +405,65 @@ async function igFeed(username) {
     out.items = [];
   }
   return out;
+}
+// Posts linked from the profile grid on this page ("p/CODE", "reel/CODE"), newest first, at most n.
+function igGridCodes(n) {
+  var seen = {};
+  var codes = [];
+  var links = document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]');
+  for (var i = 0; i < links.length && codes.length < n; i++) {
+    var m = /\/(p|reel)\/([A-Za-z0-9_-]{5,40})\//.exec(links[i].getAttribute('href') || '');
+    if (m && !seen[m[2]]) {
+      seen[m[2]] = true;
+      codes.push(m[1] + '/' + m[2]);
+    }
+  }
+  return codes;
+}
+// A post's likes and comments from its own page's description ("2 likes, 1 comment - name on a date"): the numbers
+// Instagram's server gives every visitor of that post, used when its data calls are refused (the vivo, 2026-11-21).
+async function igPostFromPage(code) {
+  try {
+    var r = await fetchText('/' + code + '/', null);
+    if (!r.ok) return null;
+    var metas = r.text.match(/<meta\b[^>]*>/gi) || [];
+    for (var i = 0; i < metas.length; i++) {
+      if (!/(name|property)="(og:)?description"/i.test(metas[i])) continue;
+      var c = /content="([^"]*)"/i.exec(metas[i]);
+      if (!c) continue;
+      var d = c[1].replace(/&#x2c;|&#44;/gi, ',').replace(/&#x27;|&#39;/gi, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+      var lm = new RegExp(IG_NUM + '\\s+likes?\\b', 'i').exec(d);
+      var cm = new RegExp(IG_NUM + '\\s+comments?\\b', 'i').exec(d);
+      if (!lm && !cm) continue;
+      var item = {};
+      if (lm) item.like_count = igAbbr(lm[1]);
+      if (cm) item.comment_count = igAbbr(cm[1]);
+      return item;
+    }
+  } catch (e) {}
+  return null;
+}
+// The account's last 12 posts, pruned: { status, items, via }. Tries the feed by account id (what instagram.com's own
+// profile page calls), then by username, then each grid post's own page. status is -1 on a timeout or failure.
+async function igFeed(username, uid, diag) {
+  if (/^[0-9]{1,30}$/.test(uid || '')) {
+    var byId = await igFeedCall('/api/v1/feed/user/' + uid + '/?count=12');
+    diag.fi = byId.status;
+    if (byId.items.length > 0) return { status: byId.status, items: byId.items, via: 'id' };
+  }
+  var byName = await igFeedCall('/api/v1/feed/user/' + encodeURIComponent(username) + '/username/?count=12');
+  if (byName.items.length > 0) return { status: byName.status, items: byName.items, via: 'name' };
+  // The grid draws after the header: wait for its links a little, leaving time for the page fetches.
+  var codes = igGridCodes(6);
+  while (codes.length === 0 && remaining() > 3500) {
+    await tick();
+    codes = igGridCodes(6);
+  }
+  diag.grid = codes.length;
+  var got = await Promise.all(codes.map(igPostFromPage));
+  var items = [];
+  for (var i = 0; i < got.length; i++) if (got[i]) items.push(got[i]);
+  return { status: items.length ? 200 : byName.status, items: items, via: items.length ? 'page' : 'none' };
 }
 async function run() {
   var a = await igJson('/api/v1/accounts/current_user/?edit=true');
@@ -469,7 +529,7 @@ async function run() {
   // falls back to a screenshot of this page read by Claude, or reports an error. No number is ever guessed.
   // web_profile_info gave no posts: ask the feed for them now, so it runs while the header is read. Its own timeout
   // is never later than this script's deadline, so waiting for it below still posts in time.
-  var feedCall = igHasPosts(out) ? null : igFeed(username);
+  var feedCall = igHasPosts(out) ? null : igFeed(username, uid, diag);
   var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
   diag.api = apiF === undefined ? -1 : apiF;
   var tc = null;
@@ -502,6 +562,7 @@ async function run() {
   if (feedCall) {
     var fr = await feedCall;
     diag.f = fr.status;
+    diag.via = fr.via;
     if (fr.items.length > 0) data.feed = fr.items;
   }
   finish('ok', data);

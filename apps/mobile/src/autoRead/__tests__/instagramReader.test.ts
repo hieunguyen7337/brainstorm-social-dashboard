@@ -492,7 +492,7 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       const env = await onProfile([...base(st(429)), [FEEDURL, ok(feedJson('jane'))]]);
       const feedCalls = env.calls.filter((c) => c.url.includes(FEEDURL));
       expect(feedCalls).toHaveLength(1);
-      expect(feedCalls[0].url).toBe('/api/v1/feed/user/jane/username/?count=12');
+      expect(feedCalls[0].url).toBe(`/api/v1/feed/user/${UID}/?count=12`);
       expect(feedCalls[0].init.credentials).toBe('include');
       expect(feedCalls[0].init.headers['x-ig-app-id']).toBe('936619743392459');
       expect(feedCalls[0].init.headers['x-csrftoken']).toBe('SECRETCSRF');
