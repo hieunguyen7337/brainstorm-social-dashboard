@@ -47,6 +47,7 @@ import {
   UA_ANDROID,
   UA_IOS,
 } from './config';
+import { HREF_POLL_JS, HREF_POLL_MS, takeHref } from './hrefPoll';
 import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner, type RunnerStatus } from './runner';
 import { AUTO_READ_FAILED, type AutoReadSheetProps } from './types';
@@ -155,6 +156,18 @@ function Sheet({
   }, [loading, source]);
   const reload = () => webRef.current?.reload();
 
+  // While waiting for the sign-in, ask the page where it really is (see hrefPoll.ts).
+  useEffect(() => {
+    if (status !== 'login' || !source) return;
+    const t = setInterval(() => webRef.current?.injectJavaScript(HREF_POLL_JS), HREF_POLL_MS);
+    return () => clearInterval(t);
+  }, [status, source]);
+  const onMessage = (data: string) => {
+    const href = takeHref(data);
+    if (href) runner.current?.navigated(href, false);
+    else runner.current?.message(data);
+  };
+
   const busy = status !== 'login' || loading;
   const overlay = status === 'anon' || status === 'claude';
   const footerText = status === 'login' && loading ? `Loading ${meta.label}…` : STATUS_TEXT[status];
@@ -217,7 +230,7 @@ function Sheet({
                   setLoading(false);
                   runner.current?.loadEnded(e.nativeEvent.url);
                 }}
-                onMessage={(e: WebViewMessageEvent) => runner.current?.message(e.nativeEvent.data)}
+                onMessage={(e: WebViewMessageEvent) => onMessage(e.nativeEvent.data)}
                 onError={(e) => runner.current?.loadFailed(e.nativeEvent.url)}
               />
             </View>

@@ -22,6 +22,7 @@ import type { WebViewMessageEvent, WebViewNavigation } from 'react-native-webvie
 import { api, getToken, isMock, PLATFORMS, type IngestAccount, type IngestRequest, type Platform } from '@/src/api';
 import { useConnectSheet } from '@/src/components/connect/sheetContext';
 import { DEFAULT_PERIOD, postsToIngest } from '@/src/connect/logic';
+import { HREF_POLL_JS, HREF_POLL_MS, takeHref } from './hrefPoll';
 import { FORGET_HOLD_MS, REFRESH_RETRY_MS, REFRESH_STALE_MS, REFRESH_TIMEOUT_MS, UA_ANDROID } from './config';
 import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner } from './runner';
@@ -143,6 +144,15 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
   const runner = useRef<AutoReadRunner | null>(null);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  // While the runner waits for a sign-in, ask the page where it really is (see hrefPoll.ts).
+  const waiting = useRef(true);
+  useEffect(() => {
+    if (!source) return;
+    const t = setInterval(() => {
+      if (waiting.current) webRef.current?.injectJavaScript(HREF_POLL_JS);
+    }, HREF_POLL_MS);
+    return () => clearInterval(t);
+  }, [source]);
 
   useEffect(() => {
     let finished = false;
@@ -166,6 +176,7 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
       emitResult: (read) => finish(read),
       emitClose: () => finish(null),
       onStatus: (s) => {
+        waiting.current = s === 'login';
         // Back to the login state after reading began = the page says the person is signed out.
         if (s === 'reading') sawReading = true;
         else if (s === 'login' && sawReading) finish(null);
@@ -206,7 +217,11 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
           style={styles.web}
           onNavigationStateChange={(s: WebViewNavigation) => runner.current?.navigated(s.url, s.loading)}
           onLoadEnd={(e) => runner.current?.loadEnded(e.nativeEvent.url)}
-          onMessage={(e: WebViewMessageEvent) => runner.current?.message(e.nativeEvent.data)}
+          onMessage={(e: WebViewMessageEvent) => {
+            const href = takeHref(e.nativeEvent.data);
+            if (href) runner.current?.navigated(href, false);
+            else runner.current?.message(e.nativeEvent.data);
+          }}
           onError={(e) => runner.current?.loadFailed(e.nativeEvent.url)}
         />
       ) : null}
