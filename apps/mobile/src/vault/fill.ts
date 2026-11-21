@@ -144,34 +144,11 @@ export interface FillTiming {
   pollTries?: number;
 }
 
-/** The script that fills and submits the login form. The only place a saved login ever leaves secure storage. */
-export function buildFillScript(platform: Platform, creds: FillCreds, timing: FillTiming = {}): string {
-  const target = TARGETS[platform];
-  const submitDelay = timing.submitDelayMs ?? 350;
-  const pollMs = timing.pollMs ?? 250;
-  const pollTries = timing.pollTries ?? 40;
-  const cfg = {
-    platform,
-    domains: target.domains,
-    paths: target.paths,
-    deny: DENY,
-    otp: ONE_TIME,
-    user: [...target.user, ...GENERIC_USER],
-  };
-  // ES5 on purpose: older Android System WebViews. No arrow functions, no let/const, no template strings.
-  return `(function () {
-  'use strict';
-  var K = ${jsLiteral(cfg)};
-  var C = ${jsLiteral({ u: creds.u, p: creds.p })};
-  var W = (typeof document !== 'undefined' && document.defaultView) || window;
-  function post(status) {
-    try {
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ pulse: 'vaultFill', platform: K.platform, status: status }));
-      }
-    } catch (e) {}
-  }
-  // here() runs on whatever page the WebView is really on, and that page shares this script's JS realm: it may have
+/**
+ * In-page helpers shared by the fill script and the capture script (capture.ts). They expect `K` (the `cfg` built by
+ * `pageConfig`) and `W` (the page window) in scope. ES5 on purpose: older Android System WebViews.
+ */
+export const PAGE_HELPERS = `  // here() runs on whatever page the WebView is really on, and that page shares this script's JS realm: it may have
   // replaced String, String.prototype or Array.prototype to make a check pass. So here() reads only location (its
   // properties are unforgeable) and uses only operators, in-range string indexing and .length, never a method.
   var UP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', LO = 'abcdefghijklmnopqrstuvwxyz';
@@ -269,7 +246,41 @@ export function buildFillScript(platform: Platform, creds: FillCreds, timing: Fi
     }
     return null;
   }
-  function set(el, value) {
+`;
+
+/** The `K` object the in-page helpers read: platform, its domains, login paths, denied segments and field selectors. */
+export function pageConfig(platform: Platform) {
+  const target = TARGETS[platform];
+  return {
+    platform,
+    domains: target.domains,
+    paths: target.paths,
+    deny: DENY,
+    otp: ONE_TIME,
+    user: [...target.user, ...GENERIC_USER],
+  };
+}
+
+/** The script that fills and submits the login form. The only place a saved login ever leaves secure storage. */
+export function buildFillScript(platform: Platform, creds: FillCreds, timing: FillTiming = {}): string {
+  const submitDelay = timing.submitDelayMs ?? 350;
+  const pollMs = timing.pollMs ?? 250;
+  const pollTries = timing.pollTries ?? 40;
+  const cfg = pageConfig(platform);
+  // ES5 on purpose: older Android System WebViews. No arrow functions, no let/const, no template strings.
+  return `(function () {
+  'use strict';
+  var K = ${jsLiteral(cfg)};
+  var C = ${jsLiteral({ u: creds.u, p: creds.p })};
+  var W = (typeof document !== 'undefined' && document.defaultView) || window;
+  function post(status) {
+    try {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ pulse: 'vaultFill', platform: K.platform, status: status }));
+      }
+    } catch (e) {}
+  }
+${PAGE_HELPERS}  function set(el, value) {
     try { el.focus(); } catch (e) {}
     var proto = W.HTMLInputElement && W.HTMLInputElement.prototype;
     var desc = proto && Object.getOwnPropertyDescriptor(proto, 'value');

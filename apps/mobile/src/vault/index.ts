@@ -6,8 +6,9 @@
  * `saveLogin` and come out only inside the fill script `fillScriptFor` builds for the platform's own login page.
  *
  *   - Secrets: `expo-secure-store` (Android Keystore / iOS Keychain), one entry per platform, readable only while the
- *     phone is unlocked and never synced off the device. When the phone has biometrics, the entry needs the biometric
- *     prompt every time it is read.
+ *     phone is unlocked and never synced off the device. Each login has its own biometric choice (`bio`): when it is on
+ *     and the phone has biometrics, the entry needs the biometric prompt every time it is read. `setLoginBio` flips it
+ *     without handing the values to anyone.
  *   - Index (not secret): AsyncStorage `pulse.vault.meta` = which platforms have a login and when it was saved, so the
  *     UI can say "Login saved" without unlocking anything. No username in it.
  *
@@ -98,6 +99,16 @@ function canUseBio(store: SecureStoreLike): boolean {
   }
 }
 
+/** True when this phone can put a saved login behind the fingerprint / face prompt. Never throws. */
+export function biometricsAvailable(): boolean {
+  try {
+    const store = loadSecureStore();
+    return store !== null && canUseBio(store);
+  } catch {
+    return false;
+  }
+}
+
 /** Which platforms have a saved login (index only: nothing secret is read, no prompt). */
 export async function vaultIndex(): Promise<VaultIndex> {
   if (!vaultAvailable()) return {};
@@ -111,8 +122,17 @@ export async function hasLogin(platform: Platform): Promise<boolean> {
 /**
  * Save (or replace) the login for `platform`. Throws an Error with a message fit to show when the input is unusable or the
  * secure store is missing. The values are not kept anywhere else, and cannot be read back.
+ *
+ * `opts.bio`: whether reading it needs the biometric prompt (only honoured when the phone has biometrics). Left out, the
+ * prompt is on whenever the phone supports it. A login saved automatically at a Connect sign-in should pass `{ bio: false }`
+ * so it never prompts until the person turns the prompt on in Settings (`setLoginBio`).
  */
-export async function saveLogin(platform: Platform, username: string, password: string): Promise<void> {
+export async function saveLogin(
+  platform: Platform,
+  username: string,
+  password: string,
+  opts?: { bio?: boolean },
+): Promise<void> {
   const store = loadSecureStore();
   if (!store) throw new Error('Saved logins need the latest version of the app.');
   const u = typeof username === 'string' ? username.trim() : '';
@@ -123,7 +143,7 @@ export async function saveLogin(platform: Platform, username: string, password: 
   const index = await readIndex();
   const old = index[platform];
   if (old) await deleteSecret(store, platform, old.bio);
-  const bio = canUseBio(store);
+  const bio = typeof opts?.bio === 'boolean' ? opts.bio && canUseBio(store) : canUseBio(store);
   try {
     await store.setItemAsync(secretKey(platform), JSON.stringify({ v: 1, u, p }), storeOptions(store, platform, bio));
   } catch {
@@ -148,6 +168,60 @@ async function deleteSecret(store: SecureStoreLike, platform: Platform, bio: boo
     await store.deleteItemAsync(secretKey(platform), storeOptions(store, platform, bio));
   } catch {
     // already gone, or a key the OS invalidated (biometrics changed): nothing left to remove
+  }
+}
+
+/**
+ * Turn the biometric prompt on or off for the login already saved for `platform`. The saved value is unlocked (with the
+ * prompt, when the old entry has one) and rewritten in place under the new setting; it is never returned, kept or logged.
+ * Throws an Error with a message fit to show; on failure the old entry and its index stay as they were.
+ */
+export async function setLoginBio(platform: Platform, on: boolean): Promise<void> {
+  const store = loadSecureStore();
+  if (!store) throw new Error('Saved logins need the latest version of the app.');
+  const info = (await readIndex())[platform];
+  if (!info) throw new Error('No login saved for this platform.');
+  const want = on === true;
+  if (want && !biometricsAvailable()) throw new Error("This phone can't ask for a fingerprint or face.");
+  if (want === info.bio) return;
+
+  const key = secretKey(platform);
+  const oldOpts = storeOptions(store, platform, info.bio);
+  let raw: string | null = null;
+  try {
+    raw = await store.getItemAsync(key, oldOpts);
+    const v = raw ? (JSON.parse(raw) as { u?: unknown; p?: unknown }) : null;
+    if (!v || typeof v.u !== 'string' || typeof v.p !== 'string' || !v.u || !v.p) raw = null;
+  } catch {
+    raw = null;
+  }
+  if (!raw) throw new Error("Couldn't unlock the saved login.");
+  const value: string = raw;
+
+  // Put the old entry back (best effort). If even that fails, the next fill reports the login unreadable.
+  const restore = async () => {
+    await deleteSecret(store, platform, want);
+    try {
+      await store.setItemAsync(key, value, oldOpts);
+    } catch {
+      // nothing more to do; the error below still tells the person it did not work
+    }
+  };
+
+  // Delete-then-write, as saveLogin does: on iOS the prompt and no-prompt items live under different keychain services.
+  await deleteSecret(store, platform, info.bio);
+  try {
+    await store.setItemAsync(key, value, storeOptions(store, platform, want));
+  } catch {
+    // e.g. the person cancelled the prompt Android shows when writing a prompt-bound item
+    await restore();
+    throw new Error("Couldn't change the saved login. Try again.");
+  }
+  try {
+    await writeIndex({ ...(await readIndex()), [platform]: { savedAt: info.savedAt, bio: want } });
+  } catch {
+    await restore();
+    throw new Error("Couldn't change the saved login. Try again.");
   }
 }
 
