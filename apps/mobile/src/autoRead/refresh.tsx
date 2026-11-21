@@ -289,6 +289,9 @@ export function AutoRefresh() {
         for (const conn of connections) {
           if (generation.current !== mine) return;
           if (conn.status !== 'connected') continue;
+          // Only connections the person signed in to themselves are read here: every real connection is `live`. A demo
+          // workspace's are `sandbox` (docs/REAL.md, "Demo workspaces"): never open a hidden sign-in for them.
+          if (conn.mode !== 'live') continue;
           try {
             if (!(await due(conn.platform)) || generation.current !== mine) continue;
             const read = await readOne(conn.platform);

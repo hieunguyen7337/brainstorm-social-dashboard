@@ -41,11 +41,12 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | Method | Path | Body -> Response | Owner |
 |---|---|---|---|
 | GET | /api/health | -> `{ok, app, version}` | core (main.py) |
-| POST | /api/workspaces | `WorkspaceCreate?` -> `WorkspaceWithToken` (seeds 30 days of data, 6 connections, 4 themes, ~24 posts) | U1 |
+| POST | /api/workspaces | `WorkspaceCreate?` -> `WorkspaceWithToken` (default: the sample seed of 30 days of data, 6 connections, 4 themes, ~24 posts; `real: true` seeds no numbers; `demo: true` makes an empty demo workspace, see `docs/REAL.md`; `real` and `demo` together is 422). `data_mode` is `sample`, `real` or `demo` | U1 |
 | GET | /api/workspace | -> `Workspace` | U1 |
 | PATCH | /api/workspace | `WorkspacePatch` -> `Workspace` | U1 |
 | GET | /api/connections | -> `list[Connection]` | U1 |
 | POST | /api/connections/{platform} | `ConnectionCreate` -> `Connection` | U1 |
+| POST | /api/connections/{platform}/demo | -> `DemoSignInResult` (the synthetic sign-in of a demo workspace: connects the platform and backfills synthetic numbers; 409 in any other workspace; see `docs/REAL.md`) | U1 |
 | DELETE | /api/connections/{platform} | -> `Connection` (status disconnected) | U1 |
 | GET | /api/dashboard?days=30&platform= | -> `DashboardSummary` | U1 |
 | GET | /api/activity?limit=30 | -> `list[ActivityItem]` | U1 |

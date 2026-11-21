@@ -3,7 +3,8 @@
  * A 401 from any call clears the token (see `http.raiseUnauthorized`) and lands here via the handler, which flips
  * the status to 'anon' so the layouts redirect to onboarding.
  *
- * Every workspace this app creates is a real one (`real: true`, docs/REAL.md): no seeded audience, posts or numbers.
+ * Every workspace this app creates is a real one (`real: true`, docs/REAL.md): no seeded audience, posts or numbers. The
+ * one exception is `startDemo`, the "Try the demo" link: a labelled workspace with synthetic sign-ins and numbers.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
@@ -19,6 +20,7 @@ import {
   setUnauthorizedHandler,
   type Platform as PulsePlatform,
   type Workspace,
+  type WorkspaceCreate,
 } from './api';
 import { forgetSignIns } from './autoRead';
 import { clearRoomWelcome, markRoomJoined, ROOM_GUEST_BRAND } from './components/room/roomStore';
@@ -48,6 +50,11 @@ export interface Session {
   starting: boolean;
   /** Create a fresh real guest workspace (optional brand name) and enter the app. Resolves true on success. */
   start: (brandName?: string) => Promise<boolean>;
+  /**
+   * Create a labelled demo workspace (synthetic sign-ins and numbers, docs/REAL.md) and enter the app. Resolves false, with
+   * `error` set, when the server does not know the demo yet.
+   */
+  startDemo: (brandName?: string) => Promise<boolean>;
   /**
    * Web link `/#ws=<token>&connect=<platform>` (what a phone without the image picker opens in its browser): the platform
    * whose connect sheet should open once the workspace is ready. `clearConnectRequest` after opening it.
@@ -86,6 +93,8 @@ function takeWorkspaceLink(): { token: string | null; connect: PulsePlatform | n
   const platform = connect && (PLATFORMS as readonly string[]).includes(connect[1]) ? (connect[1] as PulsePlatform) : null;
   return { token: ws ? ws[1] : null, connect: platform };
 }
+
+export const DEMO_UNAVAILABLE = "The demo isn't available on this server yet.";
 
 function messageOf(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -164,12 +173,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void boot();
   }, [boot]);
 
-  const start = useCallback(async (brandName?: string) => {
+  const create = useCallback(async (body: WorkspaceCreate) => {
     setStarting(true);
     setError(null);
     setNetworkError(false);
     try {
-      const { token: tok, ...ws } = await api.createWorkspace({ brand_name: brandName?.trim() || null, real: true });
+      const { token: tok, ...ws } = await api.createWorkspace(body);
+      // A server that predates the demo ignores `demo` and answers with a sample workspace: never keep that one (boot would
+      // forget it anyway), say so instead.
+      if (body.demo && ws.data_mode !== 'demo') {
+        if (alive.current) setError(DEMO_UNAVAILABLE);
+        return false;
+      }
       await setToken(tok);
       if (!alive.current) return true;
       setTokenState(tok);
@@ -187,6 +202,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (alive.current) setStarting(false);
     }
   }, []);
+
+  const start = useCallback(
+    (brandName?: string) => create({ brand_name: brandName?.trim() || null, real: true }),
+    [create],
+  );
+  const startDemo = useCallback(
+    (brandName?: string) => create({ brand_name: brandName?.trim() || null, demo: true }),
+    [create],
+  );
 
   const clearConnectRequest = useCallback(() => setConnectRequest(null), []);
 
@@ -241,6 +265,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       networkError,
       starting,
       start,
+      startDemo,
       connectRequest,
       clearConnectRequest,
       joinRoom,
@@ -257,6 +282,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       networkError,
       starting,
       start,
+      startDemo,
       connectRequest,
       clearConnectRequest,
       joinRoom,
@@ -280,4 +306,21 @@ export const isRealWorkspace = (ws: Workspace | null | undefined): boolean => ws
 
 export function useIsRealWorkspace(): boolean {
   return isRealWorkspace(useSession().workspace);
+}
+
+/** True in the labelled demo workspace (`data_mode` 'demo'): sign-ins and numbers are synthetic. Never true for a real one. */
+export const isDemoWorkspace = (ws: Workspace | null | undefined): boolean => ws?.data_mode === 'demo';
+
+export function useIsDemoWorkspace(): boolean {
+  return isDemoWorkspace(useSession().workspace);
+}
+
+/**
+ * True when the workspace works from connected accounts (real or demo): the Connect pathway, the "Connect an account" empty
+ * state and the per-account numbers. `useIsRealWorkspace` stays strictly 'real', so the demo keeps its sandbox wording.
+ */
+export const isAccountsWorkspace = (ws: Workspace | null | undefined): boolean => isRealWorkspace(ws) || isDemoWorkspace(ws);
+
+export function useIsAccountsWorkspace(): boolean {
+  return isAccountsWorkspace(useSession().workspace);
 }

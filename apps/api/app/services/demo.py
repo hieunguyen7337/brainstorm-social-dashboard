@@ -1,0 +1,227 @@
+"""Demo workspaces (docs/REAL.md, "Demo workspaces"): synthetic sign-ins and numbers, clearly labelled, for tests and demos.
+
+A demo workspace has `data_mode = 'demo'`. It starts like a real one (six disconnected connections, themes, no numbers).
+`sign_in` is the synthetic stand-in for signing in to a platform and reading its numbers: it connects the platform as a
+`sandbox` connection (so `metrics.tick` keeps the simulated audience growing), backfills 60 days of daily metrics, adds a
+few published posts (`metrics_source = 'sim'`) and logs a `real = 0` event. Everything is deterministic per brand and
+platform, so a rehearsal shows the same numbers as the live demo.
+
+Two rules keep synthetic numbers away from real ones: `require_demo` (a demo sign-in only works in a demo workspace) and
+`refuse_in_demo` (real ingest, screenshot and profile writes are refused in a demo workspace).
+"""
+
+import random
+import sqlite3
+from datetime import UTC, datetime, timedelta
+
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+from app.db import new_id, now_iso
+from app.models import Connection
+from app.services import harvest
+from app.services.posts import create_post
+from app.services.seed import (
+    DEMO_BRAND,
+    DEMO_COPY,
+    GENERIC_COPY,
+    SHAPES,
+    TAGS,
+    THEMES,
+    _fmt_time,
+    _handle,
+    seed_real_workspace,
+)
+
+HISTORY_DAYS = 60  # the dashboard's default 30-day window and the 30 days before it (for the change %)
+PREVIOUS_WINDOW_FACTOR = 0.85  # the earlier 30 days run a little lower, so the change % is positive
+WINDOW_DAYS = 30
+# One post goes out this long ago with no views, so the simulated audience visibly grows it. Short on purpose: a post's reach
+# curve has a 20 minute time constant (`metrics.TAU`), so an older one would add thousands of views to today at once.
+FRESH_POST_MINUTES = 3
+
+DEMO_REFUSED = (
+    "This is a demo workspace: its numbers are synthetic. Start your own workspace to add your real numbers."
+)
+NOT_DEMO = "Demo sign-in only works in a demo workspace."
+
+
+class DemoSignInResult(BaseModel):
+    platform: str
+    connection: Connection
+    followers: int
+    views: int  # 30-day totals of the synthetic numbers just read
+    engagements: int
+    period_days: int = WINDOW_DAYS
+    posts_added: int
+    fresh: bool  # False when the platform was already signed in (nothing was added twice)
+    captured_at: str
+
+
+def is_demo(ws: sqlite3.Row) -> bool:
+    return ws["data_mode"] == "demo"
+
+
+def refuse_in_demo(ws: sqlite3.Row) -> None:
+    """Real-number writes (ingest, screenshot, profile URL) are not allowed in a demo workspace."""
+    if is_demo(ws):
+        raise HTTPException(status_code=409, detail=DEMO_REFUSED)
+
+
+def require_demo(ws: sqlite3.Row) -> None:
+    if not is_demo(ws):
+        raise HTTPException(status_code=409, detail=NOT_DEMO)
+
+
+def demo_slug(brand: str) -> str:
+    """The handle slug: the same one `seed_workspace` uses for its demo brand."""
+    if brand == DEMO_BRAND:
+        return "brewandbloom"
+    return "".join(ch for ch in brand.lower() if ch.isalnum())[:24] or "brand"
+
+
+def seed_demo_workspace(conn: sqlite3.Connection, workspace_id: str) -> None:
+    """Like a real workspace (nothing connected, no numbers), but its rows are `sandbox`: nothing in it is ever `live`."""
+    seed_real_workspace(conn, workspace_id)
+    conn.execute("UPDATE connections SET mode = 'sandbox' WHERE workspace_id = ?", (workspace_id,))
+    conn.commit()
+
+
+def _daily_rows(workspace_id: str, platform: str, slug: str, now: datetime) -> tuple[list[tuple], int, int]:
+    """60 days of (workspace, platform, day, views, engagements, clicks, conversions) rows plus the last-30-day sums."""
+    _, _, base, eng_r, click_r, conv_r, weekly, _spike = SHAPES[platform]
+    rows: list[tuple] = []
+    views30 = eng30 = 0
+    for i in range(HISTORY_DAYS - 1, -1, -1):
+        d = (now - timedelta(days=i)).date()
+        rng = random.Random(f"{slug}:{platform}:{d.isoformat()}")
+        v = base * weekly[d.weekday()] * (1 + 0.006 * (WINDOW_DAYS - 1 - i)) * rng.lognormvariate(0, 0.12)
+        if platform == "reddit":
+            v *= rng.uniform(3, 6) if rng.random() < 0.12 else rng.uniform(0.4, 0.9)  # a front-page spike now and then
+        if i >= WINDOW_DAYS:
+            v *= PREVIOUS_WINDOW_FACTOR
+        if i == 0:
+            v *= max(now.hour / 24, 0.15)  # today is partial
+        views = max(int(v), 0)
+        eng = int(views * eng_r * rng.uniform(0.88, 1.12) + rng.random())
+        clicks = int(eng * click_r * rng.uniform(0.88, 1.12) + rng.random())
+        conv = int(clicks * conv_r * rng.uniform(0.9, 1.1) + rng.random())
+        rows.append((workspace_id, platform, d.isoformat(), views, eng, clicks, conv))
+        if i < WINDOW_DAYS:
+            views30 += views
+            eng30 += eng
+    return rows, views30, eng30
+
+
+def _add_posts(conn: sqlite3.Connection, ws: sqlite3.Row, platform: str, slug: str, now: datetime,
+               views30: int) -> int:
+    """Three published posts for the platform: two with history and one that went out a few minutes ago."""
+    wid, brand = ws["id"], ws["brand_name"]
+    theme_ids = [r["id"] for r in conn.execute(
+        "SELECT id FROM themes WHERE workspace_id = ? ORDER BY created_at, rowid LIMIT 3", (wid,))]
+    copy = DEMO_COPY if brand == DEMO_BRAND else [c.format(brand=brand) for c in GENERIC_COPY]
+    _, _, _, eng_r, click_r, conv_r, _, _ = SHAPES[platform]
+    rng = random.Random(f"{slug}:{platform}:posts")
+    # (theme index, age) - ages in days for the two with history, minutes for the fresh one
+    plan = [(0, timedelta(days=9)), (1, timedelta(days=3)), (2, timedelta(minutes=FRESH_POST_MINUTES))]
+    added = 0
+    for ti, age in plan:
+        if ti >= len(theme_ids):
+            break
+        text = copy[ti]
+        if platform == "linkedin":
+            text += f"\n\nWhat's your take? Tell us below. #{TAGS[ti][0]}"
+        elif platform == "x":
+            text = text[:200]
+        tags = TAGS[ti][: 2 if platform in ("x", "linkedin") else 3]
+        quality = rng.uniform(0.55, 0.9)
+        post = create_post(
+            conn, wid, platform=platform, content=text, hashtags=tags,
+            media_prompt=f"Bright, natural-light photo for {THEMES[ti][0].lower()} at {brand}",
+            theme_id=theme_ids[ti], status="published", source="seed", quality=quality, commit=False,
+        )
+        pub = now - age
+        fresh = age < timedelta(hours=1)
+        # `tick` grows a post from `last_tick_at`: the fresh one from its publish time (it has no views yet), the older ones
+        # from now (their counts are already seeded, like `seed_workspace`), or they would grow all over again at once.
+        ticked_at = pub if fresh else now
+        if fresh:
+            views = eng = clicks = conv = 0  # tick grows it from here
+        else:
+            views = int(views30 * rng.uniform(0.04, 0.13) * (0.6 + quality))
+            eng = int(views * eng_r * rng.uniform(0.9, 1.1))
+            clicks = int(eng * click_r * rng.uniform(0.9, 1.1))
+            conv = int(clicks * conv_r * rng.uniform(0.9, 1.1) + rng.random())
+        conn.execute(
+            "UPDATE posts SET status='published', published_at=?, created_at=?, last_tick_at=?,"
+            " views=?, engagements=?, clicks=?, conversions=? WHERE id=?",
+            (_fmt_time(pub), _fmt_time(pub - timedelta(hours=1)), _fmt_time(ticked_at), views, eng, clicks, conv,
+             post.id),
+        )
+        conn.execute(
+            "INSERT INTO events (id, workspace_id, post_id, type, platform, detail, real, ts)"
+            " VALUES (?,?,?,'published',?,?,0,?)",
+            (new_id("e_"), wid, post.id, platform, f"Published to {harvest.NAMES[platform]}: {text[:60]}",
+             _fmt_time(pub)),
+        )
+        added += 1
+    return added
+
+
+def sign_in(conn: sqlite3.Connection, ws: sqlite3.Row, platform: str) -> DemoSignInResult:
+    """The synthetic sign-in: connect `platform` and read its (synthetic) numbers. One transaction, safe to repeat."""
+    wid = ws["id"]
+    slug = demo_slug(ws["brand_name"])
+    now_dt = datetime.now(UTC).replace(microsecond=0)
+    now = now_iso()
+    try:
+        followers = int(SHAPES[platform][0] * random.Random(f"{slug}:{platform}").uniform(0.92, 1.08))
+        handle = _handle(platform, slug)
+        row = conn.execute(
+            "SELECT id, status FROM connections WHERE workspace_id = ? AND platform = ?", (wid, platform)).fetchone()
+        fresh = row is None or row["status"] != "connected"
+        if row is None:
+            conn.execute(
+                "INSERT INTO connections (id, workspace_id, platform, handle, status, mode, followers, connected_at)"
+                " VALUES (?,?,?,?,'connected','sandbox',?,?)",
+                (new_id("c_"), wid, platform, handle, followers, now),
+            )
+        else:
+            conn.execute(
+                "UPDATE connections SET handle=?, status='connected', mode='sandbox', followers=?,"
+                " connected_at = CASE WHEN status = 'connected' THEN connected_at ELSE ? END WHERE id=?",
+                (handle, followers, now, row["id"]),
+            )
+
+        rows, views30, eng30 = _daily_rows(wid, platform, slug, now_dt)
+        conn.executemany(
+            "INSERT INTO daily_metrics VALUES (?,?,?,?,?,?,?) ON CONFLICT(workspace_id, platform, day) DO NOTHING",
+            rows,
+        )
+        have_posts = conn.execute(
+            "SELECT COUNT(*) AS n FROM posts WHERE workspace_id = ? AND platform = ? AND source = 'seed'",
+            (wid, platform)).fetchone()["n"]
+        posts_added = 0 if have_posts else _add_posts(conn, ws, platform, slug, now_dt, views30)
+        if fresh:
+            conn.execute(
+                "INSERT INTO events (id, workspace_id, post_id, type, platform, detail, real, ts)"
+                " VALUES (?,?,NULL,'connected',?,?,0,?)",
+                (new_id("e_"), wid, platform, f"Connected {harvest.NAMES[platform]} (demo)", now),
+            )
+        harvest._snapshot(conn, wid, platform, None, "demo", now, followers=followers, period_days=WINDOW_DAYS,
+                          views=views30, engagements=eng30)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    connection = conn.execute(
+        "SELECT * FROM connections WHERE workspace_id = ? AND platform = ?", (wid, platform)).fetchone()
+    return DemoSignInResult(
+        platform=platform,
+        connection=Connection(
+            platform=connection["platform"], handle=connection["handle"], status=connection["status"],
+            mode=connection["mode"], followers=connection["followers"], connected_at=connection["connected_at"],
+        ),
+        followers=followers, views=views30, engagements=eng30, posts_added=posts_added, fresh=fresh,
+        captured_at=now,
+    )

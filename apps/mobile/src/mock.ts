@@ -24,7 +24,7 @@ import { buildShareInfo } from './shareLinks';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
-  HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
+  DemoSignInResult, HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
   PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, Workspace,
 } from './types';
 
@@ -168,7 +168,7 @@ interface Saved {
   snaps: Snap[]; // oldest first, only calls that carried account numbers
   snapshots: number; // rows the real server would hold: one per post plus one per account snapshot
   at: number | null; // when numbers were last saved
-  source: IngestSource | null;
+  source: IngestSource | 'demo' | null; // 'demo': the synthetic sign-in of a demo workspace
   followers: number | null; // from the latest save that had it
 }
 const newSaved = (): Saved => ({ saves: 0, snaps: [], snapshots: 0, at: null, source: null, followers: null });
@@ -192,6 +192,8 @@ interface State {
   aiUsed: number;
   aiSpent: number;
   saved: Record<Platform, Saved>;
+  /** Demo workspace only: the synthetic numbers of every platform, handed over one platform at a time by `demoSignIn`. */
+  demoStash?: { conns: Connection[]; daily: Map<string, Totals>; posts: PostRec[] };
 }
 
 let state: State | null = null;
@@ -406,6 +408,7 @@ function savedChange(s: State, ps: Platform[], key: 'views' | 'engagements'): nu
 function dashboard(s: State, days: number, platform: Platform | null): DashboardSummary {
   const now = Date.now();
   const isReal = s.ws.data_mode === 'real';
+  const isDemo = s.ws.data_mode === 'demo'; // daily numbers like a sample workspace, but only signed-in platforms are listed
   const plats: Platform[] = platform ? [platform] : [...PLATFORMS];
   /** Sum daily rows for `n` days starting `from` days back (0 = today). */
   const sum = (ps: Platform[], from: number, n: number): Totals => {
@@ -452,7 +455,7 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
     },
     by_platform: rows
       // A real workspace lists the connected platforms and any with numbers; nothing connected gives an empty list.
-      .filter(({ p, t }) => !isReal || conn(s, p).status === 'connected' || t.views + t.engagements + t.clicks + t.conversions > 0)
+      .filter(({ p, t }) => !(isReal || isDemo) || conn(s, p).status === 'connected' || t.views + t.engagements + t.clicks + t.conversions > 0)
       .map(({ p, t }) => ({
         platform: p, ...t, share: rate(t.views, totals.views),
         ...(conn(s, p).status === 'connected' ? { followers: conn(s, p).followers } : {}),
@@ -772,6 +775,50 @@ function seedReal(brandInput: string | null | undefined): State {
   s.events = [];
   s.activity = [];
   return s;
+}
+
+/**
+ * A demo workspace (docs/REAL.md, "Demo workspaces"): starts empty like a real one, but its connections are `sandbox` (the
+ * audience simulation keeps growing them) and the sample seed's numbers wait in `demoStash`. `demoSignIn` hands one platform's
+ * numbers over, the stand-in for signing in and reading them.
+ */
+function seedDemo(brandInput: string | null | undefined): State {
+  const s = seed(brandInput);
+  const created = iso(Date.now());
+  s.demoStash = { conns: s.conns, daily: s.daily, posts: s.posts.filter((r) => r.post.status === 'published') };
+  s.ws = { ...s.ws, created_at: created, data_mode: 'demo' };
+  s.conns = PLATFORMS.map((p): Connection => ({ platform: p, handle: '', status: 'disconnected', mode: 'sandbox', followers: 0, connected_at: created }));
+  s.posts = [];
+  s.daily = new Map();
+  s.events = [];
+  s.activity = [];
+  return s;
+}
+
+const DEMO_REFUSED = 'This is a demo workspace: its numbers are synthetic. Start your own workspace to add your real numbers.';
+
+/** `POST /api/connections/{platform}/demo`: connect the platform and hand over its synthetic numbers (idempotent). */
+function demoSignIn(s: State, platform: Platform): DemoSignInResult {
+  if (s.ws.data_mode !== 'demo' || !s.demoStash) throw new ApiError(409, 'Demo sign-in only works in a demo workspace.');
+  const c = conn(s, platform);
+  const fresh = c.status !== 'connected';
+  const from = s.demoStash.conns[PLATFORMS.indexOf(platform)];
+  if (fresh) {
+    for (const [key, row] of s.demoStash.daily) {
+      if (key.startsWith(`${platform}|`)) s.daily.set(key, { ...row });
+    }
+    s.posts.push(...s.demoStash.posts.filter((r) => r.post.platform === platform));
+    Object.assign(c, { handle: from.handle, status: 'connected', mode: 'sandbox', followers: from.followers, connected_at: iso(Date.now()) });
+    note(s, 'connection', `Connected ${LABEL[platform]} (demo)`, { platform });
+  }
+  const now = Date.now();
+  const h = s.saved[platform];
+  const totals = dashboard(s, 30, platform).totals;
+  Object.assign(h, { saves: h.saves + 1, snapshots: h.snapshots + 1, at: now, source: 'demo', followers: c.followers });
+  return {
+    platform, connection: c, followers: c.followers, views: totals.views, engagements: totals.engagements, period_days: 30,
+    posts_added: fresh ? s.posts.filter((r) => r.post.platform === platform).length : 0, fresh, captured_at: iso(now),
+  };
 }
 
 // ---- generation -------------------------------------------------------------------------------------
@@ -1112,7 +1159,8 @@ export const mockApi: PulseApi = {
 
   createWorkspace: (body) =>
     call(() => {
-      const s = body?.real === true ? seedReal(body.brand_name) : seed(body?.brand_name);
+      if (body?.demo === true && body.real === true) unprocessable('a workspace is either real or demo, not both');
+      const s = body?.demo === true ? seedDemo(body.brand_name) : body?.real === true ? seedReal(body.brand_name) : seed(body?.brand_name);
       state = s;
       return { ...s.ws, token: s.token };
     }),
@@ -1135,6 +1183,7 @@ export const mockApi: PulseApi = {
       const p = platformOf(platform);
       const handle = (b?.handle ?? '').trim();
       if (!handle || handle.length > 60) unprocessable('handle: String should have between 1 and 60 characters');
+      if (s.ws.data_mode === 'demo') return demoSignIn(s, p).connection; // one synthetic path, like the real server
       const c = conn(s, p);
       const real = s.ws.data_mode === 'real'; // a real workspace never gets invented followers or a simulated audience
       Object.assign(c, {
@@ -1323,6 +1372,7 @@ export const mockApi: PulseApi = {
     authed(
       (s) => {
         if (!isPlatform(platform)) unknownPlatform(platform);
+        if (s.ws.data_mode === 'demo') throw new ApiError(409, DEMO_REFUSED); // before any AI use
         if (!SCREENSHOT_TYPES.includes(b?.media_type)) throw new ApiError(415, 'Unsupported image type: use PNG, JPEG or WebP.');
         if (typeof b.image_base64 !== 'string' || !b.image_base64) unprocessable('image_base64: Field required');
         if (decodedBytes(b.image_base64) > SCREENSHOT_MAX_BYTES) throw new ApiError(413, 'The image is larger than 5 MB.');
@@ -1336,7 +1386,12 @@ export const mockApi: PulseApi = {
       },
       aiAvailable ? [700, 1400] : FAST, // a vision call takes a moment, the 503 does not
     ),
-  ingestMetrics: (b) => authed((s) => ingest(s, b)),
+  ingestMetrics: (b) =>
+    authed((s) => {
+      if (s.ws.data_mode === 'demo') throw new ApiError(409, DEMO_REFUSED); // a demo workspace never takes real numbers
+      return ingest(s, b);
+    }),
+  demoSignIn: (platform) => authed((s) => demoSignIn(s, platformOf(platform)), [250, 600]),
   getHarvestStatus: () =>
     authed((s) =>
       PLATFORMS.map((p): HarvestStatus => {

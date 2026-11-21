@@ -10,6 +10,9 @@
  *   points to the screenshot upload.
  *   A failed read or save (503: AI off or capped, too large, offline, no numbers) shows why on the card; nothing is typed by hand.
  *
+ *   Demo workspace (docs/REAL.md, "Demo workspaces"): "Connect with <Platform>" (and "Update") opens the synthetic sign-in
+ *   (`src/demo`) on every platform and OS; there is no screenshot upload and the real reader is never mounted.
+ *
  * Feedback is inline, never a toast: inside the sheet a native modal would hide it.
  */
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
@@ -29,9 +32,20 @@ import {
   savedSummary,
   updatedLabel,
 } from '@/src/connect';
+import { DemoSignInSheet } from '@/src/demo/DemoSignInSheet';
+import { demoSuccessNote } from '@/src/demo/logic';
 import { pickScreenshot } from '@/src/pickImage';
+import { useIsDemoWorkspace, useSession } from '@/src/session';
 import { colors, space, type as t } from '@/src/theme';
-import type { Connection, HarvestStatus, IngestRequest, IngestResult, Platform, ScreenshotRead } from '@/src/types';
+import type {
+  Connection,
+  DemoSignInResult,
+  HarvestStatus,
+  IngestRequest,
+  IngestResult,
+  Platform,
+  ScreenshotRead,
+} from '@/src/types';
 import { Button, Card, ErrorState, Skeleton } from '@/src/ui';
 import { PlatformCard, type CardNote } from './PlatformCard';
 import { useConnectSheet } from './sheetContext';
@@ -45,8 +59,8 @@ export interface ConnectAccountsHandle {
 export interface ConnectAccountsProps {
   /** Open this platform's panel on mount (a `#connect=` link, or a "Connect"/"Update" button elsewhere): it moves to the top. */
   initialPlatform?: Platform | null;
-  /** Called after each successful save. */
-  onSaved?: (platform: Platform, result: IngestResult) => void;
+  /** Called after each successful save (a demo sign-in passes no `result`: it is not an ingest). */
+  onSaved?: (platform: Platform, result?: IngestResult) => void;
   handleRef?: Ref<ConnectAccountsHandle>;
 }
 
@@ -80,6 +94,8 @@ function connectedFrom(prev: Connection | null, req: IngestRequest, result: Inge
 
 export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: ConnectAccountsProps) {
   const { version, markSaved } = useConnectSheet();
+  const demo = useIsDemoWorkspace();
+  const brand = useSession().workspace?.brand_name ?? '';
   const connections = useLoader(() => api.listConnections(), []);
   // "Updated <time>" comes from here; a failure only means no time is shown.
   const harvest = useLoader(async (): Promise<HarvestStatus[]> => {
@@ -198,6 +214,34 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
 
   /** The platform whose in-app sign-in sheet is open (`src/autoRead`). */
   const [auto, setAuto] = useState<Platform | null>(null);
+  /** Demo workspace: the platform whose synthetic sign-in (`src/demo`) is open. */
+  const [demoOpen, setDemoOpen] = useState<Platform | null>(null);
+
+  const openDemo = (platform: Platform) => {
+    if (busy) return;
+    setNote(platform, null);
+    setDemoOpen(platform);
+  };
+
+  /** The synthetic sign-in finished: the server connected the platform and these are the numbers it "read". */
+  const demoDone = (platform: Platform, result: DemoSignInResult) => {
+    if (!alive.current) return;
+    setDemoOpen(null);
+    connections.setData((list) => upsert(list, result.connection));
+    setSavedAt((cur) => ({ ...cur, [platform]: result.captured_at }));
+    setNote(platform, { tone: 'success', text: demoSuccessNote(platform, result) });
+    setExpanded(null);
+    markSaved(); // the dashboard (and every other list) refetches by itself
+    void reload(); // the server's copy replaces the instant one
+    onSaved?.(platform);
+  };
+
+  /** Closed without finishing: the server may already have connected the platform, so look again. */
+  const demoClosed = () => {
+    if (!alive.current) return;
+    setDemoOpen(null);
+    void reload();
+  };
   // Android only, and only when this build has both native modules (an older APK does not): web and iOS keep the upload.
   const canAutoRead = RNPlatform.OS === 'android' && autoReadAvailable();
 
@@ -313,13 +357,19 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
             busy={busy}
             open={mine !== null}
             note={notes[platform] ?? null}
+            demo={demo}
             onUpdate={() => {
-              // Android with the in-app reader: "Update" signs in and reads at once; elsewhere it opens the card's buttons.
-              if (canAutoRead) connect(platform);
+              // Demo: "Update" signs in again with the demo account. Android with the in-app reader: "Update" signs in and
+              // reads at once; elsewhere it opens the card's buttons.
+              if (demo) openDemo(platform);
+              else if (canAutoRead) connect(platform);
               else setExpanded((cur) => (cur === platform ? null : platform));
             }}
-            onUpload={() => upload(platform)}
-            onConnect={canAutoRead ? () => connect(platform) : () => connectElsewhere(platform)}
+            // A demo workspace has nothing real to read: no screenshot upload.
+            onUpload={demo ? undefined : () => upload(platform)}
+            onConnect={
+              demo ? () => openDemo(platform) : canAutoRead ? () => connect(platform) : () => connectElsewhere(platform)
+            }
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}
             {mine?.step === 'saving' ? <Saving /> : null}
@@ -329,7 +379,15 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
       {connections.error ? (
         <Text style={[t.small, styles.stale]}>{"Couldn't refresh your accounts. Showing the last known status."}</Text>
       ) : null}
-      {auto ? (
+      {demoOpen ? (
+        <DemoSignInSheet
+          platform={demoOpen}
+          brand={brand}
+          onClose={demoClosed}
+          onDone={(result) => demoDone(demoOpen, result)}
+        />
+      ) : null}
+      {auto && !demo ? (
         <AutoReadSheet
           platform={auto}
           visible

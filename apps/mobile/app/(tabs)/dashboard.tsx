@@ -27,7 +27,7 @@ import { StartRoom } from '@/src/components/room/StartRoom';
 import { APP_NAME, POLL_MS } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
-import { useIsRealWorkspace, useSession } from '@/src/session';
+import { useIsAccountsWorkspace, useSession } from '@/src/session';
 import { platformMeta, space } from '@/src/theme';
 import { Card, Chip, ChipStrip, ErrorState, Screen } from '@/src/ui';
 
@@ -40,8 +40,9 @@ export default function DashboardScreen() {
   // Wide windows (>= 1024 px) get the board; below that the phone column below renders exactly as it always did.
   const wide = useWide();
   const { workspace } = useSession();
-  // docs/REAL.md: a real workspace shows only what the person connected; an old sample one renders exactly as it always did.
-  const real = useIsRealWorkspace();
+  // docs/REAL.md: a real workspace shows only what the person connected, and so does the demo workspace (with synthetic
+  // numbers); an old sample one renders exactly as it always did.
+  const real = useIsAccountsWorkspace();
   // Bumps after every save in the connect dialog, so a save refreshes this screen at once instead of at the next poll.
   const { version } = useConnectSheet();
   const [platform, setPlatform] = useState<Platform | null>(null);
