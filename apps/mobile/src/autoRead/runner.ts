@@ -66,6 +66,14 @@ export interface RunnerDeps {
 /** After a saved-login fill, wait this long before a screenshot so the page can move on. */
 export const FILL_QUIET_MS = 10_000;
 
+/**
+ * Sent when a screenshot is armed on a loaded page: back to the top, the window and any inner scroll box, so the capture
+ * shows the profile header. On the Samsung (2026-11-21) Instagram's profile opened scrolled past its counts, and Claude
+ * read no numbers.
+ */
+export const SCROLL_TOP_JS =
+  "(function(){try{window.scrollTo(0,0);var a=document.querySelectorAll('main,section,div');for(var i=0;i<a.length;i++){if(a[i].scrollTop>0)a[i].scrollTop=0;}}catch(e){}})();true;";
+
 type Phase = 'anon' | 'login' | 'reading' | 'fallback' | 'capturing' | 'claude' | 'done';
 
 const STATUS: Record<Exclude<Phase, 'done'>, RunnerStatus> = {
@@ -316,8 +324,10 @@ export class AutoReadRunner {
       if (this.flow.isLogin(u)) {
         this.toLogin(false);
         this.signInPage(raw);
-      } else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path)))
+      } else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path))) {
+        this.deps.inject(SCROLL_TOP_JS);
         this.arm(SETTLE_MS, () => void this.captureNow());
+      }
     }
   }
 
@@ -440,6 +450,7 @@ export class AutoReadRunner {
       this.navigateTo(target);
       this.arm(FALLBACK_LOAD_MS, () => void this.captureNow());
     } else {
+      this.deps.inject(SCROLL_TOP_JS);
       this.arm(300, () => void this.captureNow());
     }
   }
