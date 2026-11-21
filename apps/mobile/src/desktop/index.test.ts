@@ -1,5 +1,5 @@
 /** Unit tests for src/desktop/index.ts (the bridge lookup): `npx jest --ci src/desktop`. */
-import { desktopApiUrl, getDesktop, isDesktop } from './index';
+import { desktopApiUrl, desktopTitleBarInset, getDesktop, isDesktop } from './index';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare const describe: (name: string, fn: () => void) => void;
@@ -22,6 +22,16 @@ describe('desktop bridge', () => {
     g.window = { pulseDesktop: { version: 1, apiUrl: 'https://pulse.example.fly.dev//' } };
     expect(isDesktop()).toBe(true);
     expect(desktopApiUrl()).toBe('https://pulse.example.fly.dev');
+    delete g.window;
+  });
+
+  it('reserves the title bar strip on macOS and Windows only', () => {
+    delete g.window;
+    expect(desktopTitleBarInset()).toBe(0);
+    for (const [platform, inset] of [['darwin', 40], ['win32', 40], ['linux', 0]] as const) {
+      g.window = { pulseDesktop: { version: 1, apiUrl: 'x', platform } };
+      expect(desktopTitleBarInset()).toBe(inset);
+    }
     delete g.window;
   });
 });

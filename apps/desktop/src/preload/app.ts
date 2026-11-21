@@ -23,6 +23,7 @@ ipcRenderer.on(IPC.claudeEvent, (_e: IpcRendererEvent, id: string, event: Claude
 
 const api: PulseDesktop = {
   version: DESKTOP_BRIDGE_VERSION,
+  platform: process.platform,
   apiUrl,
   social: {
     status: () => ipcRenderer.invoke(IPC.socialStatus),

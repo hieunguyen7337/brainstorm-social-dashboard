@@ -2,10 +2,12 @@ import { app, BrowserWindow, net, protocol, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { DESKTOP_TITLEBAR_HEIGHT } from '@/src/desktop/types';
 import { API_URL, APP_HOST, APP_SCHEME, APP_URL } from './config';
 import { createContext } from './context';
 import { registerIpc } from './ipc';
 import { contentTypeFor, resolveRendererPath } from './paths';
+import { titleBarOptions, WINDOW_BG } from './window';
 
 const ROOT = path.resolve(__dirname, '..');
 const RENDERER_DIR = path.join(ROOT, 'renderer');
@@ -63,8 +65,9 @@ function createMainWindow(): BrowserWindow {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#0f1020',
+    backgroundColor: WINDOW_BG,
     title: 'Pulse',
+    ...titleBarOptions(process.platform, DESKTOP_TITLEBAR_HEIGHT),
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
