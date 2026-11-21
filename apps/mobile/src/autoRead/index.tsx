@@ -137,7 +137,13 @@ function Sheet({
     };
   }, [platform, capture]);
 
-  const close = () => (runner.current ? runner.current.cancel() : latest.current.onClose());
+  // Close on a signed-in page reads first (the person thinks they are done); a second Close, or Close on the login page,
+  // closes.
+  const close = () => {
+    const r = runner.current;
+    if (!r) return latest.current.onClose();
+    if (!r.readBeforeClose()) r.cancel();
+  };
   const onLayout = (e: LayoutChangeEvent) => {
     size.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
   };

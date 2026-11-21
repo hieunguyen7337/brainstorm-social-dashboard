@@ -307,6 +307,35 @@ describe('instagram runner', () => {
     });
   });
 
+  describe('Close while waiting for the sign-in', () => {
+    it('on a signed-in feed (budget spent, same URL) reads instead of closing', async () => {
+      const { runner, log, adv } = await onFeed();
+      for (let i = 0; i < MAX_INJECTIONS + 2; i++) {
+        runner.message(msg('signed_out'));
+        runner.navigated(FEED, false);
+        await adv(INJECT_DELAY_MS + 10);
+      }
+      runner.message(msg('signed_out'));
+      await adv(10);
+      expect(log.statuses[log.statuses.length - 1]).toBe('login');
+      const before = log.injects.length;
+      expect(runner.readBeforeClose()).toBe(true);
+      await adv(INJECT_DELAY_MS + 10);
+      expect(log.injects.length).toBe(before + 1);
+      runner.message(msg('ok', okData));
+      await adv(10);
+      expect(log.results).toHaveLength(1);
+    });
+
+    it('on the login page closes as before', async () => {
+      const { runner, adv } = await onFeed();
+      runner.message(msg('signed_out'));
+      runner.navigated(LOGIN, false);
+      await adv(10);
+      expect(runner.readBeforeClose()).toBe(false);
+    });
+  });
+
   describe('empty with / without a username', () => {
     it('empty with username -> opens the profile and captures it, then reads the screenshot', async () => {
       const { runner, log, adv } = await onFeed();

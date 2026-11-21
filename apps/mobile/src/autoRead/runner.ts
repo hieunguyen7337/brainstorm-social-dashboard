@@ -182,6 +182,25 @@ export class AutoReadRunner {
     void this.end(() => this.deps.emitClose());
   }
 
+  /**
+   * Close pressed while still waiting for the sign-in: when the page is already signed in (any non-login page), read it
+   * now instead of throwing the sign-in away. Returns true when a read started; the sheet then closes itself when done.
+   */
+  readBeforeClose(): boolean {
+    let started = false;
+    this.guard(() => {
+      if (this.isOver() || this.phase !== 'login' || !this.currentUrl || !this.currentRaw) return;
+      if (!this.flow.pastLogin(this.currentUrl)) return;
+      this.stale = null;
+      this.lastInject = null;
+      this.injections = 0;
+      this.navigations = 0;
+      this.onPage(this.currentUrl, this.currentRaw, true);
+      started = this.phase !== 'login';
+    });
+    return started;
+  }
+
   /** The sheet is going away: stop everything and call nothing back. */
   dispose(): void {
     this.disposed = true;
