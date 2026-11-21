@@ -8,6 +8,7 @@ import { CreateBoard } from '@/src/components/create/CreateBoard';
 import { errorMessage } from '@/src/components/create/errors';
 import { GeneratingState } from '@/src/components/create/GeneratingState';
 import { TREND_FETCH, firstParam, orderLike, type Batch, type TrendChoice } from '@/src/components/create/logic';
+import { PhotoPicker } from '@/src/components/create/PhotoPicker';
 import { PlatformPicker } from '@/src/components/create/PlatformPicker';
 import { ResultPane } from '@/src/components/create/ResultPane';
 import { ResultView } from '@/src/components/create/ResultView';
@@ -18,6 +19,7 @@ import { StyleBadge } from '@/src/components/settings/StyleBadge';
 import { APP_NAME, MAX_CONTENT_WIDTH } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
+import type { PickedImage } from '@/src/pickImage';
 import { useSession } from '@/src/session';
 import { colors, space } from '@/src/theme';
 import { LIVE_PLATFORMS } from '@/src/platforms';
@@ -54,6 +56,7 @@ export default function CreateScreen() {
   const [trendOpen, setTrendOpen] = useState(false);
   const [brief, setBrief] = useState('');
   const [tone, setTone] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<PickedImage[]>([]);
 
   // ---- generation flow -------------------------------------------------------------------------------------------
   const [phase, setPhase] = useState<Phase>('form');
@@ -136,6 +139,7 @@ export default function CreateScreen() {
         trend_id: trendView?.id ?? null,
         brief: brief.trim() || undefined,
         tone: tone ?? undefined,
+        photos: photos.length > 0 ? photos.map((p) => ({ image_base64: p.base64, media_type: p.mediaType })) : undefined,
       });
       const posts = orderLike(res.posts, platforms);
       if (posts.length === 0) throw new Error('No posts came back');
@@ -201,7 +205,12 @@ export default function CreateScreen() {
       onClear={() => setTrend(null)}
     />
   );
-  const briefFields = <BriefFields brief={brief} onBrief={setBrief} tone={tone} onTone={setTone} disabled={generating} />;
+  const briefFields = (
+    <>
+      <BriefFields brief={brief} onBrief={setBrief} tone={tone} onTone={setTone} disabled={generating} />
+      <PhotoPicker photos={photos} onChange={setPhotos} disabled={generating} />
+    </>
+  );
   const usageLine = (
     <>
       <StyleBadge />
@@ -308,7 +317,7 @@ export default function CreateScreen() {
               {themePicker}
               {trendPicker}
             </Card>
-            <Card>{briefFields}</Card>
+            <Card style={styles.sections}>{briefFields}</Card>
           </View>
 
           <View style={styles.generate}>

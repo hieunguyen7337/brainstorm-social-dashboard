@@ -324,6 +324,8 @@ export interface GenerateRequest {
   trend_id?: string | null;
   brief?: string; // max 1000 chars
   tone?: string;
+  /** Up to 10 photos Claude looks at while it writes (not stored). */
+  photos?: { image_base64: string; media_type: ScreenshotMediaType }[];
 }
 
 export interface GenerateResponse {
