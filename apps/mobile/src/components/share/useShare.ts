@@ -3,6 +3,9 @@
  *
  * - LinkedIn / X / Reddit / Facebook open the network's composer with the text pre-filled; X cards also offer Threads.
  * - Instagram / TikTok have no composer link: the button copies the caption and a note says what to do next.
+ * - Android, Instagram: "Post to Instagram" copies the caption, asks for a photo (cropped square) and hands it to
+ *   Instagram through the share sheet; with IG_AUTOPOST on it can instead publish it through the signed-in WebView
+ *   after a "Post to Instagram now?" confirm (src/igPost: logic.ts has the design, IgPostSheet.tsx the WebView).
  * - After the composer was opened (or the caption copied) the post is marked published through the screen's own
  *   publish call, so the card updates through the live state it already has.
  *
@@ -11,9 +14,12 @@
  */
 import * as Clipboard from 'expo-clipboard';
 import { useCallback, useRef, useState } from 'react';
-import { Linking, Platform as RNPlatform } from 'react-native';
+import { Alert, Linking, Platform as RNPlatform } from 'react-native';
 
 import { api } from '@/src/api';
+import { canSharePhoto, openInstagramApp, pickPostPhoto, sharePhoto, type PostPhoto } from '@/src/igPost/device';
+import { igAutoPostAvailable, type IgPostOutcome } from '@/src/igPost/IgPostSheet';
+import { IG_AUTOPOST, igButtonMode, igFailureText, igNote } from '@/src/igPost/logic';
 import { buildShareInfo, captionFor } from '@/src/shareLinks';
 import { platformMeta } from '@/src/theme';
 import type { Platform, Post, ShareInfo } from '@/src/types';
@@ -28,15 +34,22 @@ export interface ShareAction {
   testID: string;
   /** Visible text and accessible label. */
   label: string;
-  /** `open`: open a composer URL. `copy`: copy the caption (Instagram, TikTok). */
-  mode: 'open' | 'copy';
+  /**
+   * `open`: open a composer URL. `copy`: copy the caption (Instagram off Android, TikTok). `instagram` (Android): copy
+   * the caption, pick a photo, hand both to Instagram (or auto-post them, see src/igPost).
+   */
+  mode: 'open' | 'copy' | 'instagram';
 }
 
 /** The buttons a card of this platform gets, in order. */
-export function shareActionsFor(platform: Platform): ShareAction[] {
+export function shareActionsFor(platform: Platform, os: string = RNPlatform.OS): ShareAction[] {
   const label = platformMeta[platform].label;
   switch (platform) {
     case 'instagram':
+      if (igButtonMode(os) === 'instagram') {
+        return [{ key: 'instagram', testID: 'share-instagram', label: 'Post to Instagram', mode: 'instagram' }];
+      }
+      return [{ key: platform, testID: `share-${platform}`, label: 'Copy caption', mode: 'copy' }];
     case 'tiktok':
       return [{ key: platform, testID: `share-${platform}`, label: 'Copy caption', mode: 'copy' }];
     case 'x':
@@ -183,7 +196,57 @@ export interface ShareState {
   links: ShareLink[];
   press: (action: ShareAction) => void;
   openLink: (link: ShareLink) => void;
+  /** Android auto-post in progress: ShareButtons renders `<IgPostSheet {...igSheet} />`. */
+  igSheet: { photo: PostPhoto; caption: string; onDone: (outcome: IgPostOutcome) => void } | null;
 }
+
+/** Auto-post when the build allows it and the person confirms; 'share' hands the photo to the Instagram app. */
+type IgRoute = 'auto' | 'share' | 'cancel';
+
+/** Android's Alert can fire onPress and onDismiss; the first answer wins. */
+function ask<T>(title: string, message: string, buttons: { text: string; value: T; cancel?: boolean }[], dismissed: T) {
+  return new Promise<T>((resolve) => {
+    let done = false;
+    const answer = (v: T) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+    };
+    Alert.alert(
+      title,
+      message,
+      buttons.map((b) => ({
+        text: b.text,
+        style: (b.cancel ? 'cancel' : 'default') as 'cancel' | 'default',
+        onPress: () => answer(b.value),
+      })),
+      { cancelable: true, onDismiss: () => answer(dismissed) },
+    );
+  });
+}
+
+const askIgRoute = (): Promise<IgRoute> =>
+  ask<IgRoute>(
+    'Post to Instagram now?',
+    'Pulse publishes this photo and caption on your Instagram account, where everyone can see it.',
+    [
+      { text: 'Cancel', value: 'cancel', cancel: true },
+      { text: 'Open Instagram', value: 'share' },
+      { text: 'Post now', value: 'auto' },
+    ],
+    'cancel',
+  );
+
+const askShareInstead = (message: string): Promise<boolean> =>
+  ask<boolean>(
+    "Couldn't post to Instagram",
+    message,
+    [
+      { text: 'Cancel', value: false, cancel: true },
+      { text: 'Open Instagram', value: true },
+    ],
+    false,
+  );
 
 export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   const toast = useToast();
@@ -192,6 +255,8 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   const [busyKey, setBusyKey] = useState<ShareKey | null>(null);
   const [remoteNote, setRemoteNote] = useState<string | null>(null);
   const [links, setLinksState] = useState<ShareLink[]>(() => pendingLinks.get(post.id) ?? []);
+  const [igJob, setIgJob] = useState<{ photo: PostPhoto; caption: string } | null>(null);
+  const igResolve = useRef<((outcome: IgPostOutcome) => void) | null>(null);
 
   // Latest values for the async flow below (a press spans an awaited request and a re-render or two).
   const postRef = useRef(post);
@@ -251,6 +316,85 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
     await markPublished('Caption copied');
   };
 
+  /** The photo to Instagram through Android's share sheet; an APK without expo-sharing opens the Instagram app. */
+  const shareToInstagram = async (photo: PostPhoto | null, copied: boolean): Promise<void> => {
+    const paste = copied ? 'The caption is copied: paste it in Instagram.' : "Couldn't copy the caption.";
+    if (photo && canSharePhoto()) {
+      toast.show(`Choose "Instagram Feed". ${paste}`, 'info');
+      if (await sharePhoto(photo.uri)) {
+        toast.show(paste, copied ? 'success' : 'error');
+        await markPublished('Sent to Instagram');
+        return;
+      }
+    }
+    if (!(await openInstagramApp())) {
+      toast.show("Couldn't open Instagram.", 'error');
+      return;
+    }
+    toast.show(copied ? 'Caption copied. In Instagram tap +, pick the photo, then paste the caption.' : paste, 'info');
+    await markPublished('Opened Instagram');
+  };
+
+  /** Opens the posting sheet and resolves when it is done. */
+  const autoPost = (photo: PostPhoto, caption: string): Promise<IgPostOutcome> =>
+    new Promise((resolve) => {
+      igResolve.current = resolve;
+      setIgJob({ photo, caption });
+    });
+
+  const igDone = (outcome: IgPostOutcome): void => {
+    setIgJob(null);
+    const resolve = igResolve.current;
+    igResolve.current = null;
+    resolve?.(outcome);
+  };
+
+  /** Android "Post to Instagram": caption to the clipboard, a photo from the library, then share or auto-post. */
+  const postInstagram = async (): Promise<void> => {
+    const caption = captionFor(current().post);
+    const copied = await copyCaption(caption);
+    const picked = await pickPostPhoto();
+    if (picked.status === 'cancelled') {
+      toast.show(
+        copied ? 'Caption copied. Instagram needs a photo: tap again to pick one.' : 'Instagram needs a photo.',
+        'info',
+      );
+      return;
+    }
+    if (picked.status === 'error') {
+      toast.show(picked.message, 'error');
+      return;
+    }
+    if (picked.status === 'unavailable') {
+      await shareToInstagram(null, copied); // this APK has no photo picker: the person picks it in Instagram
+      return;
+    }
+    const { photo } = picked;
+    const route: IgRoute = IG_AUTOPOST && igAutoPostAvailable() ? await askIgRoute() : 'share';
+    if (route === 'cancel') return;
+    if (route === 'share') {
+      await shareToInstagram(photo, copied);
+      return;
+    }
+    const outcome = await autoPost(photo, caption);
+    if (outcome.ok === true) {
+      haptic.success();
+      toast.show('Posted to Instagram');
+      await markPublished('Posted to Instagram');
+      return;
+    }
+    if (outcome.ok === null) {
+      if (outcome.whilePosting) toast.show('Closed while posting. Check Instagram: it may have posted.', 'info');
+      return;
+    }
+    const message = igFailureText(outcome);
+    if (outcome.stage === 'timeout') {
+      toast.show(message, 'info');
+      return;
+    }
+    if (await askShareInstead(message)) await shareToInstagram(photo, copied);
+  };
+
   const open = async (action: ShareAction, blank: Window | null): Promise<void> => {
     const { post: shown, edited } = current();
     const info = await loadShare(shown, edited);
@@ -279,7 +423,7 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
     busyRef.current = true;
     setBusyKey(action.key);
     const blank = action.mode === 'open' ? openBlankTab() : null;
-    const job = action.mode === 'copy' ? copy() : open(action, blank);
+    const job = action.mode === 'copy' ? copy() : action.mode === 'instagram' ? postInstagram() : open(action, blank);
     job
       .catch(() => {
         if (blank && !blank.closed) blank.close();
@@ -300,5 +444,11 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   };
 
   const localNote = actions[0].mode === 'copy' ? buildShareInfo(post).instagram_note : null;
-  return { actions, busyKey, note: remoteNote ?? localNote, links, press, openLink };
+  // Android Instagram: the server's note describes the copy-only flow, so this button keeps its own.
+  const note =
+    actions[0].mode === 'instagram'
+      ? igNote({ autoPost: IG_AUTOPOST && igAutoPostAvailable(), hasVisualPlan: !!post.media_prompt?.trim() })
+      : (remoteNote ?? localNote);
+  const igSheet = igJob ? { ...igJob, onDone: igDone } : null;
+  return { actions, busyKey, note, links, press, openLink, igSheet };
 }
