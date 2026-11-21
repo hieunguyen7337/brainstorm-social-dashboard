@@ -22,6 +22,7 @@ import {
 } from './api';
 import { forgetSignIns } from './autoRead';
 import { clearRoomWelcome, markRoomJoined, ROOM_GUEST_BRAND } from './components/room/roomStore';
+import { clearVault } from './vault';
 
 export type SessionStatus =
   /** Reading storage / validating the saved token. */
@@ -211,12 +212,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     clearRoomWelcome();
-    // Drop the platform sign-ins kept for background refresh. Started first; the hidden WebView that clears them lives in
-    // the tab layout, so wait (briefly, never longer than 1.5 s) before the status flip unmounts it.
+    // Drop the platform sign-ins kept for background refresh and the saved logins in the vault. Both start first; the
+    // hidden WebView that clears the sign-ins lives in the tab layout, so wait (briefly, never longer than 1.5 s) for
+    // both before the status flip unmounts it.
     const forgotten = forgetSignIns().catch(() => undefined);
+    const vaultCleared = clearVault().catch(() => undefined);
     await setToken(null);
     if (Platform.OS !== 'web') {
-      await Promise.race([forgotten, new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
+      await Promise.race([Promise.all([forgotten, vaultCleared]), new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
     }
     if (!alive.current) return;
     setMock(isMock());

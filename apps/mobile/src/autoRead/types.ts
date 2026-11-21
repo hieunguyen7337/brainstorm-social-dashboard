@@ -49,7 +49,10 @@ export interface ParsedRead {
  *                         edge_media_to_comment.count, edge_media_to_caption.edges[0].node.text}}> }`
  *   tiktok    step 0   `{ userInfo: { user: { uniqueId }, stats: { followerCount, followingCount, heartCount,
  *                         videoCount } } }`
- *   linkedin  step 0   `{ text: <document.body.innerText, at most 20000 chars> }`
+ *   linkedin  step 0   `{ publicId, followers?, connections?, page?: 'dashboard' | 'profile', text?, diag }` (counts
+ *                       from LinkedIn's own API; text = innerText of the dashboard or own profile, at most 20000 chars;
+ *                       diag = status codes and yes/no only)
+ *   linkedin  step 1   `{ publicId, page: 'profile', text: <innerText of the person's own profile>, diag }`
  *   x         step 0   `{ handle }`                       (the signed-in account's handle, no "@")
  *   x         step 1   `{ handle, text: <innerText, at most 20000 chars> }`
  *   reddit    step 0   `{ me: </api/me.json body, pruned to data.{name,total_karma,link_karma,comment_karma,

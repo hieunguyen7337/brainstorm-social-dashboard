@@ -7,11 +7,13 @@ import { publicBaseUrl } from '@/src/api';
 import { AccountsSection } from '@/src/components/settings/AccountsSection';
 import { AutopilotSection } from '@/src/components/settings/AutopilotSection';
 import { BrandSection } from '@/src/components/settings/BrandSection';
+import { BrowserControlCard } from '@/src/components/settings/BrowserControlCard';
 import { ClaudeMcpCard } from '@/src/components/settings/ClaudeMcpCard';
 import { ConnectorsSection, type ConnectorsHandle } from '@/src/components/settings/ConnectorsSection';
 import { GetTheAppCard } from '@/src/components/settings/GetTheAppCard';
 import { StyleSection } from '@/src/components/settings/StyleSection';
 import { ThemesSection } from '@/src/components/settings/ThemesSection';
+import { VaultSection } from '@/src/components/settings/VaultSection';
 import { APP_NAME } from '@/src/config';
 import { BOARD_MAX_WIDTH, Col, Grid, useWide } from '@/src/layout';
 import { useIsRealWorkspace, useSession } from '@/src/session';
@@ -67,7 +69,9 @@ export default function SettingsScreen() {
           </Col>
           <Col span={6} style={styles.wideStack} testID="settings-col-right">
             {accounts}
+            {real ? <VaultSection /> : null}
             <ClaudeMcpCard />
+            <BrowserControlCard />
             <GetTheAppCard />
           </Col>
         </Grid>
@@ -91,10 +95,12 @@ export default function SettingsScreen() {
       <ThemesSection />
 
       {accounts}
+      {real ? <VaultSection /> : null}
 
       <AutopilotSection />
 
       <ClaudeMcpCard />
+      <BrowserControlCard />
       <GetTheAppCard />
       <ResetCard />
       <Footer />
@@ -111,7 +117,7 @@ function ResetCard() {
     // A reset always ends in a new, empty real workspace (onboarding), whatever this workspace was.
     const ok = await confirm(
       'Reset workspace?',
-      'This forgets the current workspace on this device and starts a new, empty one. Your connected numbers, posts and themes will be gone.',
+      'This forgets the current workspace on this device and starts a new, empty one. Your connected numbers, posts, themes and saved logins will be gone.',
       'Reset',
       true,
     );
@@ -133,8 +139,8 @@ function ResetCard() {
         <View style={styles.dangerText}>
           <Text style={[t.h3, styles.dangerTitle]}>Reset workspace</Text>
           <Text style={t.dim}>
-            Forget this workspace on this device and start a new, empty one. Your connected numbers, posts and themes
-            will be gone.
+            Forget this workspace on this device and start a new, empty one. Your connected numbers, posts, themes and saved
+            logins will be gone.
           </Text>
         </View>
       </View>

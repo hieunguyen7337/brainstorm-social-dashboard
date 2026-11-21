@@ -183,7 +183,8 @@ _NICHE_TAGS = (
     (r"\bai\b|software|saas|\bapps?\b|code|coding|developer|tech", ("ai", "tech", "saas", "productivitytools")),
     (r"shop|store|ecommerce|retail|product", ("ecommerce", "shopsmall", "onlineshop", "newproduct")),
 )
-_DEFAULT_TAG_COUNT = {"linkedin": 3, "instagram": 12, "tiktok": 10, "x": 2, "reddit": 0, "facebook": 2}
+IG_MAX_HASHTAGS = 5  # Instagram's own limit per caption
+_DEFAULT_TAG_COUNT = {"linkedin": 3, "instagram": 5, "tiktok": 5, "x": 2, "reddit": 0, "facebook": 2}
 
 
 def _slug(text: str, limit: int = 24) -> str:
@@ -740,7 +741,7 @@ _INSTAGRAM = Channel(
             "instagram",
             (
                 f"a punchy caption of at most 2200 characters with emojis, line breaks and a call-to-action line "
-                f"containing {LINK}. 8 to 15 unique hashtags in the hashtags field (brand, theme and niche tags). "
+                f"containing {LINK}. 3 to 5 unique hashtags in the hashtags field (brand, theme and niche tags; Instagram accepts at most 5). "
                 "media_prompt: a concrete visual plan that mentions the brand colours and the setting, either a "
                 "carousel ('Slide 1: ... On-slide text: ...', up to 6 slides) or a 15 to 30 second reel shot list "
                 "with timings ('0-3s: ...')."
@@ -750,14 +751,16 @@ _INSTAGRAM = Channel(
             "tiktok",
             (
                 f"a video script: hook (0-3s), three beats, a call to action with {LINK}, and the on-screen text. "
-                "8 to 15 unique hashtags in the hashtags field. media_prompt: a shot list of 15 to 30 seconds in total "
+                "3 to 5 unique hashtags in the hashtags field. media_prompt: a shot list of 15 to 30 seconds in total "
                 "with timings ('0-3s: ...') that mentions the brand colours and the setting."
             ),
         ),
     ),
     max_chars=2200,
-    min_hashtags=8,
-    max_hashtags=15,
+    # Instagram keeps only the first 5 hashtags and strips the '#' from the rest (seen on a phone, 2026-11-21:
+    # "You can only add 5 hashtags to your caption"), so 12 tags left 7 loose words in the post.
+    min_hashtags=3,
+    max_hashtags=IG_MAX_HASHTAGS,
 )
 _X = Channel(
     id="x",

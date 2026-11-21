@@ -49,9 +49,12 @@ import {
   UA_ANDROID,
   UA_IOS,
 } from './config';
+import { fillScriptFor, takeVaultFill, useVaultStatus, type FillStatus } from '@/src/vault';
+import { canFill } from '@/src/vault/fill';
 import { HREF_POLL_JS, HREF_POLL_MS, takeHref } from './hrefPoll';
 import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner, type RunnerStatus } from './runner';
+import { FILL_CHECK_MS, fillNote, offerVaultFill } from './vaultOffer';
 import { AUTO_READ_FAILED, type AutoReadSheetProps } from './types';
 
 export { AUTO_READ_FAILED } from './types';
@@ -91,6 +94,17 @@ function Sheet({
   const shotRef = useRef<View>(null);
   const size = useRef({ w: 0, h: 0 });
   const runner = useRef<AutoReadRunner | null>(null);
+  const vault = useVaultStatus();
+  const [signInUrl, setSignInUrl] = useState<string | null>(null);
+  const signInUrlRef = useRef<string | null>(null);
+  const [attempts, setAttempts] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const [filling, setFilling] = useState(false);
+  const [vaultNote, setVaultNote] = useState<string | null>(null);
+  const statusRef = useRef<RunnerStatus>('login');
+  statusRef.current = status;
+  const alive = useRef(true);
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef({ onClose, onResult, readScreenshot, handle });
   latest.current = { onClose, onResult, readScreenshot, handle };
 
@@ -133,6 +147,10 @@ function Sheet({
       emitResult: (read) => latest.current.onResult(read),
       emitClose: (reason) => latest.current.onClose(reason),
       onStatus: setStatus,
+      onSignInPage: (url) => {
+        signInUrlRef.current = url;
+        setSignInUrl((p) => (p === url ? p : url));
+      },
     });
     runner.current = r;
     r.start();
@@ -175,12 +193,84 @@ function Sheet({
     const t = setInterval(() => webRef.current?.injectJavaScript(HREF_POLL_JS), HREF_POLL_MS);
     return () => clearInterval(t);
   }, [status, source]);
+  const clearCheck = () => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    checkTimer.current = null;
+  };
+  useEffect(() => {
+    if (status === 'login') return;
+    setVaultNote(null);
+    clearCheck();
+  }, [status]);
+  useEffect(
+    () => () => {
+      alive.current = false;
+      clearCheck();
+    },
+    [],
+  );
+
+  const onFill = (fs: FillStatus) => {
+    if (fs === 'partial') {
+      runner.current?.noteVaultFill();
+    } else if (fs === 'filled') {
+      runner.current?.noteVaultFill();
+      clearCheck();
+      checkTimer.current = setTimeout(() => {
+        checkTimer.current = null;
+        if (statusRef.current === 'login' && canFill(platform, signInUrlRef.current)) {
+          setVaultNote(fillNote('failed', meta.label));
+        }
+      }, FILL_CHECK_MS);
+    } else {
+      setVaultNote(fillNote(fs, meta.label));
+    }
+  };
+
+  const signInWithSaved = async () => {
+    if (filling) return;
+    setFilling(true);
+    let script: string | null = null;
+    try {
+      script = await fillScriptFor(platform);
+    } catch {
+      script = null;
+    }
+    if (!alive.current) return;
+    setFilling(false);
+    if (!script) {
+      setVaultNote(fillNote('unreadable', meta.label));
+      return;
+    }
+    if (!(statusRef.current === 'login' && canFill(platform, signInUrlRef.current) && webRef.current)) {
+      script = null;
+      return;
+    }
+    setVaultNote(null);
+    webRef.current.injectJavaScript(script);
+    script = null;
+    setAttempts((n) => n + 1);
+    runner.current?.noteVaultFill();
+  };
+
   const onMessage = (data: string) => {
+    const f = takeVaultFill(data);
+    if (f) {
+      if (f.platform === platform) onFill(f.status);
+      return;
+    }
     const href = takeHref(data);
     if (href) runner.current?.navigated(href, false);
     else runner.current?.message(data);
   };
 
+  const offer = offerVaultFill(platform, {
+    status,
+    hasLogin: !!vault.saved[platform],
+    url: signInUrl,
+    attempts,
+    dismissed,
+  });
   const busy = status !== 'login' || loading;
   const overlay = status === 'anon' || status === 'claude';
   const footerText = status === 'login' && loading ? `Loading ${meta.label}…` : STATUS_TEXT[status];
@@ -197,7 +287,7 @@ function Sheet({
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.headline} accessibilityRole="header">
-            {`Sign in to ${meta.label}. Pulse only reads your numbers; it never sees your password and nothing is posted.`}
+            {`Sign in to ${meta.label}. Pulse only reads your numbers. Pulse's servers and Claude never see your password, and nothing is posted.`}
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -215,6 +305,41 @@ function Sheet({
         <Text style={styles.note} testID="auto-read-stays-signed-in">
           {STAYS_SIGNED_IN}
         </Text>
+
+        {offer ? (
+          <View style={styles.vaultBar} testID="auto-read-vault-bar">
+            <Text style={styles.vaultText}>{`Sign in with your saved ${meta.label} login?`}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign in with saved login"
+              onPress={() => void signInWithSaved()}
+              disabled={filling}
+              style={({ pressed }) => [styles.vaultPrimary, pressed && styles.pressed]}
+              testID="auto-read-vault-signin"
+            >
+              {filling ? (
+                <ActivityIndicator size="small" color={colors.bg} />
+              ) : (
+                <Text style={styles.vaultPrimaryText}>Sign in</Text>
+              )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Not now"
+              onPress={() => setDismissed(true)}
+              hitSlop={8}
+              style={({ pressed }) => [styles.vaultSecondary, pressed && styles.pressed]}
+              testID="auto-read-vault-dismiss"
+            >
+              <Text style={styles.vaultSecondaryText}>Not now</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {vaultNote && status === 'login' ? (
+          <Text style={styles.vaultNote} testID="auto-read-vault-note">
+            {vaultNote}
+          </Text>
+        ) : null}
 
         <View style={styles.body}>
           {source ? (
@@ -342,6 +467,37 @@ const styles = StyleSheet.create({
     borderColor: colors.borderHi,
   },
   note: {
+    color: colors.textDim,
+    fontSize: 12,
+    lineHeight: 16,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.xs,
+    backgroundColor: colors.card,
+  },
+  vaultBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    backgroundColor: colors.cardHi,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderHi,
+  },
+  vaultText: { flex: 1, minWidth: 160, color: colors.text, fontSize: 13, fontWeight: '600' },
+  vaultPrimary: {
+    minWidth: 72,
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  vaultPrimaryText: { color: colors.bg, fontSize: 13, fontWeight: '700' },
+  vaultSecondary: { paddingHorizontal: space.sm, paddingVertical: space.sm },
+  vaultSecondaryText: { color: colors.textDim, fontSize: 13, fontWeight: '600' },
+  vaultNote: {
     color: colors.textDim,
     fontSize: 12,
     lineHeight: 16,

@@ -11,6 +11,8 @@ from fastapi import FastAPI
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from app.mcp_browser import BROWSER_RULES, register_browser_tools
+
 POST_FIELDS = (
     "id",
     "platform",
@@ -40,6 +42,8 @@ If the harvest script (tools/harvest) already ran successfully for LinkedIn, you
    - Use only the user's OWN LinkedIn account, in the browser they are already logged in to.
    - Never ask for, read or type a password. If a login page shows, stop, ask the user to log in
      themselves, then carry on once they say they are done.
+   - Saved logins live only in the Pulse phone app's vault. You cannot request, read or type them,
+     and no tool returns them.
    - Work at a human pace: wait 1-2 seconds between pages.
    - Read at most 30 posts.
    - Never like, comment, follow, connect, post or message anyone. Read only.
@@ -82,6 +86,8 @@ If the harvest script (tools/harvest) already ran successfully for Instagram, yo
    - Use only the user's OWN Instagram account, in the browser they are already logged in to.
    - Never ask for, read or type a password. If a login page shows, stop, ask the user to log in
      themselves, then carry on once they say they are done.
+   - Saved logins live only in the Pulse phone app's vault. You cannot request, read or type them,
+     and no tool returns them.
    - Work at a human pace: wait 1-2 seconds between pages.
    - Read at most 12 posts or reels.
    - Never like, comment, follow, post or message anyone. Read only.
@@ -168,7 +174,9 @@ def mount_mcp(app: FastAPI) -> None:
             "Pulse is an automated social media manager. Use these tools to read the dashboard, "
             "browse trends and themes, generate/create/publish posts and control autopilot. To bring in the "
             "user's real LinkedIn/Instagram numbers, call harvest_instructions, follow it in the user's own "
-            "browser, then record_metrics."
+            "browser, then record_metrics. When the automatic readers or posters fail, the browser_* tools drive "
+            "the signed-in browser inside the Pulse app on the user's Android phone (browser_status first). "
+            + BROWSER_RULES
         ),
         stateless_http=True,
         json_response=True,
@@ -357,6 +365,8 @@ def mount_mcp(app: FastAPI) -> None:
                 f"Unsupported platform {platform!r}: harvest_instructions supports 'linkedin' and 'instagram'."
             )
         return HARVEST_STEPS[key]
+
+    register_browser_tools(mcp, call, PulseToolError)
 
     # Mount the SDK's route directly so the endpoint is exactly /mcp (no Mount redirect, no /mcp/mcp).
     sub = mcp.streamable_http_app()

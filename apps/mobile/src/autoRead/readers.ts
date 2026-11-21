@@ -340,23 +340,12 @@ function igCountsFromText(text) {
   if (fol === undefined) return null;
   return { followers: fol, following: one('following'), posts: one('posts?') };
 }
-function igMeta(doc) {
-  var out = [];
+function igBodyText() {
   try {
-    var metas = doc.querySelectorAll('meta[property="og:description"], meta[name="description"]');
-    for (var i = 0; i < metas.length; i++) out.push(metas[i].getAttribute('content') || '');
-  } catch (e) {}
-  return out.join('\n');
-}
-function igMetaFromHtml(html) {
-  var out = [];
-  var re = /<meta[^>]+(?:property|name)="(?:og:description|description)"[^>]*>/gi;
-  var m;
-  while ((m = re.exec(String(html || ''))) && out.length < 4) {
-    var c = /content="([^"]*)"/i.exec(m[0]);
-    if (c) out.push(c[1].replace(/&#0?44;/g, ',').replace(/&amp;/g, '&'));
+    return String((document.body && document.body.innerText) || '');
+  } catch (e) {
+    return '';
   }
-  return out.join('\n');
 }
 async function igJson(path) {
   try {
@@ -417,30 +406,46 @@ async function run() {
       edge_owner_to_timeline_media: { count: num(info.media_count) },
     };
   }
-  // Last way before a screenshot: the profile page's own text ("12 Followers, 34 Following, 5 Posts"), which Instagram
-  // serves even when its data calls answer 400/429/404 (2026-11-21, on the owner's phone).
-  if (!user) {
-    var counts = null;
-    if (pathIs('/' + lower(username))) counts = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
-    if (!counts && remaining() > 1500) {
-      try {
-        var h = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
-        diag.h = h.status;
-        if (h.ok) counts = igCountsFromText(igMetaFromHtml(h.text));
-      } catch (e) {}
-    }
-    diag.t = !!counts;
-    if (counts) {
-      user = {
-        username: username,
-        edge_followed_by: { count: counts.followers },
-        edge_follow: { count: counts.following },
-        edge_owner_to_timeline_media: { count: counts.posts },
-      };
-    }
+  // No cached copy is ever used (owner, 2026-11-21: "the app should show error, instead of relying on cache"). The page's
+  // meta description is a slow server copy: on the vivo every data call failed (400, 429, 404) and it said 0 followers
+  // while the header showed 1. So when the calls fail the app opens the profile and reads its live header (below), then
+  // a screenshot of it read by Claude, then reports an error.
+  var out = user ? igUser(user, username) : { username: username };
+  // The person sees their own numbers on their profile page, so the app opens it in view and reads there (step 1).
+  if (STEP === 0 && !pathIs('/' + lower(username))) return finish('ok', { user: out, diag: diag, go: username });
+  // Only what the person sees on their own profile is saved (owner, 2026-11-21: "either show the true correct number or
+  // come back as error"). The data calls are Instagram's server answers and can fail or lag, so the live header the
+  // person sees wins over them; without it this step comes back empty, and the app
+  // falls back to a screenshot of this page read by Claude, or reports an error. No number is ever guessed.
+  var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
+  diag.api = apiF === undefined ? -1 : apiF;
+  var tc = null;
+  var pageT0 = Date.now();
+  while (pathIs('/' + lower(username))) {
+    tc = igCountsFromText(igBodyText());
+    if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
+    await tick();
   }
-  if (!user) return finish('empty', { username: username, diag: diag });
-  finish('ok', { user: igUser(user, username) });
+  diag.vis = !!tc;
+  if (!tc) return finish('empty', { username: username, diag: diag });
+  diag.txt = tc.followers;
+  // A rounded count on the page ("1.2K" = 1200) keeps the data call's exact number only when that number rounds to it.
+  function shown(seen, exact) {
+    if (seen === undefined) return exact;
+    var rounded = seen >= 1000 && seen % 100 === 0;
+    return rounded && exact !== undefined && Math.abs(seen - exact) <= 0.06 * seen ? exact : seen;
+  }
+  var f = shown(tc.followers, apiF);
+  if (f !== apiF) diag.src = 'page';
+  out.edge_followed_by = { count: f };
+  var g = shown(tc.following, isObj(out.edge_follow) ? num(out.edge_follow.count) : undefined);
+  if (g !== undefined) out.edge_follow = { count: g };
+  var p = shown(tc.posts, isObj(out.edge_owner_to_timeline_media) ? num(out.edge_owner_to_timeline_media.count) : undefined);
+  if (p !== undefined) {
+    if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
+    out.edge_owner_to_timeline_media.count = p;
+  }
+  finish('ok', { user: out, diag: diag });
 }
 `;
 
@@ -532,15 +537,186 @@ async function run() {
 }
 `;
 
-/** LinkedIn creator dashboard: wait for one of its labels, settle, post the page text. */
+/**
+ * LinkedIn, shared by both steps: the login-page test, the guest-page test and the profile id in the address.
+ * A phone WebView lands on /feed/ after signing in, and /dashboard/ may not be served to every account on mobile web
+ * (2026-11-21: LinkedIn still failed on the owner's phone with a reader that only ran on /dashboard/), so nothing here
+ * depends on one page.
+ */
+const LINKEDIN_COMMON = String.raw`
+var LI_ID = /^[^\s\/?#%"'\\<>&]{1,100}$/;
+function liLoginPage() {
+  return pathIs('/login', '/checkpoint', '/authwall', '/uas', '/signup', '/m/login') || hasPasswordInput();
+}
+// A guest (signed-out) page: links to sign in or join, which signed-in pages do not carry.
+function liGuest() {
+  try {
+    return !!document.querySelector(
+      'a[href*="/login"], a[href*="/signup"], a[href*="session_redirect"], form[action*="login"], a[href*="/start/join"]'
+    );
+  } catch (e) {
+    return false;
+  }
+}
+// The profile id in /in/<id>/ ('' elsewhere, and for the /in/me/ shortcut).
+function liPathId() {
+  var m = /^\/in\/([^\/?#]+)/.exec(location.pathname);
+  if (!m) return '';
+  var id = m[1];
+  try {
+    id = decodeURIComponent(id);
+  } catch (e) {}
+  return LI_ID.test(id) && lower(id) !== 'me' ? id : '';
+}
+var LI_PROFILE = /\d[\d.,]*\s?[KkMmBb]?\+?\s+(?:followers?|connections?)(?![A-Za-z])/i;
+var LI_DASH = /post impressions|total followers|profile viewers|search appearances/i;
+`;
+
+/**
+ * LinkedIn step 0, on whichever signed-in page the person is on (usually /feed/). Same-origin GETs to LinkedIn's own
+ * Voyager API, the way its web app makes them: /voyager/api/me gives the public profile id, .../networkinfo the
+ * follower and connection counts. The API wants the JSESSIONID cookie's value (quotes removed) as its `csrf-token`
+ * header; that value is sent only to linkedin.com and never posted. On the dashboard or the person's own profile the
+ * page text comes along too. Posts `ok` whenever the person is signed in, even with no numbers: the app then opens
+ * the profile (step 1). `signed_out` only on a login page, or when the API refuses and the page is a guest page.
+ */
 const LINKEDIN_0 = String.raw`
-function liSignedOut() {
-  return pathIs('/login', '/checkpoint', '/authwall', '/uas', '/signup') || hasPasswordInput();
+function liCookie(name) {
+  var parts = String(document.cookie || '').split(';');
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i].replace(/^ +/, '');
+    if (p.indexOf(name + '=') === 0) {
+      try {
+        return decodeURIComponent(p.slice(name.length + 1));
+      } catch (e) {
+        return '';
+      }
+    }
+  }
+  return '';
+}
+function liCsrf() {
+  return liCookie('JSESSIONID').replace(/^"+|"+$/g, '');
+}
+async function liJson(path, csrf) {
+  try {
+    var r = await fetchText(path, {
+      'csrf-token': csrf,
+      accept: 'application/vnd.linkedin.normalized+json+2.1',
+      'x-restli-protocol-version': '2.0.0',
+      'x-li-lang': 'en_US',
+    });
+    return { status: r.status, json: r.ok ? asJson(r.text) : null };
+  } catch (e) {
+    return { status: 0, json: null };
+  }
+}
+// Breadth-first: the shallowest value stored under key that passes test (at most 4000 nodes, depth 8).
+function liFind(root, key, test) {
+  var queue = [root];
+  var depth = [0];
+  for (var seen = 0; seen < queue.length && seen < 4000; seen++) {
+    var v = queue[seen];
+    var d = depth[seen];
+    if (!isObj(v)) continue;
+    if (!Array.isArray(v) && Object.prototype.hasOwnProperty.call(v, key) && test(v[key])) return v[key];
+    if (d >= 8) continue;
+    var keys = Object.keys(v);
+    for (var i = 0; i < keys.length; i++) {
+      if (isObj(v[keys[i]])) {
+        queue.push(v[keys[i]]);
+        depth.push(d + 1);
+      }
+    }
+  }
+  return undefined;
+}
+function liIsId(s) {
+  return typeof s === 'string' && LI_ID.test(s) && lower(s) !== 'me';
+}
+function liIsCount(n) {
+  return num(n) !== undefined && n >= 0;
+}
+async function liWaitText(pattern, maxMs) {
+  var t0 = Date.now();
+  for (;;) {
+    var text = bodyText();
+    if (pattern.test(text)) {
+      await sleep(Math.min(SETTLE_MS, Math.max(0, remaining() - 300)));
+      var again = bodyText();
+      return pattern.test(again) ? again : text;
+    }
+    if (Date.now() - t0 >= maxMs || remaining() <= 500) return '';
+    await tick();
+  }
 }
 async function run() {
-  await readText(/post impressions|total followers|profile viewers|search appearances/i, liSignedOut, function (text) {
-    return { text: text };
-  });
+  if (liLoginPage()) return finish('signed_out');
+  var csrf = liCsrf();
+  var diag = { path: location.pathname, csrf: !!csrf, me: -1 };
+  var me = csrf ? await liJson('/voyager/api/me', csrf) : { status: -1, json: null };
+  diag.me = me.status;
+  // Only the API names the signed-in account: an /in/<id>/ address may be someone else's profile.
+  var pid = (me.json ? liFind(me.json, 'publicIdentifier', liIsId) : undefined) || '';
+  diag.id = !!pid;
+  if (!pid && (me.status === -1 || me.status === 401 || me.status === 403) && liGuest()) {
+    return finish('signed_out');
+  }
+  var out = { publicId: pid || null, diag: diag };
+  if (pid && csrf && remaining() > 2500) {
+    var ni = await liJson('/voyager/api/identity/profiles/' + encodeURIComponent(pid) + '/networkinfo', csrf);
+    diag.ni = ni.status;
+    var f = ni.json ? liFind(ni.json, 'followersCount', liIsCount) : undefined;
+    var c = ni.json ? liFind(ni.json, 'connectionsCount', liIsCount) : undefined;
+    if (f !== undefined) out.followers = f;
+    if (c !== undefined) out.connections = c;
+  }
+  // The page's own numbers: the creator dashboard, or the person's own profile.
+  if (pathIs('/dashboard') && remaining() > 1500) {
+    var dt = await liWaitText(LI_DASH, 6000);
+    if (dt) {
+      out.page = 'dashboard';
+      out.text = dt;
+    }
+  } else if (pid && lower(liPathId()) === lower(pid) && remaining() > 1500) {
+    var pt = await liWaitText(LI_PROFILE, 6000);
+    if (pt) {
+      out.page = 'profile';
+      out.text = pt;
+    }
+  }
+  diag.text = !!out.text;
+  finish('ok', out);
+}
+`;
+
+/**
+ * LinkedIn step 1, on the person's own profile (/in/<id>/, or /in/me/ which LinkedIn redirects there): wait for
+ * "500+ connections" / "1,234 followers", settle, post the page text. Nothing found by the deadline is `empty` with a
+ * `diag` (the app then sends a screenshot of this page).
+ */
+const LINKEDIN_1 = String.raw`
+async function run() {
+  for (;;) {
+    if (liLoginPage()) return finish('signed_out');
+    var text = bodyText();
+    if (LI_PROFILE.test(text)) {
+      await sleep(SETTLE_MS);
+      if (liLoginPage()) return finish('signed_out');
+      var again = bodyText();
+      return finish('ok', {
+        publicId: liPathId() || null,
+        page: 'profile',
+        text: LI_PROFILE.test(again) ? again : text,
+        diag: { path: location.pathname, text: true },
+      });
+    }
+    if (remaining() <= 0) {
+      if (liGuest() && !liPathId()) return finish('signed_out');
+      return finish('empty', { publicId: liPathId() || null, diag: { path: location.pathname, text: false, len: text.length, guest: liGuest() } });
+    }
+    await tick();
+  }
 }
 `;
 
@@ -687,11 +863,14 @@ function readerFor(platform: unknown, step: unknown): ReaderDef | null {
   if (typeof platform !== 'string' || typeof step !== 'number') return null;
   switch (platform + ':' + step) {
     case 'instagram:0':
+    case 'instagram:1':
       return { hosts: ['instagram.com'], net: true, body: INSTAGRAM_0 };
     case 'tiktok:0':
       return { hosts: ['tiktok.com'], net: true, body: TIKTOK_0 };
     case 'linkedin:0':
-      return { hosts: ['linkedin.com'], text: true, body: LINKEDIN_0 };
+      return { hosts: ['linkedin.com'], net: true, text: true, body: LINKEDIN_COMMON + LINKEDIN_0 };
+    case 'linkedin:1':
+      return { hosts: ['linkedin.com'], text: true, body: LINKEDIN_COMMON + LINKEDIN_1 };
     case 'x:0':
       return { hosts: ['x.com', 'twitter.com'], body: X_COMMON + X_0 };
     case 'x:1':
@@ -713,7 +892,7 @@ function cleanHandle(h: unknown): string | null {
 }
 
 /**
- * The script for `platform` at `step` (instagram, tiktok, linkedin, reddit, facebook: 0; x: 0 and 1), ready for
+ * The script for `platform` at `step` (instagram, tiktok, reddit, facebook: 0; linkedin, x: 0 and 1), ready for
  * `WebView.injectJavaScript`. Any other pair throws `Error('no such reader')`. `opts.deadlineMs` exists for tests.
  */
 export function readerScript(

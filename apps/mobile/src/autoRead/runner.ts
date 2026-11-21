@@ -54,12 +54,17 @@ export interface RunnerDeps {
   trace?(event: string, detail?: Record<string, unknown>): void;
   /** Best effort: drop the WebView's sign-in (cookies) before the sheet reports back. */
   clearSession?(): Promise<void>;
+  /** login phase: the WebView is on a page not past sign-in (raw URL); fires again for every such page */
+  onSignInPage?(url: string): void;
   // test seams
   fetchImpl?: typeof fetch;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (id: unknown) => void;
 }
+
+/** After a saved-login fill, wait this long before a screenshot so the page can move on. */
+export const FILL_QUIET_MS = 10_000;
 
 type Phase = 'anon' | 'login' | 'reading' | 'fallback' | 'capturing' | 'claude' | 'done';
 
@@ -106,6 +111,7 @@ export class AutoReadRunner {
   private fallbackTarget: PageUrl | null = null;
   private lastInject: { url: string; at: number; ran: boolean } | null = null;
   private disposed = false;
+  private lastFillAt: number | null = null;
 
   private readonly deps: RunnerDeps;
 
@@ -160,6 +166,9 @@ export class AutoReadRunner {
       this.t('msg', { status: msg.status, step: msg.step, diag: d && typeof d === 'object' ? d.diag : undefined });
       // A failed read says which step failed (status codes, no cookie values): visible in `adb logcat -s ReactNativeJS`.
       if (msg.status !== 'ok') console.log(`[autoRead] ${String(raw).slice(0, 500)}`);
+      // An `ok` message may carry page text: log only its `diag` (status codes and yes/no), never the data itself.
+      else if (msg.data && typeof msg.data === 'object' && 'diag' in msg.data)
+        console.log(`[autoRead] ${msg.platform} step ${msg.step} ok ${JSON.stringify((msg.data as { diag: unknown }).diag).slice(0, 300)}`);
       if (msg.status === 'ok') this.onStepData(msg.data);
       else if (msg.status === 'signed_out') this.toLogin(false);
       else void this.stepEmpty(msg.data);
@@ -247,6 +256,7 @@ export class AutoReadRunner {
       if (!this.flow.pastLogin(u)) {
         // A real login page resets the read budget: the person is signing in again, not looping on a signed-out feed.
         if (this.flow.isLogin(u)) this.injections = 0;
+        this.signInPage(raw);
         return;
       }
       const first = this.flow.steps[0];
@@ -258,13 +268,31 @@ export class AutoReadRunner {
         this.enterStep(0, true);
       }
     } else if (this.phase === 'reading') {
-      if (this.flow.isLogin(u)) this.toLogin(false);
-      else if (this.flow.steps[this.step].matches(u, this.ctx)) this.scheduleInject(raw, isLoad);
+      if (this.flow.isLogin(u)) {
+        this.toLogin(false);
+        this.signInPage(raw);
+      } else if (this.flow.steps[this.step].matches(u, this.ctx)) this.scheduleInject(raw, isLoad);
     } else if (this.phase === 'fallback') {
       if (!this.flow.hostOk(u)) return;
-      if (this.flow.isLogin(u)) this.toLogin(false);
-      else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path)))
+      if (this.flow.isLogin(u)) {
+        this.toLogin(false);
+        this.signInPage(raw);
+      } else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path)))
         this.arm(SETTLE_MS, () => void this.captureNow());
+    }
+  }
+
+  /** The sheet fills a saved login: a capture right after would show the page mid-submit. */
+  noteVaultFill(): void {
+    if (this.isOver()) return;
+    this.lastFillAt = this.now();
+  }
+
+  private signInPage(raw: string): void {
+    try {
+      this.deps.onSignInPage?.(raw);
+    } catch {
+      // a broken callback must never end the run
     }
   }
 
@@ -343,6 +371,7 @@ export class AutoReadRunner {
     } catch {
       outcome = { kind: 'empty' };
     }
+    console.log(`[autoRead] ${this.deps.platform} step ${this.step} -> ${outcome.kind}`);
     if (outcome.kind === 'read') {
       void this.finishParsed(outcome.read, outcome.confidence);
     } else if (outcome.kind === 'next' && this.step + 1 < this.flow.steps.length) {
@@ -379,6 +408,19 @@ export class AutoReadRunner {
   /** "Screen capture": the WebView as a JPEG, read by Claude through the screenshot endpoint. */
   private async captureNow(): Promise<void> {
     if (!this.in('fallback')) return;
+    // Never capture a login form (it could hold a filled password).
+    if (this.currentUrl && this.flow.isLogin(this.currentUrl)) {
+      this.toLogin(false);
+      if (this.currentRaw) this.signInPage(this.currentRaw);
+      return;
+    }
+    if (this.lastFillAt !== null) {
+      const since = this.now() - this.lastFillAt;
+      if (since < FILL_QUIET_MS) {
+        this.arm(FILL_QUIET_MS - since + SETTLE_MS, () => void this.captureNow());
+        return;
+      }
+    }
     this.clearTimers();
     this.setPhase('capturing');
     let base64: string;
