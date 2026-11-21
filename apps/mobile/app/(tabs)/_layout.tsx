@@ -7,7 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AutoRefresh } from '@/src/autoRead';
 import { OfflineView, SplashView } from '@/src/components/BootStates';
+import { PublishConfirmDialog } from '@/src/components/assistant/PublishConfirmDialog';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
+import { isDesktop } from '@/src/desktop';
 import { useWide } from '@/src/layout';
 import { Sidebar } from '@/src/layout/Sidebar';
 import { useSession } from '@/src/session';
@@ -33,6 +35,7 @@ export default function TabsLayout() {
   const { status } = useSession();
   const insets = useSafeAreaInsets();
   const wide = useWide();
+  const desktop = isDesktop();
   if (status === 'loading') return <SplashView />;
   if (status === 'anon') return <Redirect href="/onboarding" />;
   if (status === 'offline') return <OfflineView />;
@@ -99,6 +102,16 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="albums" size={size} color={color} />,
         }}
       />
+      {/* Pulse Desktop only (docs/DESKTOP.md): hidden from the tab bar and the sidebar everywhere else. */}
+      <Tabs.Screen
+        name="assistant"
+        options={{
+          title: 'Assistant',
+          href: desktop ? undefined : null,
+          tabBarButtonTestID: 'tab-assistant',
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="settings"
         options={{
@@ -110,6 +123,8 @@ export default function TabsLayout() {
     </Tabs>
     {/* Android: re-reads connected accounts in the background (no-op elsewhere). */}
     <AutoRefresh />
+    {/* Pulse Desktop: confirms a real post the assistant asked for. */}
+    {desktop ? <PublishConfirmDialog /> : null}
     </>
   );
 }

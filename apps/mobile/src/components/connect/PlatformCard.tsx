@@ -37,6 +37,13 @@ export interface PlatformCardProps {
   onUpload: () => void;
   /** Sign in inside Pulse and read the numbers (Android app); on web and iOS it points to the Android app. */
   onConnect?: () => void;
+  /**
+   * Pulse Desktop: the only action is "Connect with <Platform>" (its own login window). The screenshot upload shows only
+   * once `uploadOffered` (a connect failed); a connected card gets a "Show <Platform>" link (`onShow`).
+   */
+  desktop?: boolean;
+  uploadOffered?: boolean;
+  onShow?: () => void;
   children?: ReactNode;
 }
 
@@ -52,6 +59,9 @@ export function PlatformCard({
   onUpdate,
   onUpload,
   onConnect,
+  desktop = false,
+  uploadOffered = false,
+  onShow,
   children,
 }: PlatformCardProps) {
   const meta = platformMeta[platform];
@@ -104,7 +114,36 @@ export function PlatformCard({
           ) : null}
         </View>
 
-        {showActions ? (
+        {desktop ? (
+          <>
+            {showActions ? (
+              <>
+                <Text style={t.small}>{`Sign in to ${meta.label} in its own window. Pulse reads your numbers for you.`}</Text>
+                <View style={styles.actions}>
+                  <Button
+                    small
+                    title={`Connect with ${meta.label}`}
+                    icon="log-in-outline"
+                    accessibilityLabel={`Connect with ${meta.label}`}
+                    disabled={busy}
+                    onPress={onConnect}
+                  />
+                </View>
+              </>
+            ) : null}
+            {connected && !open && onShow ? (
+              <Button
+                small
+                variant="ghost"
+                title={`Show ${meta.label}`}
+                icon="open-outline"
+                accessibilityLabel={`Show ${meta.label}`}
+                onPress={onShow}
+                style={styles.link}
+              />
+            ) : null}
+          </>
+        ) : showActions ? (
           <>
             <Text style={t.small}>
               {onConnect
@@ -148,6 +187,22 @@ export function PlatformCard({
           </View>
         ) : null}
 
+        {desktop && uploadOffered && !open ? (
+          <>
+            <Text style={t.small}>{`Screenshot: ${PLATFORM_HELP[platform]}.`}</Text>
+            <Button
+              small
+              variant="ghost"
+              title="Upload a screenshot instead"
+              icon="image-outline"
+              accessibilityLabel={`Upload ${meta.label} screenshot`}
+              disabled={busy}
+              onPress={onUpload}
+              style={styles.link}
+            />
+          </>
+        ) : null}
+
         {children}
       </View>
     </Card>
@@ -160,6 +215,7 @@ const styles = StyleSheet.create({
   headInfo: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.md },
   avatar: { width: 40, height: 40 },
   dimmed: { opacity: 0.5 },
+  link: { alignSelf: 'flex-start' },
   fallback: { opacity: 0.5 },
   dot: {
     position: 'absolute',
