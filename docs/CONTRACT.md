@@ -44,6 +44,8 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | POST | /api/workspaces | `WorkspaceCreate?` -> `WorkspaceWithToken` (seeds 30 days of data, 6 connections, 4 themes, ~24 posts) | U1 |
 | GET | /api/workspace | -> `Workspace` | U1 |
 | PATCH | /api/workspace | `WorkspacePatch` -> `Workspace` | U1 |
+| POST | /api/workspace/style | `StyleLearnRequest` `{files: [{name, media_type, data_base64}] (at most 10), text}` -> `StyleLearnResult` `{style: WritingStyle, skipped: [{name, reason}]}`. One batch of the person's own writing (.txt, .md, .pdf, .docx, PNG/JPEG/WebP screenshots, pasted text; 5 MB a file, 15 MB a batch) refines the stored style with one Claude call (purpose `style`); the app sends up to 100 files as batches in turn. 409 busy, 413/415/422 bad upload, 503 AI unavailable. See "Writing style" | S1 |
+| DELETE | /api/workspace/style | -> `{ok: true}` (forget the learned style) | S1 |
 | GET | /api/connections | -> `list[Connection]` | U1 |
 | POST | /api/connections/{platform} | `ConnectionCreate` -> `Connection` | U1 |
 | DELETE | /api/connections/{platform} | -> `Connection` (status disconnected) | U1 |
@@ -108,6 +110,17 @@ column, it says so in its report instead of editing `db.py`.
   cost = input $2/MTok + output $10/MTok from `response.usage`, recorded in `ai_usage`.
 - No key, cap reached or API error -> deterministic template fallback (`ai_used: false` in the response), so
   the demo never breaks.
+
+## Writing style (S1)
+- `Workspace.writing_style` is `WritingStyle | null`: `{summary, traits (<= 8), examples (<= 3), sources (<= 100 names),
+  file_count, sample_chars, updated_at}`, stored as JSON in `workspaces.writing_style` ('' until the person uploads).
+- `POST /api/workspace/style` reads one batch (<= 10 files and/or pasted text, <= 5 MB a file, <= 15 MB a batch). Text
+  is pulled out on the server (.txt/.md decoded, .docx via the standard library, .pdf via pypdf, first 30 pages) and
+  capped at 6,000 characters a file; screenshots go to Claude as images. One `messages.parse` call (purpose `style`,
+  its own `AI_WORKSPACE_LIMIT` budget) *refines* the stored profile, so many batches build on each other. A file that
+  is accepted but unreadable (a scanned PDF) is listed in `skipped`; nothing readable at all is a 422.
+- Every generation prompt (`ai.build_prompt`: Generate, Autopilot, Room mode, MCP `generate_posts`) adds the profile as
+  "Writing style: ... match the voice, not the topics". Files are never stored or logged.
 
 ## MCP tools (U4)
 `get_dashboard`, `list_posts`, `create_post`, `publish_post`, `generate_posts`, `list_trends`, `list_themes`,

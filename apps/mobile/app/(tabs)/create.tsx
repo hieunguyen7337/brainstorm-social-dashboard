@@ -14,6 +14,7 @@ import { ResultView } from '@/src/components/create/ResultView';
 import { ThemePicker } from '@/src/components/create/ThemePicker';
 import { TrendPicker } from '@/src/components/create/TrendPicker';
 import { UsageLine } from '@/src/components/create/UsageLine';
+import { StyleBadge } from '@/src/components/settings/StyleBadge';
 import { APP_NAME, MAX_CONTENT_WIDTH } from '@/src/config';
 import { useAsync } from '@/src/hooks';
 import { useWide } from '@/src/layout';
@@ -200,7 +201,12 @@ export default function CreateScreen() {
     />
   );
   const briefFields = <BriefFields brief={brief} onBrief={setBrief} tone={tone} onTone={setTone} disabled={generating} />;
-  const usageLine = <UsageLine usage={usage.data} loading={usage.loading} />;
+  const usageLine = (
+    <>
+      <StyleBadge />
+      <UsageLine usage={usage.data} loading={usage.loading} />
+    </>
+  );
   const noPlatformHint = count === 0 ? <Text style={styles.hint}>Select at least one platform to generate.</Text> : null;
   const errorCard =
     genError && !generating ? (

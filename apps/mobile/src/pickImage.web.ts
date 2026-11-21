@@ -112,6 +112,9 @@ async function prepare(file: File): Promise<PickResult> {
   }
 }
 
+/** The same decode, downscale and JPEG re-encode `pickScreenshot` applies, for `pickFiles.web.ts` (writing samples). */
+export const prepareImageFile = prepare;
+
 /** The one hidden file input, created on first use. */
 function fileInput(): HTMLInputElement {
   const existing = document.getElementById(INPUT_ID);

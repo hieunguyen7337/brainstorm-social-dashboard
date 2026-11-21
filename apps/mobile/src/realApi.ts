@@ -85,6 +85,9 @@ export const realApi: PulseApi = {
   // Claude reads the image with a vision call: allow it longer than a normal request. Nothing is saved by this call.
   readScreenshot: (platform, body) =>
     request('POST', `/api/connections/${encodeURIComponent(platform)}/screenshot`, { body, timeoutMs: 60000 }),
+  // Claude reads a batch of writing samples and refines the style: allow it longer than a normal request.
+  learnStyle: (body) => request('POST', '/api/workspace/style', { body, timeoutMs: 90000 }),
+  forgetStyle: () => request('DELETE', '/api/workspace/style'),
   ingestMetrics: (body) => request('POST', '/api/metrics/ingest', { body }),
   getHarvestStatus: () => request('GET', '/api/connections/harvest-status'),
 

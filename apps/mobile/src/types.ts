@@ -40,6 +40,45 @@ export interface Workspace {
   created_at: string;
   /** Absent on servers older than docs/REAL.md: treat as 'sample'. */
   data_mode?: DataMode;
+  /** What Claude learned from the person's own writing. Absent or null until they upload some. */
+  writing_style?: WritingStyle | null;
+}
+
+/** docs/CONTRACT.md, "Writing style". */
+export interface WritingStyle {
+  summary: string;
+  traits: string[];
+  examples: string[];
+  /** Names of what it learned from, newest last. */
+  sources: string[];
+  /** Samples learned from so far (files, screenshots and pasted text). */
+  file_count: number;
+  sample_chars: number;
+  updated_at: string;
+}
+
+/** One file of a `POST /api/workspace/style` batch. */
+export interface StyleFileUpload {
+  name: string;
+  media_type: string;
+  /** Base64 of the file bytes, with no `data:` prefix. */
+  data_base64: string;
+}
+
+/** At most 10 files per request (the app sends up to 100 files as batches, one after another). */
+export interface StyleLearnRequest {
+  files?: StyleFileUpload[];
+  text?: string;
+}
+
+export interface StyleSkipped {
+  name: string;
+  reason: string;
+}
+
+export interface StyleLearnResult {
+  style: WritingStyle;
+  skipped: StyleSkipped[];
 }
 
 export interface WorkspaceWithToken extends Workspace {
@@ -526,6 +565,10 @@ export interface PulseApi {
 
   /** POST /api/connections/{platform}/screenshot: Claude reads a profile or insights screenshot. Saves nothing. 503 = AI off or capped. */
   readScreenshot(platform: Platform, body: ScreenshotRequest): Promise<ScreenshotRead>;
+  /** POST /api/workspace/style: one batch of the person's writing refines their learned style. 503 = AI off or capped. */
+  learnStyle(body: StyleLearnRequest): Promise<StyleLearnResult>;
+  /** DELETE /api/workspace/style: forget the learned style. */
+  forgetStyle(): Promise<{ ok: true }>;
   /** POST /api/metrics/ingest: save numbers the person checked (source "screenshot") or typed (source "manual"). */
   ingestMetrics(body: IngestRequest): Promise<IngestResult>;
   /** GET /api/connections/harvest-status: when each platform's numbers were last saved. */

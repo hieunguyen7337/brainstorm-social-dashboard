@@ -10,6 +10,7 @@ import { BrandSection } from '@/src/components/settings/BrandSection';
 import { ClaudeMcpCard } from '@/src/components/settings/ClaudeMcpCard';
 import { ConnectorsSection, type ConnectorsHandle } from '@/src/components/settings/ConnectorsSection';
 import { GetTheAppCard } from '@/src/components/settings/GetTheAppCard';
+import { StyleSection } from '@/src/components/settings/StyleSection';
 import { ThemesSection } from '@/src/components/settings/ThemesSection';
 import { APP_NAME } from '@/src/config';
 import { BOARD_MAX_WIDTH, Col, Grid, useWide } from '@/src/layout';
@@ -59,6 +60,7 @@ export default function SettingsScreen() {
         <Grid gap={space.xl} testID="settings-board">
           <Col span={6} style={styles.wideStack} testID="settings-col-left">
             <BrandSection />
+            <StyleSection />
             <ThemesSection />
             <AutopilotSection />
             <ResetCard />
@@ -83,6 +85,8 @@ export default function SettingsScreen() {
       contentStyle={styles.column}
     >
       <BrandSection />
+
+      <StyleSection />
 
       <ThemesSection />
 

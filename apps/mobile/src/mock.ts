@@ -20,12 +20,14 @@ import {
   SEED_POSTS, SEED_THEMES, SHOTS, TAGS, THEME_CLASSIFIERS, THEME_EDGE, TREND_SEEDS,
 } from './mockData';
 import type { Mode } from './mockData';
+import { fileKind } from './pickFiles.types';
 import { buildShareInfo } from './shareLinks';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
   HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
   PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, Workspace,
+  WritingStyle,
 } from './types';
 
 // ---- small helpers ------------------------------------------------------------------------------
@@ -1336,6 +1338,51 @@ export const mockApi: PulseApi = {
       },
       aiAvailable ? [700, 1400] : FAST, // a vision call takes a moment, the 503 does not
     ),
+  // Same checks, codes and wording as the real server; the learned style itself is canned.
+  learnStyle: (b) =>
+    authed(
+      (s) => {
+        const files = b?.files ?? [];
+        const text = (b?.text ?? '').trim();
+        if (files.length > 10) unprocessable('files: List should have at most 10 items');
+        for (const f of files) {
+          if (fileKind(f.name, f.media_type) === null) {
+            throw new ApiError(415, `${f.name}: this type isn't supported: use .txt, .md, .pdf, .docx or a PNG, JPEG or WebP screenshot`);
+          }
+          if (decodedBytes(f.data_base64) > SCREENSHOT_MAX_BYTES) throw new ApiError(413, `${f.name}: file too large, 5 MB at most`);
+        }
+        if (files.length === 0 && !text) unprocessable('Nothing readable to learn from.');
+        if (!aiAvailable || s.aiUsed >= AI_LIMIT || s.aiSpent >= AI_CAP_USD) {
+          throw new ApiError(503, 'Learning your style needs the AI, which is off or at its limit right now.');
+        }
+        s.aiUsed = Math.min(AI_LIMIT, s.aiUsed + 1);
+        s.aiSpent = Math.round((s.aiSpent + 0.03 + s.rng() * 0.02) * 10000) / 10000;
+        const prev = s.ws.writing_style ?? null;
+        const used = [...(text ? ['pasted text'] : []), ...files.map((f) => f.name)];
+        const style: WritingStyle = {
+          summary: 'Warm, plain-spoken and a little dry. Short sentences, concrete examples and no buzzwords.',
+          traits: [
+            'Short sentences, rarely over 15 words',
+            'Opens with a plain statement, closes with one line of advice',
+            'Uses "you" and "we", never corporate "users"',
+            'No exclamation marks; one emoji at most',
+          ],
+          examples: ['Keep it simple. Ship it.'],
+          sources: [...(prev?.sources ?? []).filter((n) => !used.includes(n)), ...used].slice(-100),
+          file_count: (prev?.file_count ?? 0) + used.length,
+          sample_chars: (prev?.sample_chars ?? 0) + text.length + files.reduce((n, f) => n + Math.min(6000, decodedBytes(f.data_base64)), 0),
+          updated_at: new Date().toISOString(),
+        };
+        s.ws = { ...s.ws, writing_style: style };
+        return { style, skipped: [] };
+      },
+      aiAvailable ? [500, 1100] : FAST, // a Claude call takes a moment, the 503 does not
+    ),
+  forgetStyle: () =>
+    authed((s) => {
+      s.ws = { ...s.ws, writing_style: null };
+      return { ok: true as const };
+    }),
   ingestMetrics: (b) => authed((s) => ingest(s, b)),
   getHarvestStatus: () =>
     authed((s) =>
