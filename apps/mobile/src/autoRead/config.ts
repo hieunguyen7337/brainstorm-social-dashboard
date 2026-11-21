@@ -18,6 +18,16 @@ export const REFRESH_STALE_MS = 60 * 60 * 1000;
 export const REFRESH_TIMEOUT_MS = 30_000;
 /** The sign-in sheet reloads a page by itself once when it has not finished loading after this long. */
 export const STALL_MS = 15_000;
+/** Instagram's full-site sign-in offers 'Log in with Facebook'; its phone page does not (2026-11-21). */
+export const UA_DESKTOP =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+export const IG_FB_LOGIN_URL = 'https://www.instagram.com/accounts/login/?source=pulse_fb';
+/** Presses Instagram's own Facebook button once it renders (tries for about 10 s). Reads and sends nothing. */
+export const CLICK_FACEBOOK_JS = `(function(){var n=0;var t=setInterval(function(){n++;
+var els=document.querySelectorAll('button,a,[role="button"]');
+for(var i=0;i<els.length;i++){var x=(els[i].innerText||els[i].textContent||'').trim();
+if(/facebook/i.test(x)&&x.length<60){clearInterval(t);els[i].click();return;}}
+if(n>40)clearInterval(t);},250);})();true;`;
 /** After a refresh that failed (signed out, timeout), do not try that platform again for this long (this app run). */
 export const REFRESH_RETRY_MS = 15 * 60 * 1000;
 /** Sign-out: how long the hidden incognito WebView stays mounted so Android applies the flag (clears cookies). */
