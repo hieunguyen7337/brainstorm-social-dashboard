@@ -26,7 +26,6 @@ import { Alert, Linking, Platform as RNPlatform } from 'react-native';
 import { api } from '@/src/api';
 import { canSharePhoto, openInstagramApp, pickPostPhoto, sharePhoto, type PostPhoto } from '@/src/igPost/device';
 import { igAutoPostAvailable, type IgPostOutcome } from '@/src/igPost/IgPostSheet';
-import { fetchPostCard } from '@/src/igPost/card';
 import { demoMetricsToast, demoPostedToast, demoPostLabel, demoPostNote, demoRefreshLabel } from '@/src/demo/logic';
 import { IG_AUTOPOST, igButtonMode, igFailureText, igNote } from '@/src/igPost/logic';
 import { isLivePlatform } from '@/src/platforms';
@@ -122,6 +121,8 @@ const isWeb = RNPlatform.OS === 'web' && typeof window !== 'undefined';
 
 /** Popup-blocked links outlive the card that showed them (a published post moves to another card). */
 const pendingLinks = new Map<string, ShareLink[]>();
+/** The image added to each post ("Add image"), kept across screens and re-renders until the app restarts. */
+const pendingImages = new Map<string, PostPhoto>();
 
 const sameTags = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((tag, i) => tag === b[i]);
@@ -286,15 +287,13 @@ function ask<T>(title: string, message: string, buttons: { text: string; value: 
   });
 }
 
-const askIgRoute = (hasImage = false): Promise<IgRoute> =>
+const askIgRoute = (): Promise<IgRoute> =>
   ask<IgRoute>(
     'Post to Instagram now?',
-    hasImage
-      ? 'Pulse publishes your image with the caption on your Instagram account, where everyone can see it.'
-      : 'Pulse makes an image of this post and publishes it with the caption on your Instagram account, where everyone can see it.',
+    'Pulse publishes your image with the caption on your Instagram account, where everyone can see it.',
     [
       { text: 'Cancel', value: 'cancel', cancel: true },
-      { text: 'Use my own photo', value: 'share' },
+      { text: 'Open Instagram', value: 'share' },
       { text: 'Post now', value: 'auto' },
     ],
     'cancel',
@@ -318,7 +317,14 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
 
   const [busyKey, setBusyKey] = useState<ShareKey | null>(null);
   /** A photo the person added to this post ("Add image"); Instagram posts it instead of the generated card. */
-  const [image, setImage] = useState<PostPhoto | null>(null);
+  const [image, setImageState] = useState<PostPhoto | null>(() => pendingImages.get(post.id) ?? null);
+  const imageRef = useRef(image);
+  const setImage = (photo: PostPhoto | null): void => {
+    if (photo) pendingImages.set(postRef.current.id, photo);
+    else pendingImages.delete(postRef.current.id);
+    imageRef.current = photo;
+    setImageState(photo);
+  };
   const [remoteNote, setRemoteNote] = useState<string | null>(null);
   const [links, setLinksState] = useState<ShareLink[]>(() => pendingLinks.get(post.id) ?? []);
   const [igJob, setIgJob] = useState<{ photo: PostPhoto; caption: string } | null>(null);
@@ -443,44 +449,34 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   const postInstagram = async (): Promise<void> => {
     const caption = captionFor(current().post);
     const copied = await copyCaption(caption);
-    // One tap: Pulse renders the post as an image card and posts it; "Use my own photo" keeps the picker flow.
-    let route: IgRoute | null = null;
+    // Instagram needs a real image: the one added with "Add image", else the person picks one now. Never a text card.
+    let photo = imageRef.current ?? pendingImages.get(postRef.current.id) ?? null;
+    if (!photo) {
+      const picked = await pickPostPhoto();
+      if (picked.status === 'cancelled') {
+        toast.show('Instagram needs an image: tap Add image or Post to Instagram to pick one.', 'info');
+        return;
+      }
+      if (picked.status === 'error') {
+        toast.show(picked.message, 'error');
+        return;
+      }
+      if (picked.status === 'unavailable') {
+        await shareToInstagram(null, copied); // this APK has no photo picker: the person picks it in Instagram
+        return;
+      }
+      photo = picked.photo;
+      setImage(photo);
+    }
     if (IG_AUTOPOST && igAutoPostAvailable()) {
-      route = await askIgRoute(!!image);
+      const route = await askIgRoute();
       if (route === 'cancel') return;
       if (route === 'auto') {
-        const card = image ?? (await fetchPostCard(current().post.id));
-        if (card) {
-          await finishAutoPost(card, caption, copied);
-          return;
-        }
-        toast.show("Couldn't make the image. Pick a photo instead.", 'info');
+        await finishAutoPost(photo, caption, copied);
+        return;
       }
     }
-    const picked = await pickPostPhoto();
-    if (picked.status === 'cancelled') {
-      toast.show(
-        copied ? 'Caption copied. Instagram needs a photo: tap again to pick one.' : 'Instagram needs a photo.',
-        'info',
-      );
-      return;
-    }
-    if (picked.status === 'error') {
-      toast.show(picked.message, 'error');
-      return;
-    }
-    if (picked.status === 'unavailable') {
-      await shareToInstagram(null, copied); // this APK has no photo picker: the person picks it in Instagram
-      return;
-    }
-    const { photo } = picked;
-    if (route === null && IG_AUTOPOST && igAutoPostAvailable()) route = await askIgRoute(true);
-    if (route === 'cancel') return;
-    if (route !== 'auto') {
-      await shareToInstagram(photo, copied);
-      return;
-    }
-    await finishAutoPost(photo, caption, copied);
+    await shareToInstagram(photo, copied);
   };
 
   const finishAutoPost = async (photo: PostPhoto, caption: string, copied: boolean): Promise<void> => {

@@ -107,7 +107,7 @@ export function ShareButtons({ post, compact = false, small = false, disabled = 
               <Text style={[t.small, { color: colors.textDim }]}>Remove</Text>
             </Pressable>
           ) : (
-            <Text style={[t.small, { flex: 1 }]}>Or Pulse makes one from the text.</Text>
+            <Text style={[t.small, { flex: 1 }]}>Instagram posts need an image.</Text>
           )}
         </View>
       ) : null}
