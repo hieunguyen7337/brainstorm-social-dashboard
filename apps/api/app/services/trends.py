@@ -164,37 +164,6 @@ async def fetch_all(client: httpx.AsyncClient | None = None) -> dict[str, list[I
     return {"hackernews": hn, "reddit": rd, "google": gg}
 
 
-FALLBACK = [
-    ("google", "morning coffee rituals", 0.9),
-    ("google", "indoor plants for small spaces", 0.85),
-    ("reddit", "Small businesses embracing sustainability", 0.8),
-    ("hackernews", "How AI is changing marketing for small teams", 0.75),
-    ("reddit", "Local cafes are the new community hubs", 0.7),
-    ("google", "cold brew recipes", 0.68),
-    ("hackernews", "The case for building in public", 0.6),
-    ("reddit", "Weekend farmers market finds", 0.55),
-    ("google", "self care sunday ideas", 0.5),
-    ("hackernews", "Short-form video is eating social media", 0.45),
-    ("reddit", "Houseplant owners share their best propagation tips", 0.4),
-    ("google", "eco friendly gift ideas", 0.35),
-]
-
-
-def fallback_items() -> list[Item]:
-    """Built-in examples, served only when every feed failed and nothing was ever fetched. Stored with no
-    `fetched_at` (''), so no clock is shown for them and the next successful fetch replaces them."""
-    return [
-        {
-            "source": s,
-            "title": t,
-            "url": f"https://example.com/evergreen/{quote(t.replace(' ', '-').lower())}",
-            "score": sc,
-            "region": "",
-        }
-        for s, t, sc in FALLBACK
-    ]
-
-
 def _age_seconds(conn: sqlite3.Connection) -> float | None:
     row = conn.execute("SELECT MAX(fetched_at) AS m FROM trends").fetchone()
     if not row or not row["m"]:
@@ -233,12 +202,14 @@ async def ensure_fresh(conn: sqlite3.Connection, refresh: bool = False) -> None:
     age = _age_seconds(conn)
     if not refresh and age is not None and age <= settings.trends_ttl_seconds:
         return
+    # Built-in example trends were once stored with no clock when every feed failed; they were never real.
+    conn.execute("DELETE FROM trends WHERE fetched_at = '' OR url LIKE 'https://example.com/evergreen/%'")
+    conn.commit()
     results = await fetch_all()
     items = [i for lst in results.values() for i in lst]
     if items:
         store(conn, items)
-    elif age is None:
-        store(conn, fallback_items(), fetched_at="")
+    # Every feed failed: no invented trends. The list stays as it was (or empty) and /api/trends/status says why.
 
 
 # ---- matching ------------------------------------------------------------------------------------

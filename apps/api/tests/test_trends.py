@@ -114,13 +114,13 @@ def test_one_source_failing(tclient, feeds):
     assert {t["source"] for t in r.json()} == {"hackernews", "google"}
 
 
-def test_all_fail_uses_fallback(tclient, feeds):
+def test_all_fail_serves_no_invented_trends(tclient, feeds):
     _, cfg = feeds
     cfg["fail"] = ("www.reddit.com", "hn.algolia.com", "trends.google.com")
     c, h = tclient
     data = c.get("/api/trends", headers=h).json()
-    assert len(data) == 12
-    assert {t["source"] for t in data} <= {"hackernews", "reddit", "google"}
+    assert data == []
+    assert all("example.com" not in t["url"] for t in data)
 
 
 def test_row_cap():
@@ -267,11 +267,13 @@ def test_describe_error_reasons():
     assert svc.describe_error("google", httpx.ReadTimeout("slow", request=req)) == "Timed out waiting for Google Trends"
 
 
-def test_fallback_has_no_clock_and_real_data_replaces_it():
+def test_leftover_example_rows_are_purged(feeds):
+    import asyncio
     conn = _mem_conn()
-    svc.store(conn, svc.fallback_items(), fetched_at="")
-    rows = conn.execute("SELECT fetched_at FROM trends").fetchall()
-    assert len(rows) == 12 and all(r["fetched_at"] == "" for r in rows)
-    assert svc._age_seconds(conn) is None
-    svc.store(conn, [{"source": "reddit", "title": "Real one", "url": "real", "score": 0.5, "region": ""}])
-    assert [r["title"] for r in conn.execute("SELECT title FROM trends")] == ["Real one"]
+    conn.execute("INSERT INTO trends (id, source, title, url, score, region, fetched_at) VALUES "
+                 "('x1', 'google', 'morning coffee rituals', 'https://example.com/evergreen/x', 0.9, '', '')")
+    conn.commit()
+    _, cfg = feeds
+    cfg["fail"] = ("www.reddit.com", "hn.algolia.com", "trends.google.com")
+    asyncio.run(svc.ensure_fresh(conn, refresh=True))
+    assert conn.execute("SELECT COUNT(*) FROM trends").fetchone()[0] == 0
