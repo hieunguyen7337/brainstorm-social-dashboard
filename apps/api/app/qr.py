@@ -52,7 +52,7 @@ h1{font-size:clamp(36px,6vw,58px);line-height:1.04;letter-spacing:-1.5px;margin:
 .btn{display:inline-flex;align-items:center;gap:10px;padding:16px 26px;border-radius:16px;font-weight:800;font-size:17px;
 color:#fff;text-decoration:none;background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 10px 30px rgba(124,92,255,.35)}
 .btns{display:flex;flex-direction:column;gap:12px;min-width:290px}
-.btn .i{width:24px;height:24px;flex:none}.btn span{display:flex;flex-direction:column;line-height:1.15}
+.btn .i{width:24px;height:24px;flex:none}.bi{display:inline-flex;gap:10px;width:58px;flex:none;justify-content:center;font-style:normal}.btns .btn{justify-content:flex-start}.btn span{display:flex;flex-direction:column;line-height:1.15}
 .btn small{font-size:12px;font-weight:600;opacity:.85}
 .btn2{background:var(--hi);border:1px solid var(--borderHi,#35406a);box-shadow:none}
 .alt{color:var(--mute);font-size:13.5px;margin-top:16px}.alt a{color:var(--dim)}
@@ -87,7 +87,7 @@ h2{font-size:30px;letter-spacing:-.7px;margin:72px 0 8px}
 .m b{color:var(--tx);display:block;margin-bottom:3px}
 footer{margin-top:64px;color:var(--mute);font-size:13px;text-align:center}
 @media (max-width:860px){.hero{grid-template-columns:1fr;margin-top:28px}.grid{grid-template-columns:1fr 1fr}
-.more{grid-template-columns:1fr}.qr{display:none}.btns{width:100%;min-width:0}.btn{width:100%;justify-content:center}}
+.more{grid-template-columns:1fr}.qr{display:none}.btns{width:100%;min-width:0}.btn{width:100%;justify-content:flex-start}}
 @media (max-width:520px){.grid{grid-template-columns:1fr}.phone{width:270px}}
 </style></head><body><div class="wrap">
 <nav><div class="logo">&#9889;</div>Pulse</nav>
@@ -95,7 +95,7 @@ footer{margin-top:64px;color:var(--mute);font-size:13px;text-align:center}
 <span class="pill">Android app &middot; free</span>
 <h1>Your socials, <span class="grad">on autopilot.</span></h1>
 <p class="lead">Pulse reads your real Instagram and LinkedIn numbers, writes the next post with AI, and publishes it for you in two taps. No copy and paste, no switching apps.</p>
-<div class="cta"><div class="btns"><a class="btn" href="/download/android"><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22A11.5 11.5 0 0 0 12 8.08c-1.74 0-3.4.37-4.92 1.06L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg><span>Download for Android<small>APK for phones</small></span></a><a class="btn btn2" href="/download/desktop"><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.5l7.5-1v7H3zM11.5 4.3L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3.1-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.2zM14 5.2c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z"/></svg><span>Download for Desktop<small>Windows and macOS</small></span></a></div><div class="qr"><div class="box" role="img" aria-label="QR code to download Pulse for Android">__QR__</div><div>Android phone nearby?<br>Scan to install.</div></div></div>
+<div class="cta"><div class="btns"><a class="btn" href="/download/android"><i class="bi"><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22A11.5 11.5 0 0 0 12 8.08c-1.74 0-3.4.37-4.92 1.06L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg></i><span>Download for Android<small>APK for phones</small></span></a><a class="btn btn2" href="/download/desktop"><i class="bi"><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.5l7.5-1v7H3zM11.5 4.3L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg><svg class="i" viewBox="0 0 24 24"><path fill="currentColor" d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3.1-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.2zM14 5.2c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z"/></svg></i><span>Download for Desktop<small>Windows and macOS</small></span></a></div><div class="qr"><div class="box" role="img" aria-label="QR code to download Pulse for Android">__QR__</div><div>Android phone nearby?<br>Scan to install.</div></div></div>
 <div class="alt">Or pick yours: <a href="/download/android">Android</a> &middot; <a href="/download/windows">Windows</a> &middot; <a href="/download/mac">macOS</a></div>
 
 </div>
