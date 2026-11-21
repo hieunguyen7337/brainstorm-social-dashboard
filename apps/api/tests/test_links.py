@@ -35,3 +35,14 @@ def test_landing_page_html_escaped(client):
     assert "<script>alert(1)</script>" not in page.text
     assert "&lt;script&gt;" in page.text and "Get started" in page.text
     assert f"/api/links/'+\"{code}\"+'/convert" in page.text
+
+
+def test_head_redirects_without_counting(auth):
+    client, h, _ = auth
+    post = _published(client, h)
+    code = post["link_code"]
+    r = client.head(f"/r/{code}", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == f"/l/{code}"
+    p2 = next(p for p in client.get("/api/posts", headers=h).json() if p["id"] == post["id"])
+    assert p2["clicks"] == post["clicks"]
+    assert client.head("/r/zzzzzz", follow_redirects=False).status_code == 404
