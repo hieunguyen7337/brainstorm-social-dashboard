@@ -20,6 +20,7 @@ write-only: nobody can view a saved login again, only replace or delete it.
   its setting); one saved in Settings starts with it on; the Settings toggle flips it (`setLoginBio`).
 - **AsyncStorage**, key `pulse.vault.meta`, holds `{savedAt, bio}` per platform and nothing else. No username, so the
   UI can say "Login saved" without reading a secret.
+- Not part of this vault: the person's Claude API key is a separate SecureStore entry, `pulse.assistant.anthropic.v1`, with the same device-only rules (`apps/mobile/README.md`, Assistant section).
 - **Memory only, at most 2 minutes**: the login typed on the sign-in sheet, between the tap on Log in and the page
   showing the sign-in worked (`src/vault/capture.ts`, `makeCaptureHolder`).
 - **The WebView cookie store** (Android's, shared by the app's WebViews): the platform sign-in itself.

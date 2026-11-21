@@ -125,6 +125,7 @@ behaviour is unchanged.
 - New Assistant panel (desktop only): a chat screen/drawer that streams Claude's output (text deltas, tool calls,
   sub-agents, results), modelled on LocalBridge's `public/index.html` renderer. Shows a "Claude not found / not
   signed in" state with the one command to fix it.
+  - Phones have their own Assistant tab (Android and iOS) that uses the person's own Anthropic API key, not Claude Code. Desktop behaviour is unchanged. See `apps/mobile/README.md` (Assistant section).
 - Create / Queue screens get an "Edit with Claude" action that opens the panel prefilled with the post id.
 
 ### 4.3 `window.pulseDesktop` API (preload, contextBridge)
@@ -281,7 +282,7 @@ apps/desktop/
   test/                   node:test (fake claude binary, fake webContents)
 apps/mobile/src/desktop/  types + useDesktop()
 apps/mobile/src/autoRead/index.web.tsx      desktop-aware (bridges to window.pulseDesktop)
-apps/mobile/src/components/assistant/       chat panel (desktop only)
+apps/mobile/src/components/assistant/       chat panel (desktop; ChatItemView is shared with the phone Assistant)
 ```
 
 ## 7. Contract changes (lead only, before units start)
