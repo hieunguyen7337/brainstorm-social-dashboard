@@ -234,7 +234,6 @@ function Sheet({
                 domStorageEnabled
                 cacheEnabled={false}
                 textZoom={100}
-                webviewDebuggingEnabled // TEMP 2026-11-21: inspect the Facebook route from the dev PC; remove after
                 setSupportMultipleWindows={false}
                 originWhitelist={['*']}
                 onShouldStartLoadWithRequest={allowWebUrl}
