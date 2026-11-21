@@ -8,6 +8,8 @@
  *   Android with the in-app reader (`src/autoRead`): "Connect with <Platform>" (or "Update" on a connected card) opens a
  *   sign-in sheet that reads the numbers on the phone -> saved at once with source "device". Its failure note on the card
  *   points to the screenshot upload.
+ *   Pulse Desktop (`src/desktop`): the card's only action is "Connect with <Platform>" (its own login window); the upload
+ *   appears after a failed connect, and a connected card has "Show <Platform>".
  *   A failed read or save (503: AI off or capped, too large, offline, no numbers) shows why on the card; nothing is typed by hand.
  *
  *   Demo workspace (docs/REAL.md, "Demo workspaces"): "Connect with <Platform>" (and "Update") opens the synthetic sign-in
@@ -34,6 +36,7 @@ import {
 } from '@/src/connect';
 import { DemoSignInSheet } from '@/src/demo/DemoSignInSheet';
 import { demoSuccessNote } from '@/src/demo/logic';
+import { getDesktop } from '@/src/desktop';
 import { pickScreenshot } from '@/src/pickImage';
 import { useIsDemoWorkspace, useSession } from '@/src/session';
 import { colors, space, type as t } from '@/src/theme';
@@ -244,11 +247,15 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     void reload();
   };
   // Android only, and only when this build has both native modules (an older APK does not): web and iOS keep the upload.
-  const canAutoRead = RNPlatform.OS === 'android' && autoReadAvailable();
+  const desktop = getDesktop();
+  const canAutoRead = (RNPlatform.OS === 'android' || desktop !== null) && autoReadAvailable();
+  /** Desktop: platforms whose connect failed, so the screenshot upload is offered on their card. */
+  const [offered, setOffered] = useState<Platform[]>([]);
 
   const connect = (platform: Platform) => {
     if (busy) return;
     setNote(platform, null);
+    setOffered((cur) => cur.filter((p) => p !== platform));
     setAuto(platform);
   };
 
@@ -284,7 +291,10 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
   const autoClose = (platform: Platform, reason?: string) => {
     if (!alive.current) return;
     setAuto(null);
-    if (reason) setNote(platform, { tone: 'error', text: reason });
+    if (reason) {
+      setNote(platform, { tone: 'error', text: reason });
+      if (desktop) setOffered((cur) => (cur.includes(platform) ? cur : [...cur, platform]));
+    }
   };
 
   const cancel = () => {
@@ -366,11 +376,14 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
               else if (canAutoRead) connect(platform);
               else setExpanded((cur) => (cur === platform ? null : platform));
             }}
-            // A demo workspace has nothing real to read: no screenshot upload.
+            // A demo workspace has nothing real to read: no screenshot upload, and (on Pulse Desktop too) no sign-in window.
             onUpload={demo ? undefined : () => upload(platform)}
             onConnect={
               demo ? () => openDemo(platform) : canAutoRead ? () => connect(platform) : () => connectElsewhere(platform)
             }
+            desktop={!demo && desktop !== null}
+            uploadOffered={offered.includes(platform)}
+            onShow={!demo && desktop ? () => void desktop.social.openWindow(platform).catch(() => undefined) : undefined}
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}
             {mine?.step === 'saving' ? <Saving /> : null}
