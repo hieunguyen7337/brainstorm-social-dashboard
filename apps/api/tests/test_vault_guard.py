@@ -44,6 +44,7 @@ PUBLIC = {
     "GET /get": "big-screen install page: no input, no token",
     "POST /api/workspaces": "sign-up: creates the workspace and its token",
     "GET /r/{code}": "tracked link click (counts a click on the post)",
+    "HEAD /r/{code}": "tracked link probe (link previews; never counts a click)",
     "GET /l/{code}": "tracked link landing page",
     "POST /api/links/{code}/convert": "tracked link conversion (counts a conversion)",
     "POST /api/billing/webhook": "Stripe webhook, checked by its stripe-signature",

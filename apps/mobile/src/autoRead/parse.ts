@@ -625,7 +625,12 @@ function readInstagram(json: unknown): ParsedRead {
   // web_profile_info's own posts win; the feed call's posts are used only when those gave none (never both).
   const edges = dig(user, 'edge_owner_to_timeline_media', 'edges');
   let posts = readInstagramPosts(edges, (e) => readInstagramPost(dig(e, 'node')));
-  if (posts.length === 0) posts = readInstagramPosts(feed, readInstagramFeedItem);
+  // Edge posts that carry no count at all (hidden or missing) give the dashboard nothing: the feed's replace them.
+  const counted = posts.some((p) => p.likes !== null || p.comments !== null || p.views !== null);
+  if (!counted) {
+    const fromFeed = readInstagramPosts(feed, readInstagramFeedItem);
+    if (fromFeed.length > 0 || posts.length === 0) posts = fromFeed;
+  }
   if (posts.length > 0) out.posts = posts;
   return out;
 }

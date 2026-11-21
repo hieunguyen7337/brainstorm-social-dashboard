@@ -48,6 +48,8 @@ export interface PlatformCardProps {
   desktop?: boolean;
   uploadOffered?: boolean;
   onShow?: () => void;
+  /** Instagram, connected: copy the tracked link and open Instagram's edit-profile page. */
+  onBioLink?: () => void;
   children?: ReactNode;
 }
 
@@ -67,6 +69,7 @@ export function PlatformCard({
   desktop = false,
   uploadOffered = false,
   onShow,
+  onBioLink,
   children,
 }: PlatformCardProps) {
   const meta = platformMeta[platform];
@@ -185,6 +188,19 @@ export function PlatformCard({
               ) : null}
             </View>
           </>
+        ) : null}
+
+        {connected && !open && onBioLink ? (
+          <Button
+            small
+            variant="secondary"
+            title="Put link in bio"
+            icon="link-outline"
+            accessibilityLabel="Put your Pulse link in your Instagram bio"
+            disabled={busy}
+            onPress={onBioLink}
+            style={styles.link}
+          />
         ) : null}
 
         {note ? (

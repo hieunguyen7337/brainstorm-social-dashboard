@@ -23,10 +23,14 @@ import { ActivityIndicator, Image, Linking, Platform as RNPlatform, StyleSheet, 
 import { androidDownloadUrl, api, getToken, publicBaseUrl } from '@/src/api';
 import { AutoReadSheet, autoReadAvailable, type DeviceRead } from '@/src/autoRead';
 import {
+  BIO_LINK_NEEDS_POST,
+  bioLinkSteps,
   checkForm,
   formFromRead,
+  IG_EDIT_PROFILE_URL,
   isConnected,
   latestIso,
+  pickBioLink,
   platformMismatch,
   postsToIngest,
   readFailure,
@@ -49,7 +53,7 @@ import type {
   Platform,
   ScreenshotRead,
 } from '@/src/types';
-import { Button, Card, ErrorState, Skeleton } from '@/src/ui';
+import { Button, Card, ErrorState, Skeleton, copyText } from '@/src/ui';
 import { isLivePlatform } from '@/src/platforms';
 import { PlatformCard, type CardNote } from './PlatformCard';
 import { useConnectSheet } from './sheetContext';
@@ -279,6 +283,25 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     }
   };
 
+  /** Instagram only lets the profile's link be tapped: copy the tracked link, open Edit profile, say what to paste where. */
+  const putLinkInBio = async () => {
+    if (busy) return;
+    try {
+      const link = pickBioLink(await api.listPosts({ status: 'published', platform: 'instagram', limit: 20 }));
+      if (!alive.current) return;
+      if (!link) {
+        setNote('instagram', { tone: 'info', text: BIO_LINK_NEEDS_POST });
+        return;
+      }
+      const copied = await copyText(link);
+      if (!alive.current) return;
+      setNote('instagram', { tone: copied ? 'success' : 'info', text: bioLinkSteps(copied) });
+      void Linking.openURL(IG_EDIT_PROFILE_URL).catch(() => undefined);
+    } catch {
+      if (alive.current) setNote('instagram', { tone: 'error', text: "Couldn't find your tracked link. Try again." });
+    }
+  };
+
   /** Numbers read on the phone: saved at once with source "device". */
   const autoResult = (platform: Platform, read: DeviceRead) => {
     if (!alive.current) return;
@@ -383,6 +406,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
             }
             desktop={!demo && desktop !== null}
             uploadOffered={offered.includes(platform)}
+            onBioLink={platform === 'instagram' && !demo ? () => void putLinkInBio() : undefined}
             onShow={!demo && desktop ? () => void desktop.social.openWindow(platform).catch(() => undefined) : undefined}
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}

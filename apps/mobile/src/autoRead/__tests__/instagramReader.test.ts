@@ -549,6 +549,24 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expect(env.posted[0].data.user.edge_owner_to_timeline_media).toEqual({ count: 3 });
     });
 
+    it('web_profile_info gave post edges with no like or comment counts: the feed is asked for them', async () => {
+      const bare = ok({
+        data: {
+          user: {
+            username: 'jane',
+            edge_followed_by: { count: 1234 },
+            edge_owner_to_timeline_media: {
+              count: 1,
+              edges: [{ node: { taken_at_timestamp: 1_700_000_000, edge_media_preview_like: { count: -1 } } }],
+            },
+          },
+        },
+      });
+      const env = await onProfile([...base(bare), [FEEDURL, ok(feedJson('jane'))]]);
+      expect(env.calls.some((c) => c.url.includes(FEEDURL))).toBe(true);
+      expect(env.posted[0].data.feed).toHaveLength(3);
+    });
+
     it('web_profile_info gave posts: no feed call, no feed field', async () => {
       const env = await onProfile([...base(ok(profileJson('jane', 1234))), [FEEDURL, ok(feedJson('jane'))]]);
       expect(env.calls.some((c) => c.url.includes(FEEDURL))).toBe(false);
