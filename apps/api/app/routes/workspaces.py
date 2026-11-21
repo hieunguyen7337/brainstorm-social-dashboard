@@ -16,14 +16,16 @@ from app.models import (
     WorkspacePatch,
     WorkspaceWithToken,
 )
-from app.services import demo, harvest
+from app.services import demo, harvest, style
 from app.services.seed import DEMO, DEMO_BRAND, seed_real_workspace, seed_workspace
 
 router = APIRouter()
 
 
 def _ws(row: sqlite3.Row) -> dict:
-    return {k: row[k] for k in Workspace.model_fields}
+    out = {k: row[k] for k in Workspace.model_fields if k != "writing_style"}
+    out["writing_style"] = style.load(row)  # stored as JSON text; None until the person uploads writing
+    return out
 
 
 def _conn(row: sqlite3.Row) -> Connection:

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from app.auth import get_workspace
 from app.config import settings
 from app.db import get_db
+from app.services.channels import IG_MAX_HASHTAGS
 from app.services.posts import get_post_row, link_url_for
 
 router = APIRouter()
@@ -155,6 +156,8 @@ def build_share_links(row: sqlite3.Row) -> dict:
     content = (row["content"] or "").strip()
     link = link_url_for(row["link_code"])
     tags = _hashtags(row["hashtags"], content)
+    if row["platform"] in ("instagram", "tiktok"):
+        tags = tags[:IG_MAX_HASHTAGS]  # posts saved before the limit may hold more; Instagram drops the rest
     caption = _caption(content, tags, link)
     title, reddit_text = reddit_parts(content, link)
     return {

@@ -75,10 +75,9 @@ describe('LINKEDIN_0 (any signed-in page) in a jsdom page', () => {
     expect(env.rawPosted[0]).not.toContain('Janeprivate');
     expectNoSecrets(env.rawPosted);
 
+    // True number or error (owner, 2026-11-21): the API's numbers alone are not saved; the app reads the profile page.
     const outcome = flowFor('linkedin').steps[0].finish(m.data, {});
-    expect(outcome).toMatchObject({ kind: 'read', confidence: 'high' });
-    if (outcome.kind !== 'read') throw new Error('unreachable');
-    expect(outcome.read).toMatchObject({ handle: 'jane-doe', followers: 1234, notes: 'Connections: 567.' });
+    expect(outcome).toEqual({ kind: 'next', ctx: { handle: 'jane-doe' } });
   });
 
   it('Voyager 403 on a signed-in feed: ok with no id, so the app goes on to the profile page', async () => {

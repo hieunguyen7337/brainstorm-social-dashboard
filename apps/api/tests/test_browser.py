@@ -192,6 +192,57 @@ def test_oversized_text_is_capped(auth):
     assert len(res["result"]["text"]) == browser_route.MAX_TEXT
 
 
+def test_page_url_secrets_never_reach_server_or_agent(auth):
+    c, h, _ = auth
+    connect_phone(c, h)
+    cid = c.post("/api/browser/commands", json={"action": "read_text"}, headers=h).json()["id"]
+    assert c.get("/api/browser/next", params={"wait": 0}, headers=h).json()["command"]["id"] == cid
+    url = "https://www.example.com/cb?trk=1&code=hunter2-fake&access_token=hunter2-fake#access_token=hunter2-fake"
+    assert c.post(f"/api/browser/results/{cid}", json={"ok": True, "text": "x", "url": url}, headers=h).json() == {
+        "ok": True
+    }
+    want = "https://www.example.com/cb?trk=1&code=REDACTED&access_token=REDACTED"
+    res = c.get(f"/api/browser/commands/{cid}", headers=h).json()
+    assert res["result"]["url"] == want
+    assert "hunter2-fake" not in res["result"]["url"] and "#" not in res["result"]["url"]
+    status = c.get("/api/browser/status", headers=h).json()
+    assert status["url"] == want
+    assert "hunter2-fake" not in str(status)
+
+
+def test_heartbeat_url_drops_userinfo(auth):
+    c, h, _ = auth
+    body = {"active": True, "url": "https://user:hunter2-fake@www.example.com/a?b=1"}
+    assert c.post("/api/browser/session", json=body, headers=h).status_code == 200
+    url = c.get("/api/browser/status", headers=h).json()["url"]
+    assert url == "https://www.example.com/a?b=1"
+    assert "hunter2-fake" not in url
+
+
+@pytest.mark.parametrize(
+    "url,want",
+    [
+        ("https://www.instagram.com/accounts/login/?next=%2F", "https://www.instagram.com/accounts/login/?next=%2F"),
+        ("https://www.example.com/a#access_token=hunter2-fake", "https://www.example.com/a"),
+        ("https://user:hunter2-fake@www.example.com/a", "https://www.example.com/a"),
+        ("https://user:p@ss@www.example.com/a", "https://www.example.com/a"),
+        (
+            "https://www.example.com/cb?key=hunter2-fake&sig=hunter2-fake&b=1",
+            "https://www.example.com/cb?key=REDACTED&sig=REDACTED&b=1",
+        ),
+        ("https://www.example.com/cb?%63ode=hunter2-fake", "https://www.example.com/cb?%63ode=REDACTED"),
+        ("https://www.example.com/cb?code", "https://www.example.com/cb?code=REDACTED"),
+        (
+            "https://x.com/cb?oauth_token=hunter2-fake&reset-token=hunter2-fake&trk=1",
+            "https://x.com/cb?oauth_token=REDACTED&reset-token=REDACTED&trk=1",
+        ),
+        ("", ""),
+    ],
+)
+def test_public_url_rules(url, want):
+    assert browser_route._public_url(url) == want
+
+
 # ---- MCP tools ------------------------------------------------------------------------------------------------------
 
 

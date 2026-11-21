@@ -147,6 +147,10 @@ def build_prompt(
         f"- offer: {ws['offer']}",
         f"- product_url: {ws['product_url']}",
     ]
+    # Imported here: style imports this module for its own Claude calls. Empty until the person uploads writing.
+    from app.services import style
+
+    lines += style.prompt_lines(ws)
     if theme is not None:
         lines.append(f"Theme: {theme['name']}. {theme['description']}")
     if trend is not None:

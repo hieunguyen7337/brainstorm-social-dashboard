@@ -23,6 +23,7 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app import redact
 from app.db import PLATFORMS, new_id, now_iso
 from app.models import Platform, Post
 from app.services import metrics
@@ -94,6 +95,12 @@ class IngestPost(BaseModel):
     engagements: Count
     clicks: Count | None = None
     conversions: Count | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _drop_credential_query(cls, value: str | None) -> str | None:
+        # A sign-in redirect can carry a session token or a one-time code; it is never stored or shown.
+        return redact.strip_credential_query(value) if value else value
 
 
 class IngestRequest(BaseModel):
@@ -209,7 +216,7 @@ def validate_profile_url(platform: str, raw: str) -> str:
         raise HTTPException(status_code=422, detail="profile_url is not a valid URL") from None
     if parts.scheme not in ("http", "https") or not host:
         raise HTTPException(status_code=422, detail="profile_url must be an absolute http(s) URL")
-    if parts.username is not None or parts.password is not None:
+    if parts.username is not None or parts.password is not None or redact.has_credential_query(raw):
         raise HTTPException(status_code=422, detail="profile_url must not contain credentials")
     domains = DOMAINS[platform]
     if not any(host == d or host.endswith("." + d) for d in domains):

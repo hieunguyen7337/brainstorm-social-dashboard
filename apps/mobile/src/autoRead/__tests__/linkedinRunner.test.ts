@@ -100,20 +100,12 @@ describe('linkedin runner', () => {
     expect(s.log.injects[0]).toContain('var STEP = 0;');
   });
 
-  it('Voyager numbers on step 0 finish the read at once (high confidence)', async () => {
+  it('Voyager numbers on step 0 are not saved alone: the app opens the own profile to read what is shown', async () => {
     const s = await onFeed();
     s.runner.message(msg(0, 'ok', { publicId: 'jane-doe', followers: 1234, connections: 567, diag: { me: 200 } }));
     await s.adv(10);
-    expect(s.log.results).toHaveLength(1);
-    expect(s.log.results[0]).toMatchObject({
-      platform: 'linkedin',
-      handle: 'jane-doe',
-      followers: 1234,
-      notes: 'Connections: 567.',
-      confidence: 'high',
-      source: 'device',
-      ai_used: false,
-    });
+    expect(s.log.results).toHaveLength(0);
+    expect(s.log.loads).toEqual([LOGIN, PROFILE]);
     expect(s.log.captures).toBe(0);
   });
 

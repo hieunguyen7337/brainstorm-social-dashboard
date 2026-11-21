@@ -340,23 +340,12 @@ function igCountsFromText(text) {
   if (fol === undefined) return null;
   return { followers: fol, following: one('following'), posts: one('posts?') };
 }
-function igMeta(doc) {
-  var out = [];
+function igBodyText() {
   try {
-    var metas = doc.querySelectorAll('meta[property="og:description"], meta[name="description"]');
-    for (var i = 0; i < metas.length; i++) out.push(metas[i].getAttribute('content') || '');
-  } catch (e) {}
-  return out.join('\n');
-}
-function igMetaFromHtml(html) {
-  var out = [];
-  var re = /<meta[^>]+(?:property|name)="(?:og:description|description)"[^>]*>/gi;
-  var m;
-  while ((m = re.exec(String(html || ''))) && out.length < 4) {
-    var c = /content="([^"]*)"/i.exec(m[0]);
-    if (c) out.push(c[1].replace(/&#0?44;/g, ',').replace(/&amp;/g, '&'));
+    return String((document.body && document.body.innerText) || '');
+  } catch (e) {
+    return '';
   }
-  return out.join('\n');
 }
 async function igJson(path) {
   try {
@@ -417,67 +406,44 @@ async function run() {
       edge_owner_to_timeline_media: { count: num(info.media_count) },
     };
   }
-  // Last way before a screenshot: the profile page's own text ("12 Followers, 34 Following, 5 Posts"), which Instagram
-  // serves even when its data calls answer 400/429/404 (2026-11-21, on the owner's phone).
-  if (!user) {
-    var counts = null;
-    if (pathIs('/' + lower(username))) counts = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
-    if (!counts && remaining() > 1500) {
-      try {
-        var h = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
-        diag.h = h.status;
-        if (h.ok) counts = igCountsFromText(igMetaFromHtml(h.text));
-      } catch (e) {}
-    }
-    diag.t = !!counts;
-    if (counts) {
-      user = {
-        username: username,
-        edge_followed_by: { count: counts.followers },
-        edge_follow: { count: counts.following },
-        edge_owner_to_timeline_media: { count: counts.posts },
-      };
-    }
-  }
-  if (!user) return finish('empty', { username: username, diag: diag });
-  var out = igUser(user, username);
-  // The person sees their own numbers on their profile page, so the app opens it and reads there (step 1). Step 0
-  // still sends what it found, in case the profile page never loads (2026-11-21: the owner asked to see it go there).
+  // No cached copy is ever used (owner, 2026-11-21: "the app should show error, instead of relying on cache"). The page's
+  // meta description is a slow server copy: on the vivo every data call failed (400, 429, 404) and it said 0 followers
+  // while the header showed 1. So when the calls fail the app opens the profile and reads its live header (below), then
+  // a screenshot of it read by Claude, then reports an error.
+  var out = user ? igUser(user, username) : { username: username };
+  // The person sees their own numbers on their profile page, so the app opens it in view and reads there (step 1).
   if (STEP === 0 && !pathIs('/' + lower(username))) return finish('ok', { user: out, diag: diag, go: username });
-  // Check the follower count against the profile page itself (2026-11-21: a tester's account with 1 follower was saved
-  // as 0 from the data call). The page's number wins when the call gave none, gave 0, or is off by more than the
-  // rounding of "1.2K"-style counts.
+  // Only what the person sees on their own profile is saved (owner, 2026-11-21: "either show the true correct number or
+  // come back as error"). The data calls are Instagram's server answers and can fail or lag, so the live header the
+  // person sees wins over them; without it this step comes back empty, and the app
+  // falls back to a screenshot of this page read by Claude, or reports an error. No number is ever guessed.
   var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
   diag.api = apiF === undefined ? -1 : apiF;
-  if (diag.t === undefined && remaining() > 1500) {
-    var tc = null;
-    // On the profile page Instagram draws the header after load: give it a few seconds to show the counts.
-    var pageT0 = Date.now();
-    while (pathIs('/' + lower(username))) {
-      tc = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
-      if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
-      await tick();
-    }
-    if (!tc) {
-      try {
-        var h2 = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
-        diag.h = h2.status;
-        if (h2.ok) tc = igCountsFromText(igMetaFromHtml(h2.text));
-      } catch (e) {}
-    }
-    if (tc) {
-      diag.txt = tc.followers;
-      var off = apiF === undefined || (apiF === 0 && tc.followers > 0) || Math.abs(tc.followers - apiF) > 0.06 * tc.followers;
-      if (off) {
-        out.edge_followed_by = { count: tc.followers };
-        diag.src = 'page';
-        if (tc.following !== undefined) out.edge_follow = { count: tc.following };
-        if (tc.posts !== undefined) {
-          if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
-          out.edge_owner_to_timeline_media.count = tc.posts;
-        }
-      }
-    }
+  var tc = null;
+  var pageT0 = Date.now();
+  while (pathIs('/' + lower(username))) {
+    tc = igCountsFromText(igBodyText());
+    if (tc || Date.now() - pageT0 > 5000 || remaining() < 3000) break;
+    await tick();
+  }
+  diag.vis = !!tc;
+  if (!tc) return finish('empty', { username: username, diag: diag });
+  diag.txt = tc.followers;
+  // A rounded count on the page ("1.2K" = 1200) keeps the data call's exact number only when that number rounds to it.
+  function shown(seen, exact) {
+    if (seen === undefined) return exact;
+    var rounded = seen >= 1000 && seen % 100 === 0;
+    return rounded && exact !== undefined && Math.abs(seen - exact) <= 0.06 * seen ? exact : seen;
+  }
+  var f = shown(tc.followers, apiF);
+  if (f !== apiF) diag.src = 'page';
+  out.edge_followed_by = { count: f };
+  var g = shown(tc.following, isObj(out.edge_follow) ? num(out.edge_follow.count) : undefined);
+  if (g !== undefined) out.edge_follow = { count: g };
+  var p = shown(tc.posts, isObj(out.edge_owner_to_timeline_media) ? num(out.edge_owner_to_timeline_media.count) : undefined);
+  if (p !== undefined) {
+    if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
+    out.edge_owner_to_timeline_media.count = p;
   }
   finish('ok', { user: out, diag: diag });
 }

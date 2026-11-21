@@ -255,9 +255,15 @@ const linkedin: Flow = (() => {
       direct: anyPage,
       script: (ctx) => readerScript('linkedin', 0, ctx),
       finish: (data) => {
-        const parsed = parseLinkedInData(data);
-        if (hasNumbers(parsed)) return read(parsed, typeof rec(data).followers === 'number' ? 'high' : 'medium');
-        return { kind: 'next', ctx: { handle: liId(rec(data).publicId) } };
+        // Only numbers the person can see are saved (owner, 2026-11-21: "either show the true correct number or come
+        // back as error"). Text read from their own profile or dashboard counts; the API's numbers alone do not, so the
+        // app opens the profile (step 1) and reads it there, then a screenshot, then an error.
+        const d = rec(data);
+        if (d.page === 'profile' || d.page === 'dashboard') {
+          const parsed = parseLinkedInData({ ...d, followers: undefined, connections: undefined });
+          if (hasNumbers(parsed)) return read(parsed, 'medium');
+        }
+        return { kind: 'next', ctx: { handle: liId(d.publicId) } };
       },
       showsNumbers: false, // the feed shows other people's numbers; the profile (step 1, fallbackUrl) shows theirs
     },

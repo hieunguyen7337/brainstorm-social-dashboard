@@ -22,11 +22,14 @@ import { colors, radius, space } from '@/src/theme';
 import {
   PAGE_ACTIONS,
   allowedUrl,
+  captureBlock,
   describeCommand,
   elementsInShotPixels,
+  pageHasSecret,
   pageScript,
   parseCommand,
   parsePageMessage,
+  safeUrl,
   shotSize,
   type BrowserCommand,
   type BrowserResult,
@@ -97,6 +100,7 @@ function Controller({ native }: { native: NativeBits }) {
   const shotRef = useRef<View>(null);
   const shot = useRef<ShotSize>({ w: 0, h: 0 });
   const nav = useRef({ url: 'about:blank', title: '', canGoBack: false });
+  const lastFill = useRef(0); // when Claude last typed into a field: no screenshot for a while after
   const loadWaiters = useRef<(() => void)[]>([]);
   const pageWaiters = useRef(new Map<string, (r: BrowserResult) => void>());
   const [phase, setPhase] = useState<Phase>('connecting');
@@ -133,6 +137,15 @@ function Controller({ native }: { native: NativeBits }) {
   const capture = useCallback(async (): Promise<BrowserResult> => {
     const { w, h } = shot.current;
     if (!shotRef.current || w <= 0 || h <= 0) return { ok: false, error: 'The browser is not on screen yet.' };
+    // Never capture a sign-in page, a page with a password or code field on screen, or the moment after a fill.
+    const probe = await runInPage({ id: `probe-${Date.now()}`, action: 'elements', args: {} });
+    const blocked = captureBlock({
+      url: nav.current.url,
+      now: Date.now(),
+      lastFillAt: lastFill.current,
+      secretOnPage: pageHasSecret(probe),
+    });
+    if (blocked) return { ok: false, error: blocked };
     for (const quality of [0.7, 0.45]) {
       const raw = await captureRef(shotRef, { format: 'jpg', quality, result: 'base64', width: w, height: h });
       const b64 = typeof raw === 'string' ? raw.replace(/^data:[^,]*,/, '') : '';
@@ -168,6 +181,7 @@ function Controller({ native }: { native: NativeBits }) {
         }
         default: {
           if (!PAGE_ACTIONS.includes(cmd.action)) return { ok: false, error: `Unsupported action ${cmd.action}` };
+          if (cmd.action === 'type') lastFill.current = Date.now();
           const r = await runInPage(cmd);
           if (cmd.action === 'elements' && r.ok) r.data = elementsInShotPixels(r.data, shot.current);
           if (r.ok && (cmd.action === 'click' || cmd.action === 'press' || cmd.action === 'type')) {
@@ -258,7 +272,7 @@ function Controller({ native }: { native: NativeBits }) {
   };
 
   const onNav = (s: WebViewNavigation) => {
-    nav.current = { url: s.url, title: s.title ?? '', canGoBack: s.canGoBack };
+    nav.current = { url: safeUrl(s.url), title: s.title ?? '', canGoBack: s.canGoBack };
   };
 
   const onLoadEnd = () => {

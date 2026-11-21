@@ -15,6 +15,18 @@ class WorkspaceCreate(BaseModel):
     demo: bool = False  # True: a labelled demo workspace whose sign-ins and numbers are synthetic (docs/REAL.md)
 
 
+class WritingStyle(BaseModel):
+    """What Claude learned from the person's own writing samples (docs/CONTRACT.md, "Writing style")."""
+
+    summary: str
+    traits: list[str]  # at most 8
+    examples: list[str]  # at most 3 short verbatim phrases
+    sources: list[str]  # names of what it learned from, newest last, at most 100
+    file_count: int  # samples learned from so far (files, screenshots and pasted text)
+    sample_chars: int  # characters of text read so far
+    updated_at: str
+
+
 class Workspace(BaseModel):
     id: str
     name: str
@@ -25,6 +37,7 @@ class Workspace(BaseModel):
     product_url: str
     created_at: str
     data_mode: DataMode = "sample"
+    writing_style: WritingStyle | None = None
 
 
 class WorkspaceWithToken(Workspace):
@@ -38,6 +51,29 @@ class WorkspacePatch(BaseModel):
     audience: str | None = None
     offer: str | None = None
     product_url: str | None = None
+
+
+class StyleFile(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    media_type: str = Field(default="", max_length=120)
+    data_base64: str
+
+
+class StyleLearnRequest(BaseModel):
+    """One batch of writing samples: up to 10 files and/or pasted text (the app sends 100 files as 10 batches)."""
+
+    files: list[StyleFile] = Field(default_factory=list, max_length=10)
+    text: str = Field(default="", max_length=20000)
+
+
+class StyleSkipped(BaseModel):
+    name: str
+    reason: str
+
+
+class StyleLearnResult(BaseModel):
+    style: WritingStyle
+    skipped: list[StyleSkipped]
 
 
 class Connection(BaseModel):

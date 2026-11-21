@@ -25,7 +25,7 @@ function isInstalledWebApp(): boolean {
   }
 }
 
-/** "Get the app": the Android download (everywhere) plus, on the web only, how to install the PWA on a phone. */
+/** "Get the app": the Android download plus, on the web only, how to install the PWA on a phone. Hidden in the Android app. */
 export function GetTheAppCard() {
   const toast = useToast();
   const showWebHints = useMemo(() => Platform.OS === 'web' && !isInstalledWebApp(), []);
@@ -43,6 +43,9 @@ export function GetTheAppCard() {
       toast.show("Couldn't open the download link.", 'error');
     }
   };
+
+  // Already in the Android app: nothing to get (the app updates itself over the air).
+  if (Platform.OS === 'android') return null;
 
   return (
     <View style={styles.section}>
