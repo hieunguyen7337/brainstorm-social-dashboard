@@ -37,6 +37,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { WebViewMessageEvent, WebViewNavigation } from 'react-native-webview';
 
 import { colors, platformMeta, radius, space, withAlpha } from '@/src/theme';
+import { holdUpdates } from '@/src/updateOnLaunch';
 import { makeTracer } from './trace';
 import {
   CAPTURE_MAX_BYTES,
@@ -120,6 +121,7 @@ function Sheet({
 
   useEffect(() => {
     const tr = makeTracer(platform);
+    const release = holdUpdates();
     const r = new AutoReadRunner({
       platform,
       trace: tr.trace,
@@ -137,6 +139,7 @@ function Sheet({
     return () => {
       r.dispose();
       tr.stop();
+      release();
       if (runner.current === r) runner.current = null;
     };
   }, [platform, capture]);
