@@ -229,6 +229,10 @@ export interface ShareState {
   igSheet: { photo: PostPhoto; caption: string; onDone: (outcome: IgPostOutcome) => void } | null;
   /** Android LinkedIn auto-post in progress: ShareButtons renders `<LiPostSheet {...liSheet} />`. */
   liSheet: { text: string; onDone: (outcome: LiPostOutcome) => void } | null;
+  /** A photo the person added to this post: Instagram posts it instead of the generated card. */
+  image: PostPhoto | null;
+  addImage: () => Promise<void>;
+  removeImage: () => void;
 }
 
 /** Android LinkedIn: post from here, hand the text to the LinkedIn app, or do nothing. */

@@ -21,7 +21,7 @@ def test_get_page_is_public_with_the_qr_and_no_token(client, monkeypatch):
     r = client.get("/get")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     assert qr.qr_svg("https://pulse-hackathon.fly.dev/download/android") in r.text
-    assert "Scan to install Pulse on Android" in r.text
+    assert "Install Pulse on Android" in r.text and "Scan to install." in r.text
     assert "token" not in r.text.lower()
 
 
