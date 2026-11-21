@@ -202,6 +202,81 @@ describe('the fill script', () => {
     expect(env.posted.map((m) => m.status)).toEqual(['wrong_host']);
   });
 
+  // The sheet's URL check can be fed a page-reported address (the href poll), so the in-page check is the last guard.
+  // A hostile page shares the injected script's JS realm and can replace String and its methods before we run.
+  it.each([
+    ['String.prototype.slice', "String.prototype.slice = function () { return '.instagram.com'; };"],
+    [
+      'the String global',
+      "var S0 = String; String = function (v) { var s = S0(v); return s === 'evil.example' ? 'www.instagram.com' : s; };",
+    ],
+    [
+      'String.prototype.toLowerCase',
+      'var L0 = String.prototype.toLowerCase; String.prototype.toLowerCase = function () { var s = L0.call(this); ' +
+        "return s === 'evil.example' ? 'www.instagram.com' : s; };",
+    ],
+  ])('a hostile page that replaced %s still gets wrong_host and no values', async (_what, override) => {
+    const env = makeEnv({ url: 'https://evil.example/accounts/login/', html: page(IG_FORM) });
+    const doc = env.dom.window.document;
+    doc.querySelector('form')!.addEventListener('submit', (e) => e.preventDefault());
+    const typed: string[] = [];
+    doc.addEventListener('input', (e) => typed.push((e.target as HTMLInputElement).value));
+    env.inject(override);
+    env.inject(buildFillScript('instagram', CREDS, { submitDelayMs: 50, pollMs: 50, pollTries: 10 }));
+    await env.advance(100);
+    expect(val(doc, 'input[name="username"]')).toBe('');
+    expect(val(doc, 'input[name="password"]')).toBe('');
+    expect(typed).toEqual([]);
+    expect(env.posted.map((m) => m.status)).toEqual(['wrong_host']);
+  });
+
+  it.each([
+    ['instagram', 'https://www.instagram.com/accounts/login/'],
+    ['instagram', 'https://WWW.Instagram.COM/Accounts/Login/'],
+    ['instagram', 'https://instagram.com/accounts/login'],
+    ['instagram', 'https://evil-instagram.com/accounts/login/'],
+    ['instagram', 'https://instagram.com.evil.example/accounts/login/'],
+    ['instagram', 'https://www.instagram.com/accounts/login/two_factor'],
+    ['instagram', 'https://www.instagram.com/accounts/loginx/'],
+    ['instagram', 'https://www.instagram.com/challenge/abc/'],
+    ['linkedin', 'https://www.linkedin.com/uas/login'],
+    ['linkedin', 'https://www.linkedin.com/uas/login-submit'],
+    ['linkedin', 'https://www.linkedin.com/checkpoint/lg/login-submit'],
+    ['linkedin', 'https://xlinkedin.com/login'],
+    ['x', 'https://x.com/i/flow/login'],
+    ['x', 'https://mobile.twitter.com/login'],
+    ['x', 'https://ax.com/login'],
+    ['tiktok', 'https://www.tiktok.com/login/captcha'],
+    ['tiktok', 'https://www.tiktok.com/login/phone-or-email/email'],
+    ['facebook', 'https://m.facebook.com/login.php'],
+  ] as const)('the in-page check agrees with canFill on %s %s', async (platform, url) => {
+    const { env } = run(platform, url, '<div></div>');
+    await env.advance(100);
+    expect(env.posted.map((m) => m.status)).toEqual([canFill(platform, url) ? 'no_form' : 'wrong_host']);
+  });
+
+  // X runs username, password, unusual-activity check and 2FA code all on /i/flow/login; TikTok opens its code dialog
+  // over the login form. The URL alone cannot tell, so the page's own one-time-code field must stop the fill.
+  it.each([
+    [
+      'x',
+      'https://x.com/i/flow/login',
+      '<div><input name="text" type="text" inputmode="numeric" data-testid="ocfEnterTextTextInput" id="code">' +
+        '<div role="button">Next</div></div>',
+    ],
+    [
+      'tiktok',
+      'https://www.tiktok.com/login/phone-or-email/email',
+      '<form><input name="username" id="u"><input type="password" name="password" id="pw">' +
+        '<button type="submit">Log in</button></form><div role="dialog"><input autocomplete="one-time-code" id="code"></div>',
+    ],
+  ] as const)('never fills a %s second-factor step that shares the login URL', async (platform, url, html) => {
+    const { env, doc } = run(platform, url, html);
+    await env.advance(2000);
+    for (const el of Array.from(doc.querySelectorAll('input'))) expect((el as HTMLInputElement).value).toBe('');
+    expect(env.posted.map((m) => m.status)).toEqual(['no_form']);
+  });
+
   it('reports no_form when the page has no login fields', async () => {
     const { env } = run('tiktok', 'https://www.tiktok.com/login', '<div>Use QR code</div>');
     await env.advance(100);
