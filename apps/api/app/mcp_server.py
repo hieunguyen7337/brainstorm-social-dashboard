@@ -70,7 +70,9 @@ If the harvest script (tools/harvest) already ran successfully for LinkedIn, you
              "url": "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
              "content": "We just launched ...", "views": 4210, "engagements": 188}])
    Integers only. Expand abbreviations (1.2K is 1200, 3.4M is 3400000). views is impressions.
-   engagements is reactions + comments + reposts. If you cannot read a number, leave it out
+   engagements is reactions + comments + reposts. If the analytics page also shows the account's
+   reactions, comments and reposts as separate figures, send them in account as likes, comments and
+   shares (Pulse then shows Engagements broken down). If you cannot read a number, leave it out
    instead of guessing. Never estimate.
    posted_at is optional: only add it as an ISO 8601 time such as 2026-11-18T09:30:00Z when you can see
    the exact date, otherwise leave it out.
@@ -111,7 +113,9 @@ If the harvest script (tools/harvest) already ran successfully for Instagram, yo
      posts=[{"external_id": "C9xYzAbCdEf", "url": "https://www.instagram.com/p/C9xYzAbCdEf/",
              "content": "New drop ...", "views": 3900, "engagements": 410}])
    Integers only. Expand abbreviations (1.2K is 1200, 3.4M is 3400000). views is plays, reach or
-   impressions, whichever Instagram shows for that post. engagements is likes + comments. If you
+   impressions, whichever Instagram shows for that post. engagements is likes + comments. If
+   Insights shows the account's likes, comments and shares as separate figures, send them in account
+   as likes, comments and shares (Pulse then shows Engagements broken down). If you
    cannot read a number, leave it out instead of guessing. Never estimate.
    posted_at is optional: only add it as an ISO 8601 time such as 2026-11-18T09:30:00Z when you can see
    the exact date, otherwise leave it out.
@@ -333,7 +337,8 @@ def mount_mcp(app: FastAPI) -> None:
     ) -> str:
         """Record REAL numbers read from the user's OWN analytics pages (never estimated) for
         `platform`. Integers only: expand "1.2K" to 1200 and leave a number out if it cannot be read.
-        `account` (optional) holds followers, views, engagements, clicks, profile_views. `posts` is a
+        `account` (optional) holds followers, views, engagements, clicks, profile_views and, when the
+        page shows them as separate account figures, likes, comments, shares. `posts` is a
         list (max 500) of {external_id, url, content, posted_at, views, engagements, clicks,
         conversions}. external_id should be the post's id from its URL: LinkedIn, the digits after
         `urn:li:activity:`; Instagram, the shortcode in /p/<code>/ or /reel/<code>/. views is

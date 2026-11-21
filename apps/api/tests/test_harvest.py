@@ -568,7 +568,7 @@ def test_snapshots_listing_order_limit_filter_and_isolation(auth):
     got = client.get("/api/metrics/snapshots", headers=h).json()
     assert [s["id"] for s in got] == ids[::-1]  # newest first
     assert set(got[0]) == {"id", "platform", "post_id", "views", "engagements", "clicks", "conversions",
-                           "followers", "source", "captured_at"}
+                           "followers", "likes", "comments", "shares", "source", "captured_at"}
     assert [s["id"] for s in client.get("/api/metrics/snapshots?limit=2", headers=h).json()] == ids[::-1][:2]
     li = client.get("/api/metrics/snapshots?platform=linkedin", headers=h).json()
     assert [s["id"] for s in li] == ids[:3][::-1] and {s["platform"] for s in li} == {"linkedin"}

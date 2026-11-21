@@ -139,8 +139,47 @@ export function demoPostedAllToast(count: number, every = false): string {
   return `Posted ${what} (demo). First metrics are in, all synthetic.`;
 }
 
-/** Toast after "Refresh metrics": what the read found. */
-export function demoMetricsToast(label: string, read: Pick<DemoMetricsRead, 'views_gained' | 'engagements_gained' | 'advanced_minutes'>): string {
+/** Toast after "Refresh metrics": what the read found, with the engagements split like the platform shows them. */
+export function demoMetricsToast(
+  label: string,
+  read: Pick<
+    DemoMetricsRead,
+    'views_gained' | 'engagements_gained' | 'likes_gained' | 'comments_gained' | 'shares_gained' | 'advanced_minutes'
+  >,
+): string {
   const when = read.advanced_minutes > 0 ? ` after ${read.advanced_minutes} simulated min` : '';
-  return `Read back from ${label} (demo): +${counted(read.views_gained, 'view', 'views')}, +${counted(read.engagements_gained, 'engagement', 'engagements')}${when}.`;
+  const split =
+    read.engagements_gained > 0
+      ? ` (${counted(read.likes_gained, 'like', 'likes')}, ${counted(read.comments_gained, 'comment', 'comments')}, ${counted(read.shares_gained, 'share', 'shares')})`
+      : '';
+  return `Read back from ${label} (demo): +${counted(read.views_gained, 'view', 'views')}, +${counted(read.engagements_gained, 'engagement', 'engagements')}${split}${when}.`;
+}
+
+// ---- the engagement split (docs/CONTRACT.md, "Engagement split") --------------------------------------
+
+export interface DemoSplit {
+  likes: number;
+  comments: number;
+  shares: number;
+  other: number;
+}
+
+/** Mirrors the server's `demo.SPLIT_RATIOS` (apps/api/app/services/demo.py): likes, comments, shares, other (saves). */
+const DEMO_SPLIT_RATIOS: Partial<Record<Platform, readonly [number, number, number, number]>> = {
+  linkedin: [0.74, 0.14, 0.09, 0.03],
+  instagram: [0.86, 0.07, 0.04, 0.03],
+};
+const DEFAULT_SPLIT_RATIOS = [0.8, 0.1, 0.07, 0.03] as const;
+
+/** `total` engagements as likes, comments, shares and other: always adds up to `total` (largest remainder), like the server. */
+export function splitEngagements(total: number, platform: Platform): DemoSplit {
+  const n = Math.max(0, Math.floor(total));
+  const raw = (DEMO_SPLIT_RATIOS[platform] ?? DEFAULT_SPLIT_RATIOS).map((r) => n * r);
+  const parts = raw.map((x) => Math.floor(x));
+  const left = n - parts.reduce((a, b) => a + b, 0);
+  [...raw.keys()]
+    .sort((a, b) => raw[b] - parts[b] - (raw[a] - parts[a]) || a - b)
+    .slice(0, left)
+    .forEach((i) => (parts[i] += 1));
+  return { likes: parts[0], comments: parts[1], shares: parts[2], other: parts[3] };
 }

@@ -6,7 +6,10 @@
  *                          an hour is opened in ONE hidden WebView at a time (the sheet's WebView store, so the sign-in the
  *                          person made there is already in place), read with the same runner and page readers as the
  *                          sheet, and saved with `api.ingestMetrics({ source: 'device' })`. A login page, a read that takes
- *                          longer than 30 s, or any error skips the platform silently. No screenshot, no AI call.
+ *                          longer than REFRESH_TIMEOUT_MS, or any error skips the platform silently. When the page's own
+ *                          requests fail, the hidden profile is captured and read by Claude, as in the sheet (owner,
+ *                          2026-11-21: "if request keep failing, relying on the next step, screen capture and read with
+ *                          claude instead").
  *   forgetSignIns()        drops the platform sign-ins (cookies). react-native-webview has no cookie API, but on Android the
  *                          `incognito` flag clears the cookie store when it is applied, so a hidden incognito WebView is
  *                          mounted briefly by the mounted `<AutoRefresh />`. Resolves when that is done (never rejects).
@@ -23,7 +26,7 @@ import { api, getToken, isMock, PLATFORMS, type IngestAccount, type IngestReques
 import { useConnectSheet } from '@/src/components/connect/sheetContext';
 import { DEFAULT_PERIOD, postsToIngest } from '@/src/connect/logic';
 import { HREF_POLL_JS, HREF_POLL_MS, takeHref } from './hrefPoll';
-import { FORGET_HOLD_MS, REFRESH_RETRY_MS, REFRESH_STALE_MS, REFRESH_TIMEOUT_MS, UA_ANDROID } from './config';
+import { CAPTURE_MAX_BYTES, CAPTURE_RETRY_QUALITY, FORGET_HOLD_MS, REFRESH_RETRY_MS, REFRESH_STALE_MS, REFRESH_TIMEOUT_MS, UA_ANDROID } from './config';
 import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner } from './runner';
 import type { DeviceRead } from './types';
@@ -133,12 +136,16 @@ class Boundary extends Component<{ onFail: () => void; children: ReactNode }, { 
 interface HiddenReadProps {
   platform: Platform;
   native: NativeBits;
+  /** The connected account's handle: the screenshot fallback opens its profile when the requests name no account. */
+  handle: string;
   /** Called once: the numbers, or null when the read did not work (login page, timeout, error). */
   onDone: (read: DeviceRead | null) => void;
 }
 
-function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
-  const { WebView } = native;
+function HiddenRead({ platform, native, handle, onDone }: HiddenReadProps) {
+  const { WebView, captureRef } = native;
+  const shotRef = useRef<View>(null);
+  const handleRef = useRef(handle);
   const [source, setSource] = useState<{ uri: string } | null>(null);
   const webRef = useRef<WebViewRef | null>(null);
   const runner = useRef<AutoReadRunner | null>(null);
@@ -169,10 +176,17 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
     r = new AutoReadRunner({
       platform,
       loadUrl: (uri) => setSource({ uri }),
+      fallbackHandle: handleRef.current,
       inject: (js) => webRef.current?.injectJavaScript(js),
-      // No screenshot fallback and no AI call in the background: both reject, so the runner gives up (emitClose).
-      capture: () => Promise.reject(new Error('no capture in the background')),
-      readScreenshot: () => Promise.reject(new Error('no screenshot read in the background')),
+      // The hidden WebView (360 x 640) as a JPEG, read by Claude through the screenshot endpoint, like the sheet.
+      capture: async () => {
+        if (!shotRef.current) throw new Error('not ready');
+        const raw = await captureRef(shotRef, { format: 'jpg', quality: CAPTURE_RETRY_QUALITY, result: 'base64' });
+        const base64 = typeof raw === 'string' ? raw.replace(/^data:[^,]*,/, '') : '';
+        if (!base64 || (base64.length * 3) / 4 > CAPTURE_MAX_BYTES) throw new Error('capture unusable');
+        return base64;
+      },
+      readScreenshot: (base64, mediaType) => api.readScreenshot(platform, { image_base64: base64, media_type: mediaType }),
       emitResult: (read) => finish(read),
       emitClose: () => finish(null),
       onStatus: (s) => {
@@ -195,11 +209,12 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
       r?.dispose();
       if (runner.current === r) runner.current = null;
     };
-  }, [platform]);
+  }, [platform, captureRef]);
 
   return (
     <View pointerEvents="none" style={styles.clip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {source ? (
+        <View ref={shotRef} collapsable={false} style={styles.web}>
         <WebView
           ref={webRef}
           testID="auto-refresh-webview"
@@ -224,6 +239,7 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
           }}
           onError={(e) => runner.current?.loadFailed(e.nativeEvent.url)}
         />
+        </View>
       ) : null}
     </View>
   );
@@ -234,6 +250,7 @@ function HiddenRead({ platform, native, onDone }: HiddenReadProps) {
 interface Job {
   key: number;
   platform: Platform;
+  handle: string;
 }
 
 /**
@@ -267,11 +284,11 @@ export function AutoRefresh() {
   useEffect(() => {
     if (!native) return undefined;
 
-    const readOne = (platform: Platform): Promise<DeviceRead | null> =>
+    const readOne = (platform: Platform, handle: string): Promise<DeviceRead | null> =>
       new Promise<DeviceRead | null>((resolve) => {
         settle.current = resolve;
         jobKey.current += 1;
-        setJob({ key: jobKey.current, platform });
+        setJob({ key: jobKey.current, platform, handle });
       });
 
     const due = async (platform: Platform): Promise<boolean> => {
@@ -294,7 +311,7 @@ export function AutoRefresh() {
           if (conn.mode !== 'live') continue;
           try {
             if (!(await due(conn.platform)) || generation.current !== mine) continue;
-            const read = await readOne(conn.platform);
+            const read = await readOne(conn.platform, conn.handle ?? '');
             if (generation.current !== mine) return;
             const request = read ? toIngestRequest(read, conn.handle) : null;
             if (!request) {
@@ -361,7 +378,7 @@ export function AutoRefresh() {
     <>
       {job && !erasing ? (
         <Boundary key={job.key} onFail={() => endJob(null)}>
-          <HiddenRead platform={job.platform} native={native} onDone={endJob} />
+          <HiddenRead platform={job.platform} native={native} handle={job.handle} onDone={endJob} />
         </Boundary>
       ) : null}
       {erasing ? (

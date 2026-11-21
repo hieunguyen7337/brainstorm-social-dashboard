@@ -42,6 +42,13 @@ def track_click(code: str, conn: sqlite3.Connection = Depends(get_db)):
     return RedirectResponse(f"/l/{code}", status_code=302)
 
 
+@router.head("/r/{code}")
+def probe_link(code: str, conn: sqlite3.Connection = Depends(get_db)):
+    """HEAD (link unfurlers, health probes) follows the same redirect but is never counted as a click."""
+    _post_by_code(conn, code)
+    return RedirectResponse(f"/l/{code}", status_code=302)
+
+
 @router.post("/api/links/{code}/convert")
 def convert(code: str, conn: sqlite3.Connection = Depends(get_db)):
     post = _post_by_code(conn, code)

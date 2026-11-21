@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from app.db import new_id, now_iso
+from app.db import PLATFORMS, new_id, now_iso
 from app.models import Post
 from app.platforms import ConnectionOut, platform_status, require_live
 from app.services import harvest, metrics
@@ -52,6 +52,15 @@ FIRST_READ_MINUTES = 3
 REFRESH_MINUTES = 5
 MAX_ADVANCE_MINUTES = 60
 
+# How a demo account's engagements divide into likes, comments, shares and "other" (saves): fixed per platform, so the demo
+# always tells the same story. The app's mock mirrors these (apps/mobile/src/mock.ts, DEMO_SPLIT).
+SPLIT_RATIOS: dict[str, tuple[float, float, float, float]] = {
+    "linkedin": (0.74, 0.14, 0.09, 0.03),
+    "instagram": (0.86, 0.07, 0.04, 0.03),
+}
+DEFAULT_SPLIT = (0.80, 0.10, 0.07, 0.03)
+SPLIT_KEYS = ("likes", "comments", "shares", "other")
+
 DEMO_REFUSED = (
     "This is a demo workspace: its numbers are synthetic. Start your own workspace to add your real numbers."
 )
@@ -70,6 +79,34 @@ class DemoSignInResult(BaseModel):
     captured_at: str
 
 
+def split_engagements(total: int, platform: str) -> dict[str, int]:
+    """`total` engagements as likes, comments, shares and other. The four always add up to `total` (largest remainder)."""
+    total = max(0, int(total))
+    raw = [total * r for r in SPLIT_RATIOS.get(platform, DEFAULT_SPLIT)]
+    parts = [int(x) for x in raw]
+    for i in sorted(range(len(raw)), key=lambda i: raw[i] - parts[i], reverse=True)[: total - sum(parts)]:
+        parts[i] += 1
+    return dict(zip(SPLIT_KEYS, parts, strict=True))
+
+
+def engagement_split(per_plat: dict[str, dict]) -> dict | None:
+    """`DashboardSummary.engagement_split` of a demo workspace (docs/CONTRACT.md, "Engagement split").
+
+    Every platform with engagements is split with its fixed ratios, so likes + comments + shares + other equals the
+    Engagements tile (`unsplit` is 0) and the split keeps tracking as the simulated posts grow. None before any account
+    has engagements.
+    """
+    out = dict.fromkeys(SPLIT_KEYS, 0)
+    platforms: list[str] = []
+    for p in sorted(per_plat, key=PLATFORMS.index):
+        if per_plat[p]["engagements"] <= 0:
+            continue
+        for k, v in split_engagements(per_plat[p]["engagements"], p).items():
+            out[k] += v
+        platforms.append(p)
+    return {**out, "unsplit": 0, "platforms": platforms} if platforms else None
+
+
 class DemoMetricsRead(BaseModel):
     """What a synthetic metrics read of one published post found: the post with its new counters, and the change."""
 
@@ -77,6 +114,10 @@ class DemoMetricsRead(BaseModel):
     advanced_minutes: int
     views_gained: int
     engagements_gained: int
+    # the gained engagements as the platform shows them apart (the rest is "other", saves)
+    likes_gained: int = 0
+    comments_gained: int = 0
+    shares_gained: int = 0
     read_at: str
 
 
@@ -230,8 +271,10 @@ def sign_in(conn: sqlite3.Connection, ws: sqlite3.Row, platform: str) -> DemoSig
                 " VALUES (?,?,NULL,'connected',?,?,0,?)",
                 (new_id("e_"), wid, platform, f"Connected {harvest.NAMES[platform]} (demo)", now),
             )
+        parts = split_engagements(eng30, platform)  # the account's engagements, split like a platform that shows them apart
         harvest._snapshot(conn, wid, platform, None, "demo", now, followers=followers, period_days=WINDOW_DAYS,
-                          views=views30, engagements=eng30)
+                          views=views30, engagements=eng30, likes=parts["likes"], comments=parts["comments"],
+                          shares=parts["shares"])
         conn.commit()
     except Exception:
         conn.rollback()
@@ -277,14 +320,17 @@ def read_metrics(conn: sqlite3.Connection, ws: sqlite3.Row, post_id: str,
     after = get_post_row(conn, ws["id"], post_id)
     gained_views, gained_eng = after["views"] - views0, after["engagements"] - eng0
     now = now_iso()
+    parts = split_engagements(gained_eng, row["platform"])
     conn.execute(
         "INSERT INTO events (id, workspace_id, post_id, type, platform, detail, real, ts)"
         " VALUES (?,?,?,'metrics',?,?,0,?)",
         (new_id("e_"), ws["id"], post_id, row["platform"],
          (f"Read metrics back from {harvest.NAMES[row['platform']]} (demo): +{gained_views:,} views, "
-          f"+{gained_eng:,} engagements"), now),
+          f"+{gained_eng:,} engagements ({parts['likes']:,} likes, {parts['comments']:,} comments, "
+          f"{parts['shares']:,} shares)"), now),
     )
     conn.commit()
     return DemoMetricsRead(
         post=row_to_post(conn, get_post_row(conn, ws["id"], post_id)), advanced_minutes=advance,
-        views_gained=gained_views, engagements_gained=gained_eng, read_at=now)
+        views_gained=gained_views, engagements_gained=gained_eng, likes_gained=parts["likes"],
+        comments_gained=parts["comments"], shares_gained=parts["shares"], read_at=now)

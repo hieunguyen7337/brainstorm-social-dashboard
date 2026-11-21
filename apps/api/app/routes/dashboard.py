@@ -9,7 +9,7 @@ from app.auth import get_workspace
 from app.db import PLATFORMS, get_db
 from app.models import ActivityItem, DashboardSummary
 from app.platforms import live_sql_list, require_live
-from app.services import metrics
+from app.services import demo, metrics
 from app.services.posts import row_to_post
 
 router = APIRouter()
@@ -67,6 +67,43 @@ def _snapshot_change(hist: dict[tuple[str, str], list[tuple[int, int]]], connect
                     cur, prev = cur + value, prev + before
         out[k] = _pct(cur, prev)
     return out
+
+
+SPLIT_KEYS = ("likes", "comments", "shares")
+
+
+def _engagement_split(conn: sqlite3.Connection, workspace_id: str, days: int, platform: str | None,
+                      per_plat: dict[str, dict]) -> dict | None:
+    """Engagements as likes / comments / shares, or None when no platform in scope saved a split.
+
+    A platform's split comes from the same snapshot its engagements come from (the newest account snapshot whose
+    window fits, see _snapshot_history), so the two never disagree: when the newest snapshot has no split the
+    platform counts as `unsplit`. Whatever a split platform's engagements hold beyond its likes, comments and
+    shares (saves) is `other`; what the daily numbers add on top of the snapshot is `unsplit`. The parts always
+    add up to the Engagements total.
+    """
+    sql = ("SELECT platform, engagements, likes, comments, shares FROM metric_snapshots WHERE workspace_id = ?"
+           " AND post_id IS NULL AND period_days IS NOT NULL AND period_days <= ? AND engagements IS NOT NULL")
+    args: list = [workspace_id, days]
+    if platform:
+        sql, args = sql + " AND platform = ?", [*args, platform]
+    newest: dict[str, sqlite3.Row] = {}
+    for r in conn.execute(sql + " ORDER BY captured_at DESC, rowid DESC", args):
+        newest.setdefault(r["platform"], r)
+    out = {"likes": 0, "comments": 0, "shares": 0, "other": 0, "unsplit": 0}
+    platforms: list[str] = []
+    for p in sorted(per_plat, key=PLATFORMS.index):
+        total, r = per_plat[p]["engagements"], newest.get(p)
+        if r is None or all(r[k] is None for k in SPLIT_KEYS):
+            out["unsplit"] += total
+            continue
+        parts = {k: r[k] or 0 for k in SPLIT_KEYS}
+        for k, v in parts.items():
+            out[k] += v
+        out["other"] += max(0, r["engagements"] - sum(parts.values()))
+        out["unsplit"] += max(0, total - r["engagements"])
+        platforms.append(p)
+    return {**out, "platforms": platforms} if platforms else None
 
 
 NOT_READ = "Not read yet: open Connect to read"
@@ -210,7 +247,8 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
             (ws["id"], kind, start.isoformat(), *plat_args),
         ).fetchone()[0]
 
-    tiles, not_read = (_tiles(conn, ws["id"], days, platform, connected, cur_tot) if ws["data_mode"] == "real"
+    real_mode = ws["data_mode"] == "real"
+    tiles, not_read = (_tiles(conn, ws["id"], days, platform, connected, cur_tot) if real_mode
                        else (dict(cur_tot), {}))
     return {
         "days": days,
@@ -226,6 +264,11 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
         "followers_total": sum(x["followers"] for x in by_platform),
         "tiles": tiles,
         "not_read": not_read,
+        "engagement_split": (
+            _engagement_split(conn, ws["id"], days, platform, per_plat) if real_mode
+            else demo.engagement_split(per_plat) if ws["data_mode"] == "demo"
+            else None
+        ),
     }
 
 

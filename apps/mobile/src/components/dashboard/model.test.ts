@@ -1,5 +1,6 @@
 /** Unit tests for the KPI tile decision in model.ts (`kpiTile`): `npx jest --ci src/components/dashboard`. */
-import { kpiTile, METRICS, NOT_READ_FALLBACK, NOT_READ_MARK, type KpiSource } from './model';
+import { kpiTile, METRICS, NOT_READ_FALLBACK, NOT_READ_MARK, splitNote, splitRows, splitSpoken, type KpiSource } from './model';
+import type { EngagementSplit } from '@/src/types';
 
 const totals = { views: 1200, engagements: 340, clicks: 56, conversions: 7 };
 const keys = METRICS.map((m) => m.key);
@@ -63,5 +64,49 @@ describe('kpiTile', () => {
 
   it('the not-read mark is an em dash', () => {
     expect(NOT_READ_MARK).toBe('—');
+  });
+});
+
+describe('engagement split rows', () => {
+  const split: EngagementSplit = { likes: 1200, comments: 88, shares: 31, other: 0, unsplit: 0, platforms: ['instagram'] };
+
+  it('has no rows without a split', () => {
+    expect(splitRows(null)).toEqual([]);
+    expect(splitRows(undefined)).toEqual([]);
+    expect(splitNote(null)).toBeNull();
+    expect(splitSpoken(undefined)).toBe('');
+  });
+
+  it('lists likes, comments and shares in that order', () => {
+    expect(splitRows(split).map((r) => [r.key, r.label, r.value])).toEqual([
+      ['likes', 'Likes', 1200],
+      ['comments', 'Comments', 88],
+      ['shares', 'Shares', 31],
+    ]);
+  });
+
+  it('keeps a real 0 as a row', () => {
+    const rows = splitRows({ ...split, comments: 0, shares: 0 });
+    expect(rows.map((r) => r.value)).toEqual([1200, 0, 0]);
+  });
+
+  it('adds "Saves & other" only when it is more than 0', () => {
+    expect(splitRows({ ...split, other: 0 })).toHaveLength(3);
+    const rows = splitRows({ ...split, other: 60 });
+    expect(rows).toHaveLength(4);
+    expect(rows[3]).toMatchObject({ key: 'other', label: 'Saves & other', value: 60 });
+  });
+
+  it('notes the engagements that come from accounts reporting only a total', () => {
+    expect(splitNote({ ...split, unsplit: 0 })).toBeNull();
+    expect(splitNote({ ...split, unsplit: 500 })).toBe('+500 from accounts that only report a total');
+    expect(splitNote({ ...split, unsplit: 12_400 })).toBe('+12k from accounts that only report a total');
+  });
+
+  it('reads aloud as one sentence', () => {
+    expect(splitSpoken(split)).toBe('Likes 1.2k, comments 88, shares 31.');
+    expect(splitSpoken({ ...split, other: 9, unsplit: 40 })).toBe(
+      'Likes 1.2k, comments 88, shares 31, saves & other 9, +40 from accounts that only report a total.',
+    );
   });
 });

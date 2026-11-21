@@ -35,7 +35,8 @@ Response `ScreenshotRead`:
   "handle": "hieu73372025"|null,
   "followers": 46|null, "following": 48|null, "posts_count": 0|null,
   "views": 1234|null, "engagements": 56|null, "profile_views": 215|null,
-  "period_days": 7|30|90|null,          // the window views/engagements/profile_views cover, if shown
+  "likes": 40|null, "comments": 12|null, "shares": 4|null,  // the account's own split, only when shown apart
+  "period_days": 7|30|90|null,          // the window views/engagements/likes/comments/shares/profile_views cover
   "posts": [ { "content": "first 200 chars"|null, "views": 0|null, "likes": 0|null,
                "comments": 0|null, "shares": 0|null, "posted_at": "YYYY-MM-DD"|null } ],  // max 20
   "confidence": "high"|"medium"|"low",
@@ -56,6 +57,8 @@ The app saves with the existing `POST /api/metrics/ingest`, with these changes:
 - Ingest marks the connection `status 'connected'`, `mode 'live'`, sets `handle` when given and `followers` when
   given, records a `connected` event the first time ("Connected Instagram (real)"), and keeps everything else it
   does today (snapshots, posts matched or created with `metrics_source 'real'`, daily_metrics deltas).
+- Account `likes`, `comments`, `shares` are optional too (see "Engagement split" in CONTRACT.md); with none of them
+  the Engagements tile shows one number as before.
 - Post-level numbers: `views` and `engagements` (likes + comments + shares when only those are known) are
   required on `IngestPost` today; the app sends 0 for a missing one only when the other is known, else skips the
   post.
@@ -124,6 +127,13 @@ screenshot and vault flows are untouched.
   on <Platform> (demo)", instead of the real composers (nothing opens, nothing is copied), and a published card's is
   "Refresh metrics (demo)"; the toasts say what came back and that it is synthetic. A deliberate tap on a post's tracked
   link is still a genuine visit and counts as one; the generator and the reads never touch the link routes.
+- **Engagement split.** The Engagements tile breaks into likes, comments and shares in a demo workspace too
+  (docs/CONTRACT.md, "Engagement split"), synthetically: every platform with engagements is split with fixed ratios
+  (`services/demo.SPLIT_RATIOS`: LinkedIn 74/14/9/3 %, Instagram 86/7/4/3 %, the last being "other", saves), with
+  largest-remainder rounding, so `likes + comments + shares + other` equals `totals.engagements` and `unsplit` is 0, and
+  the split keeps tracking as the simulated posts grow. The sign-in's account snapshot stores the split like a real read
+  does, and each metrics read reports it for what it gained (`likes_gained`, `comments_gained`, `shares_gained`). The
+  app's mock mirrors the ratios (`apps/mobile/src/demo/logic.ts`); both sides pin the same literals in their tests.
 - **No real numbers in, no synthetic numbers out.** In a demo workspace `POST /api/metrics/ingest`, the screenshot
   reader (no AI is used) and `PUT .../profile` answer 409. The generator never writes `real = 1` and never calls the
   tracked-link routes, so "real people" counts stay real. `metrics_source 'sim'` makes Insights call every demo post

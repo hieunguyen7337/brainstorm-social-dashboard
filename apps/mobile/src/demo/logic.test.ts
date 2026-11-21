@@ -11,6 +11,7 @@ import {
   demoRefreshLabel,
   demoSlug,
   demoSuccessNote,
+  splitEngagements,
   initialState,
   reduce,
   STEPS,
@@ -185,11 +186,48 @@ describe('posting and metrics back', () => {
     expect(demoPostedAllToast(3, true)).toContain('all 3 posts');
   });
 
-  it('toasts what a refresh read back', () => {
-    const read = { views_gained: 410, engagements_gained: 1, advanced_minutes: 5 };
+  it('toasts what a refresh read back, with the engagements split', () => {
+    const read = {
+      views_gained: 410, engagements_gained: 10, likes_gained: 8, comments_gained: 1, shares_gained: 1, advanced_minutes: 5,
+    };
     expect(demoMetricsToast('LinkedIn', read)).toBe(
-      'Read back from LinkedIn (demo): +410 views, +1 engagement after 5 simulated min.',
+      'Read back from LinkedIn (demo): +410 views, +10 engagements (8 likes, 1 comment, 1 share) after 5 simulated min.',
     );
     expect(demoMetricsToast('LinkedIn', { ...read, advanced_minutes: 0 })).not.toContain('simulated min');
+  });
+
+  it('leaves the split out when no engagements came back', () => {
+    const none = { views_gained: 3, engagements_gained: 0, likes_gained: 0, comments_gained: 0, shares_gained: 0, advanced_minutes: 5 };
+    expect(demoMetricsToast('Instagram', none)).toBe('Read back from Instagram (demo): +3 views, +0 engagements after 5 simulated min.');
+  });
+
+});
+
+describe('the engagement split', () => {
+  it('matches the server for the same totals', () => {
+    // apps/api/tests/test_demo_split.py: the same ratios and the same largest-remainder rounding
+    expect(splitEngagements(10_000, 'instagram')).toEqual({ likes: 8600, comments: 700, shares: 400, other: 300 });
+    expect(splitEngagements(10_000, 'linkedin')).toEqual({ likes: 7400, comments: 1400, shares: 900, other: 300 });
+    expect(splitEngagements(10, 'instagram')).toEqual({ likes: 9, comments: 1, shares: 0, other: 0 });
+  });
+
+  it('always adds up to the total', () => {
+    for (const platform of ['linkedin', 'instagram', 'x'] as const) {
+      for (const total of [...Array(120).keys(), 999, 12_345, 98_765]) {
+        const p = splitEngagements(total, platform);
+        expect(p.likes + p.comments + p.shares + p.other).toBe(total);
+        expect(Math.min(p.likes, p.comments, p.shares, p.other)).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it('ranks likes, then comments, then shares', () => {
+    const p = splitEngagements(10_000, 'linkedin');
+    expect(p.likes > p.comments && p.comments > p.shares && p.shares > p.other).toBe(true);
+  });
+
+  it('splits nothing for zero or a negative total', () => {
+    expect(splitEngagements(0, 'instagram')).toEqual({ likes: 0, comments: 0, shares: 0, other: 0 });
+    expect(splitEngagements(-4, 'instagram')).toEqual({ likes: 0, comments: 0, shares: 0, other: 0 });
   });
 });

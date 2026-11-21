@@ -1,6 +1,6 @@
 import { AutoReadRunner, type RunnerDeps, type RunnerStatus } from '../runner';
 import { FALLBACK_LOAD_MS, INJECT_DELAY_MS, MAX_INJECTIONS, READ_TIMEOUT_MS, SETTLE_MS, STALE_PAGE_MS } from '../config';
-import { AUTO_READ_FAILED, type DeviceRead } from '../types';
+import { AUTO_READ_FAILED, AUTO_READ_NO_COUNTS, type DeviceRead } from '../types';
 import { flowFor, parsePageUrl } from '../platforms';
 import { readerScript } from '../readers';
 import { feedJson, makeEnv } from './igHarness';
@@ -507,7 +507,7 @@ describe('instagram runner', () => {
       }
     });
 
-    it('capture failing, the screenshot call failing, or finding no numbers all end with the failure reason', async () => {
+    it('capture failing, the screenshot call failing, or finding no numbers all end with the failure reason (after one retry)', async () => {
       const variants: Array<Partial<RunnerDeps>> = [
         { capture: async () => Promise.reject(new Error('x')) },
         { readScreenshot: async () => Promise.reject(new Error('x')) },
@@ -519,6 +519,8 @@ describe('instagram runner', () => {
         runner.message(msg('empty', { username: 'jane.doe' }));
         runner.navigated(PROFILE, false);
         await adv(SETTLE_MS + 50);
+        // A failed capture ends at once; a failed or empty Claude read first reloads and tries one more screenshot.
+        await adv(FALLBACK_LOAD_MS + 100);
         expect(log.closes).toEqual([AUTO_READ_FAILED]);
         expect(log.results).toHaveLength(0);
       }
@@ -624,5 +626,93 @@ describe('instagram runner', () => {
       await expect(s.adv(INJECT_DELAY_MS + 10)).resolves.toBeUndefined();
       expect(s.log.closes).toEqual([AUTO_READ_FAILED]);
     });
+  });
+});
+
+describe('profile header without counts (Samsung, 2026-11-21: Instagram limiting reads)', () => {
+  it('step 1 marks the hint noCounts only when the reader saw the header without counts', () => {
+    const f = flowFor('instagram');
+    const ctx = { handle: 'jane.doe' };
+    expect(f.steps[1].finish({ username: 'jane.doe', diag: { vis: false } }, ctx)).toEqual({
+      kind: 'empty',
+      hint: { username: 'jane.doe', noCounts: true },
+    });
+    expect(f.steps[1].finish({ username: 'jane.doe' }, ctx)).toMatchObject({ kind: 'empty', hint: { noCounts: false } });
+  });
+
+  it('the screenshot fallback then finding no numbers ends with the reason, after scrolling the page to the top', async () => {
+    const { runner, log, adv } = setup({ readScreenshot: async () => shot({ followers: null }) as any });
+    runner.start();
+    runner.navigated(FEED, false);
+    runner.loadEnded(FEED);
+    await adv(INJECT_DELAY_MS + 10);
+    runner.message(msg('ok', { ...okData, go: 'jane.doe' }));
+    await adv(10);
+    runner.navigated(PROFILE, false);
+    runner.loadEnded(PROFILE);
+    await adv(INJECT_DELAY_MS + 10);
+    const before = log.injects.length;
+    runner.message(msg('empty', { username: 'jane.doe', diag: { vis: false } }, { step: 1 }));
+    await adv(400);
+    expect(log.injects.length).toBe(before + 1);
+    expect(log.captures).toBe(1);
+    // Claude found nothing: the profile is reloaded and screenshotted once more before giving up.
+    expect(log.closes).toHaveLength(0);
+    expect(log.loads[log.loads.length - 1]).toBe(PROFILE);
+    await adv(FALLBACK_LOAD_MS + 100);
+    expect(log.captures).toBe(2);
+    expect(log.closes).toEqual([AUTO_READ_NO_COUNTS]);
+    expect(log.results).toHaveLength(0);
+  });
+});
+
+describe('requests keep failing: screenshot read by Claude instead (owner, 2026-11-21)', () => {
+  it('the first request is refused (error, no account named): the known handle opens the profile and its screenshot is read', async () => {
+    const { runner, log, adv } = setup({ fallbackHandle: 'jane.doe' });
+    runner.start();
+    runner.navigated(FEED, false);
+    runner.loadEnded(FEED);
+    await adv(INJECT_DELAY_MS + 10);
+    runner.message(msg('error'));
+    await adv(10);
+    expect(log.loads).toEqual([LOGIN, PROFILE]);
+    runner.navigated(PROFILE, false);
+    await adv(SETTLE_MS + 10);
+    expect(log.captures).toBe(1);
+    expect(log.results).toHaveLength(1);
+    expect(log.results[0]).toMatchObject({ source: 'device', followers: 100 });
+  });
+
+  it('the first screenshot shows no numbers, the reloaded one does: the second read is saved', async () => {
+    let calls = 0;
+    const { runner, log, adv } = setup({
+      readScreenshot: async () => (++calls === 1 ? shot({ followers: null }) : shot()) as any,
+    });
+    runner.start();
+    runner.navigated(FEED, false);
+    runner.loadEnded(FEED);
+    await adv(INJECT_DELAY_MS + 10);
+    runner.message(msg('empty', { username: 'jane.doe' }));
+    await adv(FALLBACK_LOAD_MS + 100);
+    expect(log.captures).toBe(1);
+    expect(log.results).toHaveLength(0);
+    await adv(FALLBACK_LOAD_MS + 100);
+    expect(log.captures).toBe(2);
+    expect(log.results).toHaveLength(1);
+    expect(log.closes).toHaveLength(0);
+  });
+
+  it('a Claude call that fails is retried once, then the read ends with the reason', async () => {
+    const { runner, log, adv } = setup({ readScreenshot: async () => Promise.reject(new Error('503')) });
+    runner.start();
+    runner.navigated(FEED, false);
+    runner.loadEnded(FEED);
+    await adv(INJECT_DELAY_MS + 10);
+    runner.message(msg('empty', { username: 'jane.doe' }));
+    await adv(FALLBACK_LOAD_MS + 100);
+    await adv(FALLBACK_LOAD_MS + 100);
+    await adv(FALLBACK_LOAD_MS + 100);
+    expect(log.captures).toBe(2);
+    expect(log.closes).toEqual([AUTO_READ_FAILED]);
   });
 });

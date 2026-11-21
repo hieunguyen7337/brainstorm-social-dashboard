@@ -145,8 +145,9 @@ const instagram: Flow = (() => {
     domains: ['instagram.com'],
     loginPaths: IG_LOGIN,
     steps: [],
-    fallbackUrl: (_ctx, hint) => {
-      const name = str(rec(hint).username);
+    fallbackUrl: (ctx, hint) => {
+      // The name the page reported, else the account the caller knows (the requests may have failed before naming it).
+      const name = str(rec(hint).username) ?? ctx.handle ?? null;
       return name && IG_NAME.test(name) ? `https://www.instagram.com/${name}/` : null;
     },
   });
@@ -171,7 +172,9 @@ const instagram: Flow = (() => {
     script: (ctx) => readerScript('instagram', 1, ctx),
     finish: (data) => {
       const parsed = parseInstagramJson(data);
-      return hasNumbers(parsed) ? read(parsed, 'high') : { kind: 'empty', hint: { username: parsed.handle ?? null } };
+      // `diag.vis` false: the reader looked at this profile and its header showed no counts.
+      const noCounts = rec(rec(data).diag).vis === false;
+      return hasNumbers(parsed) ? read(parsed, 'high') : { kind: 'empty', hint: { username: parsed.handle ?? null, noCounts } };
     },
     showsNumbers: true,
   });

@@ -82,6 +82,14 @@ export interface StepCtx {
 /** Shown to the person (as a note on the card) whenever the automatic read gives up. Nothing is typed by hand any more. */
 export const AUTO_READ_FAILED = "Couldn't read it automatically. Upload a screenshot instead.";
 
+/**
+ * The profile opened signed in but the page never showed its counts (Samsung, 2026-11-21: Instagram drew the posts grid
+ * without the header, and answered 429 to the data call: it was limiting reads). Says why, and when Pulse tries again
+ * (REFRESH_RETRY_MS).
+ */
+export const AUTO_READ_NO_COUNTS =
+  "Instagram didn't show your follower count just now (it limits how often it can be read). Pulse tries again in 15 minutes, or upload a screenshot.";
+
 /** Props of `AutoReadSheet` (`src/autoRead/index.tsx`). */
 export interface AutoReadSheetProps {
   platform: Platform;

@@ -86,7 +86,7 @@ const STAYS_SIGNED_IN_VAULT =
 
 const STATUS_TEXT: Record<RunnerStatus, string> = {
   anon: 'Checking your public profile…',
-  login: 'Sign in, then Pulse reads your numbers for you.',
+  login: 'Sign in, then Pulse reads your numbers. Blank page? Tap Reload.',
   reading: 'Reading your numbers…',
   capturing: 'Capturing your page…',
   claude: 'Reading your page with Claude…',
@@ -238,7 +238,11 @@ function Sheet({
     }, STALL_MS);
     return () => clearTimeout(t);
   }, [loading, source]);
-  const reload = () => webRef.current?.reload();
+  // Reload starts the page over on a fresh WebView at the sheet's own URL, like reopening the sheet. Reloading in place
+  // kept a blank page after "Continue with Google" on LinkedIn (Samsung, 2026-11-21): Google's popup callback had
+  // nowhere to return, and only closing and reopening the sheet recovered, already signed in.
+  const [webKey, setWebKey] = useState(0);
+  const reload = () => setWebKey((k) => k + 1);
 
   // While waiting for the sign-in, ask the page where it really is (see hrefPoll.ts).
   useEffect(() => {
@@ -435,6 +439,7 @@ function Sheet({
           {source ? (
             <View ref={shotRef} collapsable={false} style={StyleSheet.absoluteFill} onLayout={onLayout}>
               <WebView
+                key={webKey}
                 ref={webRef}
                 testID="auto-read-webview"
                 source={source}

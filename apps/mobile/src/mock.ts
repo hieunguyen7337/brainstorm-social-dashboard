@@ -21,12 +21,14 @@ import {
 } from './mockData';
 import type { Mode } from './mockData';
 import { fileKind } from './pickFiles.types';
+import { splitEngagements } from './demo/logic';
 import { buildShareInfo } from './shareLinks';
 import { LIVE_PLATFORMS, comingSoonReason, isLivePlatform } from './platforms';
 import { PLATFORMS } from './types';
 import type {
   ActivityItem, AutopilotConfig, AutopilotRun, ClassifierCounts, ClassifierName, Connection, DashboardSummary,
-  DemoMetricsRead, DemoSignInResult, HarvestStatus, IngestRequest, IngestResult, IngestSource, InsightMetrics, InsightsResponse, LiftBy, Platform,
+  DemoMetricsRead, DemoSignInResult, EngagementSplit, HarvestStatus, IngestRequest, IngestResult, IngestSource,
+  InsightMetrics, InsightsResponse, LiftBy, Platform,
   PlatformInsight, Post, PostStatus, PulseApi, ScreenshotRead, Theme, ThemeInsight, Totals, Trend, TrendsStatus,
   TrendSourceStatus, Workspace, WritingStyle,
 } from './types';
@@ -165,7 +167,15 @@ interface PostRec { post: Post; sim: Sim; real?: boolean }
 interface RealEvent { kind: 'click' | 'conversion'; platform: Platform; ts: number }
 
 /** One account snapshot the person saved: the windowed numbers and the window they cover (`period_days`). */
-interface Snap { views: number | null; engagements: number | null; period: number }
+interface Snap {
+  views: number | null;
+  engagements: number | null;
+  /** The account's engagements split up, when the person saved it so (null = not captured). */
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  period: number;
+}
 /** What the person has saved for one platform through `ingestMetrics`. */
 interface Saved {
   saves: number; // ingest calls so far: the dashboard shows a change only from the second
@@ -409,6 +419,48 @@ function savedChange(s: State, ps: Platform[], key: 'views' | 'engagements'): nu
   return earlier > 0 ? Math.round(((latest - earlier) / earlier) * 100) : 0;
 }
 
+/**
+ * Engagements as likes / comments / shares (docs/CONTRACT.md, "Engagement split"), like the real server: a platform's split
+ * comes from its latest saved snapshot that fits the window; a platform without one counts as `unsplit`. Null when no
+ * platform in view saved a split.
+ */
+function engagementSplit(s: State, days: number, rows: { p: Platform; t: Totals }[]): EngagementSplit | null {
+  const out: EngagementSplit = { likes: 0, comments: 0, shares: 0, other: 0, unsplit: 0, platforms: [] };
+  for (const { p, t } of rows) {
+    const snap = [...s.saved[p].snaps].reverse().find((n) => n.period <= days && n.engagements !== null);
+    if (!snap || (snap.likes === null && snap.comments === null && snap.shares === null)) {
+      out.unsplit += t.engagements;
+      continue;
+    }
+    const [likes, comments, shares] = [snap.likes ?? 0, snap.comments ?? 0, snap.shares ?? 0];
+    out.likes += likes;
+    out.comments += comments;
+    out.shares += shares;
+    out.other += Math.max(0, (snap.engagements ?? 0) - likes - comments - shares);
+    out.unsplit += Math.max(0, t.engagements - (snap.engagements ?? 0));
+    out.platforms.push(p);
+  }
+  return out.platforms.length > 0 ? out : null;
+}
+
+/**
+ * A demo workspace's split (like the server's `demo.engagement_split`): every platform with engagements is split with its
+ * fixed ratios, so the parts add up to the Engagements tile and `unsplit` is 0. Null before any platform has engagements.
+ */
+function demoEngagementSplit(rows: { p: Platform; t: Totals }[]): EngagementSplit | null {
+  const out: EngagementSplit = { likes: 0, comments: 0, shares: 0, other: 0, unsplit: 0, platforms: [] };
+  for (const { p, t } of rows) {
+    if (t.engagements <= 0) continue;
+    const parts = splitEngagements(t.engagements, p);
+    out.likes += parts.likes;
+    out.comments += parts.comments;
+    out.shares += parts.shares;
+    out.other += parts.other;
+    out.platforms.push(p);
+  }
+  return out.platforms.length > 0 ? out : null;
+}
+
 function dashboard(s: State, days: number, platform: Platform | null): DashboardSummary {
   const now = Date.now();
   const isReal = s.ws.data_mode === 'real';
@@ -490,6 +542,7 @@ function dashboard(s: State, days: number, platform: Platform | null): Dashboard
     data_mode: s.ws.data_mode ?? 'sample',
     // Follows the platform filter like everything else in the summary (all connected platforms when there is none).
     followers_total: plats.reduce((n, p) => (conn(s, p).status === 'connected' ? n + conn(s, p).followers : n), 0),
+    engagement_split: isReal ? engagementSplit(s, days, rows) : isDemo ? demoEngagementSplit(rows) : null,
   };
 }
 
@@ -848,8 +901,12 @@ function demoRead(s: State, r: PostRec, minutes: number): DemoMetricsRead {
   r.sim.age = age;
   grow(s, r, dv, now);
   const [gv, ge] = [p.views - v0, p.engagements - e0];
-  note(s, 'metrics', `Read metrics back from ${LABEL[p.platform]} (demo): +${gv} views, +${ge} engagements`, { platform: p.platform, post: p.id, at: now });
-  return { post: p, advanced_minutes: minutes, views_gained: gv, engagements_gained: ge, read_at: iso(now) };
+  note(s, 'metrics', `Read metrics back from ${LABEL[p.platform]} (demo): +${gv} views, +${ge} engagements (${splitEngagements(ge, p.platform).likes} likes, ${splitEngagements(ge, p.platform).comments} comments, ${splitEngagements(ge, p.platform).shares} shares)`, { platform: p.platform, post: p.id, at: now });
+  const parts = splitEngagements(ge, p.platform);
+  return {
+    post: p, advanced_minutes: minutes, views_gained: gv, engagements_gained: ge, likes_gained: parts.likes,
+    comments_gained: parts.comments, shares_gained: parts.shares, read_at: iso(now),
+  };
 }
 
 // ---- generation -------------------------------------------------------------------------------------
@@ -1101,8 +1158,12 @@ function ingest(s: State, b: IngestRequest): IngestResult {
   const acct = {
     followers: count(a.followers, 'account.followers'), views: count(a.views, 'account.views'),
     engagements: count(a.engagements, 'account.engagements'), clicks: count(a.clicks, 'account.clicks'),
-    profile_views: count(a.profile_views, 'account.profile_views'),
+    likes: count(a.likes, 'account.likes'), comments: count(a.comments, 'account.comments'),
+    shares: count(a.shares, 'account.shares'), profile_views: count(a.profile_views, 'account.profile_views'),
   };
+  // Like the real server: the total never falls below its parts, and the three alone give the total.
+  const parts = [acct.likes, acct.comments, acct.shares].filter((v): v is number => v !== null);
+  if (parts.length > 0) acct.engagements = Math.max(acct.engagements ?? 0, parts.reduce((x, y) => x + y, 0));
   const given = Object.values(acct).some((v) => v !== null);
   if ((b.posts ?? []).length > 500) unprocessable('posts: List should have at most 500 items');
   const now = Date.now();
@@ -1150,7 +1211,11 @@ function ingest(s: State, b: IngestRequest): IngestResult {
     note(s, 'connection', `Connected ${LABEL[p]} (real)`, { platform: p, real: true, at: now });
   }
   const snapshots = posts.length + (given ? 1 : 0);
-  if (given) h.snaps.push({ views: acct.views, engagements: acct.engagements, period });
+  if (given) {
+    h.snaps.push({
+      views: acct.views, engagements: acct.engagements, likes: acct.likes, comments: acct.comments, shares: acct.shares, period,
+    });
+  }
   Object.assign(h, { saves: h.saves + 1, snapshots: h.snapshots + snapshots, at: now, source: b.source });
   if (acct.followers !== null) h.followers = acct.followers;
   return { platform: p, source: b.source, matched: used.size, created: posts.length - used.size, snapshots, captured_at: iso(now) };
@@ -1168,10 +1233,14 @@ function screenshotRead(s: State, platform: Platform): ScreenshotRead {
   const between = ([lo, hi]: Range): number => lo + Math.floor(rng() * (hi - lo + 1));
   const vars = { brand: s.ws.brand_name, platform: LABEL[platform] };
   const now = Date.now();
+  // Its own random stream, so adding the split did not change any other number the mock reads.
+  const splitRng = mulberry32(hashStr(`${s.slug}|${platform}|screenshot|split`));
+  const splitBetween = ([lo, hi]: Range): number => lo + Math.floor(splitRng() * (hi - lo + 1));
   return {
     platform, detected_platform: platform, handle: platform === 'reddit' ? `u/${s.slug}` : s.slug,
     followers: between(f.followers), following: between(f.following), posts_count: between(f.posts_count),
     views: between(f.views), engagements: between(f.engagements), profile_views: between(f.profile_views),
+    likes: splitBetween(f.likes), comments: splitBetween(f.comments), shares: splitBetween(f.shares),
     period_days: f.period_days,
     posts: f.posts.map((x) => ({
       content: fill(x.content, vars), views: between(x.views), likes: between(x.likes), comments: between(x.comments),
