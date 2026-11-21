@@ -7,6 +7,7 @@ import type { Post } from '@/src/types';
 import { PlatformIcon, haptic } from '@/src/ui';
 
 import { IgPostSheet } from '@/src/igPost/IgPostSheet';
+import { LiPostSheet } from '@/src/liPost/LiPostSheet';
 
 import { useShare, type ShareAction, type ShareWiring } from './useShare';
 
@@ -121,6 +122,7 @@ export function ShareButtons({ post, compact = false, small = false, disabled = 
         </Pressable>
       ))}
       {share.igSheet ? <IgPostSheet {...share.igSheet} /> : null}
+      {share.liSheet ? <LiPostSheet {...share.liSheet} /> : null}
     </View>
   );
 }

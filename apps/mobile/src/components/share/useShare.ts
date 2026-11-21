@@ -2,6 +2,8 @@
  * "Post it for real": the logic behind the share buttons on every post card (Create results and Queue cards).
  *
  * - LinkedIn / X / Reddit / Facebook open the network's composer with the text pre-filled; X cards also offer Threads.
+ * - Android, LinkedIn: after a "Post to LinkedIn now?" confirm the signed-in WebView publishes the post itself (src/liPost);
+ *   "Open LinkedIn instead" (and any failure) hands the text to LinkedIn's own composer, as before.
  * - Instagram / TikTok have no composer link: the button copies the caption and a note says what to do next.
  * - Android, Instagram: "Post to Instagram" copies the caption, asks for a photo (cropped square) and hands it to
  *   Instagram through the share sheet; with IG_AUTOPOST on it can instead publish it through the signed-in WebView
@@ -30,6 +32,8 @@ import { isLivePlatform } from '@/src/platforms';
 import { useIsDemoWorkspace } from '@/src/session';
 import { buildShareInfo, captionFor } from '@/src/shareLinks';
 import { shareToLinkedInAndroid } from './androidShare';
+import { liAutoPostAvailable, type LiPostOutcome } from '@/src/liPost/LiPostSheet';
+import { liFailureText, liTextProblem } from '@/src/liPost/logic';
 import { platformMeta } from '@/src/theme';
 import type { Platform, Post, ShareInfo } from '@/src/types';
 import { copyText, haptic, useToast } from '@/src/ui';
@@ -222,7 +226,35 @@ export interface ShareState {
   openLink: (link: ShareLink) => void;
   /** Android auto-post in progress: ShareButtons renders `<IgPostSheet {...igSheet} />`. */
   igSheet: { photo: PostPhoto; caption: string; onDone: (outcome: IgPostOutcome) => void } | null;
+  /** Android LinkedIn auto-post in progress: ShareButtons renders `<LiPostSheet {...liSheet} />`. */
+  liSheet: { text: string; onDone: (outcome: LiPostOutcome) => void } | null;
 }
+
+/** Android LinkedIn: post from here, hand the text to the LinkedIn app, or do nothing. */
+type LiRoute = 'auto' | 'share' | 'cancel';
+
+const askLiRoute = (): Promise<LiRoute> =>
+  ask<LiRoute>(
+    'Post to LinkedIn now?',
+    'Pulse publishes this post on your LinkedIn account, where everyone can see it.',
+    [
+      { text: 'Cancel', value: 'cancel', cancel: true },
+      { text: 'Open LinkedIn instead', value: 'share' },
+      { text: 'Post', value: 'auto' },
+    ],
+    'cancel',
+  );
+
+const askLiShareInstead = (message: string): Promise<boolean> =>
+  ask<boolean>(
+    "Couldn't post to LinkedIn",
+    message,
+    [
+      { text: 'Cancel', value: false, cancel: true },
+      { text: 'Open LinkedIn instead', value: true },
+    ],
+    false,
+  );
 
 /** Auto-post when the build allows it and the person confirms; 'share' hands the photo to the Instagram app. */
 type IgRoute = 'auto' | 'share' | 'cancel';
@@ -290,6 +322,8 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   wiringRef.current = wiring;
   const busyRef = useRef(false);
   const linksRef = useRef(links);
+  const [liJob, setLiJob] = useState<{ text: string } | null>(null);
+  const liResolve = useRef<((outcome: LiPostOutcome) => void) | null>(null);
 
   const setLinks = useCallback((next: ShareLink[]) => {
     const id = postRef.current.id;
@@ -453,10 +487,7 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
     }
     const label = action.key === 'threads' ? 'Threads' : platformMeta[shown.platform].label;
     // LinkedIn's Android app ignores the composer URL (opens the feed, drops the text): hand it the post instead.
-    if (RNPlatform.OS === 'android' && action.key === 'linkedin' && (await shareToLinkedInAndroid(info.caption))) {
-      await markPublished(`Opened ${label}`);
-      return;
-    }
+    if (RNPlatform.OS === 'android' && action.key === 'linkedin' && (await postLinkedIn(info.caption, label))) return;
     if (await openUrl(url, blank)) {
       await markPublished(`Opened ${label}`);
       return;
@@ -464,6 +495,56 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
     // The browser refused the popup: keep the link on the card, the next tap is a fresh gesture.
     setLinks([...linksRef.current.filter((l) => l.key !== action.key), { key: action.key, name: label, url }]);
     toast.show(`Your browser blocked the ${label} tab. Tap the link on the card.`, 'info');
+  };
+
+  /** Opens the LinkedIn posting sheet and resolves when it is done. */
+  const autoPostLi = (text: string): Promise<LiPostOutcome> =>
+    new Promise((resolve) => {
+      liResolve.current = resolve;
+      setLiJob({ text });
+    });
+
+  const liDone = (outcome: LiPostOutcome): void => {
+    setLiJob(null);
+    const resolve = liResolve.current;
+    liResolve.current = null;
+    resolve?.(outcome);
+  };
+
+  /** LinkedIn's own composer (or the share sheet) with the text. False when nothing could open. */
+  const handOffLinkedIn = async (text: string, label: string): Promise<boolean> => {
+    if (!(await shareToLinkedInAndroid(text))) return false;
+    await markPublished(`Opened ${label}`);
+    return true;
+  };
+
+  /**
+   * Android "Post on LinkedIn": one confirm, then the signed-in WebView publishes the text (src/liPost). "Open LinkedIn
+   * instead", a failure the person chooses to hand over, or an APK without the WebView use the LinkedIn composer.
+   * Resolves true when this is settled (posted, cancelled, handed over), false to fall back to the composer URL.
+   */
+  const postLinkedIn = async (text: string, label: string): Promise<boolean> => {
+    const route: LiRoute = liAutoPostAvailable() && !liTextProblem(text) ? await askLiRoute() : 'share';
+    if (route === 'cancel') return true;
+    if (route === 'share') return handOffLinkedIn(text, label);
+    const outcome = await autoPostLi(text);
+    if (outcome.ok === true) {
+      haptic.success();
+      toast.show('Posted to LinkedIn');
+      await markPublished('Posted to LinkedIn');
+      return true;
+    }
+    if (outcome.ok === null) {
+      if (outcome.whilePosting) toast.show('Closed while posting. Check LinkedIn: it may have posted.', 'info');
+      return true;
+    }
+    const message = liFailureText(outcome);
+    if (outcome.stage === 'timeout') {
+      toast.show(message, 'info');
+      return true;
+    }
+    if (await askLiShareInstead(message)) return handOffLinkedIn(text, label);
+    return true;
   };
 
   const press = (action: ShareAction): void => {
@@ -510,5 +591,6 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
       ? igNote({ autoPost: IG_AUTOPOST && igAutoPostAvailable(), hasVisualPlan: !!post.media_prompt?.trim() })
       : (remoteNote ?? localNote);
   const igSheet = igJob ? { ...igJob, onDone: igDone } : null;
-  return { actions, busyKey, note, links, press, openLink, igSheet };
+  const liSheet = liJob ? { ...liJob, onDone: liDone } : null;
+  return { actions, busyKey, note, links, press, openLink, igSheet, liSheet };
 }
