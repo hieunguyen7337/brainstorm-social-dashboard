@@ -220,6 +220,7 @@ export default function DashboardScreen() {
             <RealPeopleCard
               clicks={summary.real_clicks}
               conversions={summary.real_conversions}
+              notRead={summary.tiles?.clicks === null}
               context={dataContext}
               filterLabel={dataPlatform ? platformMeta[dataPlatform].label : undefined}
               linkPost={linkPost}
