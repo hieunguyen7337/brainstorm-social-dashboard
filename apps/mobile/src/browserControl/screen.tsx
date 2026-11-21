@@ -184,9 +184,16 @@ function Controller({ native }: { native: NativeBits }) {
   useEffect(() => {
     const ctrl = new AbortController();
     let alive = true;
+    let online = false;
     (async () => {
       while (alive) {
         try {
+          if (!online) {
+            // One quick heartbeat so the banner and Claude's browser_status say "connected" at once.
+            await api('POST', '/api/browser/session', { active: true }, ctrl.signal);
+            online = true;
+            if (alive) setPhase('waiting');
+          }
           const next = await api<{ command: unknown }>('GET', `/api/browser/next?wait=${LONG_POLL_S}`, undefined, ctrl.signal);
           if (!alive) break;
           setPhase('waiting');
@@ -217,6 +224,7 @@ function Controller({ native }: { native: NativeBits }) {
             setDoing('This workspace key no longer works. Open Pulse again.');
             break;
           }
+          online = false;
           setPhase('offline');
           await sleep(RETRY_MS);
         }

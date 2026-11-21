@@ -54,7 +54,7 @@ KEYS = (
     "Home",
     "End",
 )
-_BARE_HOST = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+(/|$)", re.I)
+_BARE_HOST = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+(/|$)", re.IGNORECASE)
 NOT_CONNECTED = (
     "No phone is connected. Ask the user to open the Pulse app on their Android phone, go to Settings > "
     "'Let Claude use your phone's browser' and tap Start, then try again."
@@ -153,7 +153,7 @@ def _num(args: dict[str, Any], key: str, lo: float, hi: float) -> float | None:
         v = float(args[key])
     except (TypeError, ValueError):
         raise HTTPException(status_code=422, detail=f"{key} must be a number") from None
-    if v != v or v < lo or v > hi:  # NaN or out of range
+    if not lo <= v <= hi:  # also false for NaN
         raise HTTPException(status_code=422, detail=f"{key} must be between {lo:g} and {hi:g}")
     return v
 
