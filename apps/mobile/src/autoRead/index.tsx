@@ -43,10 +43,7 @@ import {
   CAPTURE_QUALITY,
   CAPTURE_RETRY_QUALITY,
   CAPTURE_RETRY_WIDTH,
-  CLICK_FACEBOOK_JS,
-  IG_FB_LOGIN_URL,
   STALL_MS,
-  UA_DESKTOP,
   UA_ANDROID,
   UA_IOS,
 } from './config';
@@ -158,21 +155,6 @@ function Sheet({
   }, [loading, source]);
   const reload = () => webRef.current?.reload();
 
-  // Instagram accounts made through Facebook have no Instagram password: open the full-site sign-in (it has the
-  // Facebook button the phone page lacks) and press that button for the person.
-  const [viaFacebook, setViaFacebook] = useState(false);
-  const pressedFacebook = useRef(false);
-  const continueWithFacebook = () => {
-    setViaFacebook(true);
-    setSource({ uri: IG_FB_LOGIN_URL });
-  };
-  const onLoadEndFacebook = (url: string) => {
-    if (viaFacebook && !pressedFacebook.current && url.startsWith('https://www.instagram.com/accounts/login')) {
-      pressedFacebook.current = true;
-      webRef.current?.injectJavaScript(CLICK_FACEBOOK_JS);
-    }
-  };
-
   const busy = status !== 'login' || loading;
   const overlay = status === 'anon' || status === 'claude';
   const footerText = status === 'login' && loading ? `Loading ${meta.label}…` : STATUS_TEXT[status];
@@ -208,18 +190,6 @@ function Sheet({
           {STAYS_SIGNED_IN}
         </Text>
 
-        {platform === 'instagram' && status === 'login' && !viaFacebook ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={continueWithFacebook}
-            style={({ pressed }) => [styles.facebook, pressed && styles.pressed]}
-            testID="auto-read-facebook"
-          >
-            <Ionicons name="logo-facebook" size={18} color="#ffffff" />
-            <Text style={styles.facebookText}>Signed up with Facebook? Continue with Facebook</Text>
-          </Pressable>
-        ) : null}
-
         <View style={styles.body}>
           {source ? (
             <View ref={shotRef} collapsable={false} style={StyleSheet.absoluteFill} onLayout={onLayout}>
@@ -228,8 +198,7 @@ function Sheet({
                 testID="auto-read-webview"
                 source={source}
                 incognito={false}
-                key={viaFacebook ? 'facebook' : 'phone'}
-                userAgent={viaFacebook ? UA_DESKTOP : Platform.OS === 'ios' ? UA_IOS : UA_ANDROID}
+                userAgent={Platform.OS === 'ios' ? UA_IOS : UA_ANDROID}
                 javaScriptEnabled
                 domStorageEnabled
                 cacheEnabled={false}
@@ -246,7 +215,6 @@ function Sheet({
                 }}
                 onLoadEnd={(e) => {
                   setLoading(false);
-                  onLoadEndFacebook(e.nativeEvent.url);
                   runner.current?.loadEnded(e.nativeEvent.url);
                 }}
                 onMessage={(e: WebViewMessageEvent) => runner.current?.message(e.nativeEvent.data)}
@@ -380,17 +348,5 @@ const styles = StyleSheet.create({
   },
   footerText: { color: colors.textDim, fontSize: 13, textAlign: 'center', flexShrink: 1 },
   reload: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: space.sm },
-  facebook: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
-    marginHorizontal: space.lg,
-    marginBottom: space.sm,
-    paddingVertical: space.sm,
-    borderRadius: radius.md,
-    backgroundColor: '#1877F2',
-  },
-  facebookText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
   reloadText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
 });
