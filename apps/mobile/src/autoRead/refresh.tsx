@@ -26,7 +26,7 @@ import { api, getToken, isMock, PLATFORMS, type IngestAccount, type IngestReques
 import { useConnectSheet } from '@/src/components/connect/sheetContext';
 import { DEFAULT_PERIOD, postsToIngest } from '@/src/connect/logic';
 import { HREF_POLL_JS, HREF_POLL_MS, takeHref } from './hrefPoll';
-import { CAPTURE_MAX_BYTES, CAPTURE_RETRY_QUALITY, FORGET_HOLD_MS, REFRESH_RETRY_MS, REFRESH_STALE_MS, REFRESH_TIMEOUT_MS, UA_ANDROID } from './config';
+import { CAPTURE_MAX_BYTES, CAPTURE_RETRY_QUALITY, FORGET_HOLD_MS, REFRESH_RETRY_MS, REFRESH_STALE_MS, REFRESH_TICK_MS, REFRESH_TIMEOUT_MS, UA_ANDROID } from './config';
 import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner } from './runner';
 import type { DeviceRead } from './types';
@@ -336,7 +336,12 @@ export function AutoRefresh() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void pass();
     });
+    // Live numbers: while the app is in front, look again every REFRESH_TICK_MS (pass() skips fresh platforms).
+    const tick = setInterval(() => {
+      if (AppState.currentState === 'active') void pass();
+    }, REFRESH_TICK_MS);
     return () => {
+      clearInterval(tick);
       sub.remove();
       generation.current += 1;
       endJob(null);

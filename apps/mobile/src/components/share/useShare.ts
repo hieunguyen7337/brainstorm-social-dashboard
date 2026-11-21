@@ -311,6 +311,8 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
   const actions = demo ? demoActionsFor(post.platform, post.status === 'published') : shareActionsFor(post.platform);
 
   const [busyKey, setBusyKey] = useState<ShareKey | null>(null);
+  /** A photo the person added to this post ("Add image"); Instagram posts it instead of the generated card. */
+  const [image, setImage] = useState<PostPhoto | null>(null);
   const [remoteNote, setRemoteNote] = useState<string | null>(null);
   const [links, setLinksState] = useState<ShareLink[]>(() => pendingLinks.get(post.id) ?? []);
   const [igJob, setIgJob] = useState<{ photo: PostPhoto; caption: string } | null>(null);
@@ -441,7 +443,7 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
       route = await askIgRoute();
       if (route === 'cancel') return;
       if (route === 'auto') {
-        const card = await fetchPostCard(current().post.id);
+        const card = image ?? (await fetchPostCard(current().post.id));
         if (card) {
           await finishAutoPost(card, caption, copied);
           return;
@@ -611,5 +613,15 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
       : (remoteNote ?? localNote);
   const igSheet = igJob ? { ...igJob, onDone: igDone } : null;
   const liSheet = liJob ? { ...liJob, onDone: liDone } : null;
-  return { actions, busyKey, note, links, press, openLink, igSheet, liSheet };
+  const addImage = async (): Promise<void> => {
+    const picked = await pickPostPhoto();
+    if (picked.status === 'ok') {
+      setImage(picked.photo);
+      toast.show('Image added. Post to Instagram uses it.');
+    } else if (picked.status === 'error') toast.show(picked.message, 'error');
+    else if (picked.status === 'unavailable') toast.show('This version of the app cannot pick photos.', 'info');
+  };
+  const removeImage = (): void => setImage(null);
+
+  return { actions, busyKey, note, links, press, openLink, igSheet, liSheet, image, addImage, removeImage };
 }
