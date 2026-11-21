@@ -57,6 +57,9 @@ function push(state: ChatState, item: NewItem): ChatState {
   return { ...state, items: [...state.items, { ...item, id: state.nextId } as ChatItem], nextId: state.nextId + 1 };
 }
 
+/** Adds one display item (the phone Assistant builds its chat from its own events, not `ClaudeEvent`s). */
+export const addItem = push;
+
 function foldJson(state: ChatState, data: unknown): ChatState {
   const msg = rec(data);
   if (!msg) return state;

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AutoRefresh } from '@/src/autoRead';
 import { OfflineView, SplashView } from '@/src/components/BootStates';
 import { PublishConfirmDialog } from '@/src/components/assistant/PublishConfirmDialog';
+import { assistantTabVisible } from '@/src/assistant/visibility';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
 import { isDesktop } from '@/src/desktop';
 import { useWide } from '@/src/layout';
@@ -36,6 +37,7 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const wide = useWide();
   const desktop = isDesktop();
+  const assistant = assistantTabVisible({ desktop, os: Platform.OS });
   if (status === 'loading') return <SplashView />;
   if (status === 'anon') return <Redirect href="/onboarding" />;
   if (status === 'offline') return <OfflineView />;
@@ -52,7 +54,8 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.bg },
         tabBarActiveTintColor: '#a794ff',
         tabBarInactiveTintColor: colors.textMute,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        // Six tabs on a phone (the Assistant joins the five): a point smaller so "Assistant" fits a 360 dp screen.
+        tabBarLabelStyle: { fontSize: assistant && Platform.OS !== 'web' ? 10 : 11, fontWeight: '700' },
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
@@ -102,12 +105,12 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="albums" size={size} color={color} />,
         }}
       />
-      {/* Pulse Desktop only (docs/DESKTOP.md): hidden from the tab bar and the sidebar everywhere else. */}
+      {/* Pulse Desktop (local Claude Code, docs/DESKTOP.md) and the Android / iOS apps (own API key): hidden on plain web. */}
       <Tabs.Screen
         name="assistant"
         options={{
           title: 'Assistant',
-          href: desktop ? undefined : null,
+          href: assistant ? undefined : null,
           tabBarButtonTestID: 'tab-assistant',
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
         }}
