@@ -6,7 +6,7 @@ import importlib
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -79,6 +79,22 @@ def create_app() -> FastAPI:
         if not settings.android_apk_url:
             return JSONResponse({"detail": "APK not published yet"}, status_code=404)
         return RedirectResponse(settings.android_apk_url, status_code=302)
+
+    rel = "https://github.com/hieunguyen7337/brainstorm-social-dashboard/releases/latest/download/"
+    desktop = {"windows": rel + "Pulse-Setup.exe", "mac": rel + "Pulse.dmg"}
+
+    @app.get("/download/windows")
+    def download_windows():
+        return RedirectResponse(desktop["windows"], status_code=302)
+
+    @app.get("/download/mac")
+    def download_mac():
+        return RedirectResponse(desktop["mac"], status_code=302)
+
+    @app.get("/download/desktop")
+    def download_desktop(request: Request):
+        ua = request.headers.get("user-agent", "")
+        return RedirectResponse(desktop["mac" if "Mac OS X" in ua or "Macintosh" in ua else "windows"], status_code=302)
 
     @app.get("/download/android/qr.svg")
     def download_android_qr():

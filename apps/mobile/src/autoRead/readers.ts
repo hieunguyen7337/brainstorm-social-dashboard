@@ -438,6 +438,12 @@ async function igPostFromPage(code) {
       var item = {};
       if (lm) item.like_count = igAbbr(lm[1]);
       if (cm) item.comment_count = igAbbr(cm[1]);
+      // The app keeps only posts with text, so carry the caption (or the post's code when it has none) and its day.
+      var q = /:\s*["“]([\s\S]+?)["”]\s*\.?\s*$/.exec(d);
+      item.caption = { text: cut(q ? q[1] : 'Instagram post ' + String(code).replace(/^(p|reel)\//, '').replace(/\/$/, ''), 200) };
+      var dm = /\bon ([A-Z][a-z]+) (\d{1,2}), (\d{4})/.exec(d);
+      var mi = dm ? ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].indexOf(dm[1]) : -1;
+      if (mi >= 0) item.taken_at = Math.floor(Date.UTC(+dm[3], mi, +dm[2], 12) / 1000);
       return item;
     }
   } catch (e) {}
