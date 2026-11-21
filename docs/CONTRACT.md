@@ -123,6 +123,20 @@ column, it says so in its report instead of editing `db.py`.
 - Every generation prompt (`ai.build_prompt`: Generate, Autopilot, Room mode, MCP `generate_posts`) adds the profile as
   "Writing style: ... match the voice, not the topics". Files are never stored or logged.
 
+## Engagement split (E1)
+- `IngestAccount` (`POST /api/metrics/ingest`, MCP `record_metrics`) and `ScreenshotRead` gain `likes`, `comments`,
+  `shares` (all optional, whole numbers, the account's totals for the same `period_days` as `engagements`). They are
+  stored on the account snapshot (`metric_snapshots.likes/comments/shares`, NULL = not captured, never 0).
+  `engagements` is `max(engagements given, likes + comments + shares)`, so the total never falls below its parts and
+  the three alone are enough.
+- `DashboardSummary.engagement_split` is `{likes, comments, shares, other, unsplit, platforms}` or null (sample
+  workspace, or no platform saved a split). It comes from the same newest in-window account snapshot as that
+  platform's engagements. `other` = a split platform's engagements beyond the three (saves); `unsplit` = engagements
+  from platforms that only report a total (and any daily numbers above the snapshot). The five numbers always add up to
+  `totals.engagements`. The Engagements tile shows the split in place of its trend line.
+- Only the screenshot reader, the manual numbers form and MCP `record_metrics` fill the split today. The Instagram,
+  LinkedIn, TikTok and Reddit auto-readers still save one engagements total, so those platforms count as `unsplit`.
+
 ## MCP tools (U4)
 `get_dashboard`, `list_posts`, `create_post`, `publish_post`, `generate_posts`, `list_trends`, `list_themes`,
 `get_ai_usage`, `set_autopilot`, `run_autopilot`. Each tool calls the REST API in-process (httpx `ASGITransport`

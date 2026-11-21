@@ -5,8 +5,9 @@ import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Sparkline } from '@/src/charts';
 import { fmtCompact } from '@/src/format';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
-import type { DashboardSummary, DayStats, Totals } from '@/src/types';
+import type { DashboardSummary, DayStats, EngagementSplit, Totals } from '@/src/types';
 import { Card } from '@/src/ui';
+import { EngagementSplitRows, hasSplit } from './EngagementSplitRows';
 import { FOLLOWERS_COLOR, FollowerChips, followersSpoken } from './FollowersTile';
 import { LiveNumber, useStable } from './live';
 import { changeView, kpiTile, METRICS, NOT_READ_MARK, type KpiTileView, type MetricDef } from './model';
@@ -17,6 +18,8 @@ const TIGHT_AT = 150;
 const SPARK_MIN = 40;
 const SPARK_MAX = 140;
 const MAX_HEIGHT = 250;
+/** The Engagements tile stacks Likes / Comments / Shares (and a note) where the trend line was, so the row may grow taller. */
+const MAX_HEIGHT_SPLIT = 300;
 /** Row width from which five tiles keep their labels whole ("ENGAGEMENTS" needs about 110 px a tile). */
 const FIVE_UP_AT = 600;
 
@@ -34,6 +37,7 @@ export function BoardKpis({
   followers,
   tiles: shown,
   notRead,
+  split,
 }: {
   totals: Totals;
   change: Totals;
@@ -49,6 +53,8 @@ export function BoardKpis({
   tiles?: DashboardSummary['tiles'];
   /** The summary's `not_read`: why a tile has no number. */
   notRead?: DashboardSummary['not_read'];
+  /** The summary's `engagement_split`: when present the Engagements tile shows likes, comments and shares. */
+  split?: EngagementSplit | null;
 }) {
   const [rowWidth, setRowWidth] = useState(0);
   const onRowLayout = useCallback((e: LayoutChangeEvent) => {
@@ -65,13 +71,15 @@ export function BoardKpis({
       values={timeseries.map((d) => d[m.key])}
       context={context}
       real={real}
+      split={m.key === 'engagements' ? split : null}
     />
   ));
-  if (!followers) return <View style={styles.row}>{tiles}</View>;
+  const taller = hasSplit(split) ? { maxHeight: MAX_HEIGHT_SPLIT } : null;
+  if (!followers) return <View style={[styles.row, taller]}>{tiles}</View>;
 
   const strip = rowWidth > 0 && rowWidth < FIVE_UP_AT;
   return (
-    <View style={styles.rows} onLayout={onRowLayout}>
+    <View style={[styles.rows, taller]} onLayout={onRowLayout}>
       {strip ? <BoardFollowersStrip total={followers.total} chips={followers.chips} context={context} /> : null}
       <View style={styles.rowInner}>
         {strip ? null : <BoardFollowersTile total={followers.total} chips={followers.chips} context={context} />}
@@ -146,6 +154,7 @@ function BoardKpiTile({
   values,
   context,
   real,
+  split,
 }: {
   metric: MetricDef;
   tile: KpiTileView;
@@ -153,6 +162,8 @@ function BoardKpiTile({
   values: number[];
   context: string;
   real: boolean;
+  /** Engagements only: likes, comments and shares, drawn in place of the trend line. */
+  split: EngagementSplit | null | undefined;
 }) {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [topH, setTopH] = useState(0);
@@ -203,7 +214,9 @@ function BoardKpiTile({
             </Text>
           ) : null}
         </View>
-        {tile.showSparkline && width > 0 && series.length >= 2 ? (
+        {value !== null && hasSplit(split) ? (
+          <EngagementSplitRows split={split} color={metric.color} inset={space.md} />
+        ) : tile.showSparkline && width > 0 && series.length >= 2 ? (
           <Sparkline
             values={series}
             color={metric.color}

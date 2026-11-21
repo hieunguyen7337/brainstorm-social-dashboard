@@ -419,6 +419,10 @@ export const SCREENSHOT_FIXTURE = {
   posts_count: [20, 90],
   views: [2800, 5200],
   engagements: [180, 420],
+  // the account's own split, read from an insights "Interactions" breakdown (the total is the larger of the two)
+  likes: [110, 260],
+  comments: [12, 45],
+  shares: [4, 24],
   profile_views: [300, 900],
   period_days: 30,
   notes: 'Mock read: test build',

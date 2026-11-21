@@ -49,12 +49,24 @@ export interface NumbersForm {
   followers: string;
   views: string;
   engagements: string;
+  /** Engagements split up; with only these the server adds them into the total. */
+  likes: string;
+  comments: string;
+  shares: string;
   profileViews: string;
-  /** The window views, engagements and profile views cover. */
+  /** The window views, engagements (and its likes, comments, shares) and profile views cover. */
   period: PeriodDays;
 }
 
-export type FormField = 'handle' | 'followers' | 'views' | 'engagements' | 'profileViews';
+export type FormField =
+  | 'handle'
+  | 'followers'
+  | 'views'
+  | 'engagements'
+  | 'likes'
+  | 'comments'
+  | 'shares'
+  | 'profileViews';
 
 export const MAX_HANDLE = 100;
 /** Same ceiling as the API's `Count`. */
@@ -65,6 +77,9 @@ export const emptyForm = (): NumbersForm => ({
   followers: '',
   views: '',
   engagements: '',
+  likes: '',
+  comments: '',
+  shares: '',
   profileViews: '',
   period: DEFAULT_PERIOD,
 });
@@ -93,6 +108,9 @@ export function formFromRead(read: ScreenshotRead): NumbersForm {
     followers: text(read.followers),
     views: text(read.views),
     engagements: text(read.engagements),
+    likes: text(read.likes),
+    comments: text(read.comments),
+    shares: text(read.shares),
     profileViews: text(read.profile_views),
     period: nearestPeriod(read.period_days),
   };
@@ -123,6 +141,9 @@ const NUMBER_FIELDS: readonly { field: Exclude<FormField, 'handle'>; key: keyof 
   { field: 'followers', key: 'followers', label: 'Followers' },
   { field: 'views', key: 'views', label: 'Views' },
   { field: 'engagements', key: 'engagements', label: 'Engagements' },
+  { field: 'likes', key: 'likes', label: 'Likes' },
+  { field: 'comments', key: 'comments', label: 'Comments' },
+  { field: 'shares', key: 'shares', label: 'Shares' },
   { field: 'profileViews', key: 'profile_views', label: 'Profile views' },
 ];
 
@@ -239,13 +260,32 @@ export function saveFailure(e: unknown): string {
   return e instanceof ApiError ? e.message : "Couldn't save the numbers. Try again.";
 }
 
+/** The engagements total the server will keep: never below likes + comments + shares (null when nothing was given). */
+export function engagementsTotal(a: IngestAccount): number | null {
+  const parts = [a.likes, a.comments, a.shares].filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+  if (parts.length === 0) return a.engagements ?? null;
+  return Math.max(a.engagements ?? 0, parts.reduce((x, y) => x + y, 0));
+}
+
 /** "Instagram" -> "Saved Instagram: 46 followers, 1,234 views." (what was saved, in the person's words). */
 export function savedSummary(platform: Platform, request: IngestRequest): string {
   const a = request.account ?? {};
   const bits: string[] = [];
   if (a.followers != null) bits.push(`${fmtInt(a.followers)} ${a.followers === 1 ? 'follower' : 'followers'}`);
   if (a.views != null) bits.push(`${fmtInt(a.views)} views`);
-  if (a.engagements != null) bits.push(`${fmtInt(a.engagements)} engagements`);
+  const total = engagementsTotal(a);
+  if (total != null) {
+    const split = (
+      [
+        [a.likes, 'likes'],
+        [a.comments, 'comments'],
+        [a.shares, 'shares'],
+      ] as const
+    )
+      .filter(([n]) => n != null)
+      .map(([n, label]) => `${fmtInt(n as number)} ${label}`);
+    bits.push(`${fmtInt(total)} engagements${split.length ? ` (${split.join(', ')})` : ''}`);
+  }
   if (a.profile_views != null) bits.push(`${fmtInt(a.profile_views)} profile views`);
   const n = request.posts?.length ?? 0;
   if (n > 0) bits.push(`${n} ${n === 1 ? 'post' : 'posts'}`);

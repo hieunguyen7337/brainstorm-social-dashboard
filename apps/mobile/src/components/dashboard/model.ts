@@ -2,9 +2,18 @@
 import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 
-import { fmtChange, parseTs, timeAgo } from '@/src/format';
+import { fmtChange, fmtCompact, parseTs, timeAgo } from '@/src/format';
 import { colors, platformMeta } from '@/src/theme';
-import type { ActivityItem, DashboardSummary, DayStats, FunnelStageName, Platform, Post, Totals } from '@/src/types';
+import type {
+  ActivityItem,
+  DashboardSummary,
+  DayStats,
+  EngagementSplit,
+  FunnelStageName,
+  Platform,
+  Post,
+  Totals,
+} from '@/src/types';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 export type MetricKey = keyof Totals;
@@ -81,6 +90,45 @@ export function kpiTile(src: KpiSource, key: MetricKey): KpiTileView {
 
 /** The em dash a tile shows for a number that was not read. */
 export const NOT_READ_MARK = '\u2014';
+
+export type SplitKey = 'likes' | 'comments' | 'shares' | 'other';
+
+export interface SplitRow {
+  key: SplitKey;
+  label: string;
+  value: number;
+  icon: IconName;
+}
+
+/**
+ * The Engagements breakdown on its tile: Likes, Comments and Shares always (a real 0 is a number), and "Saves & other" only
+ * when a split platform counts more in its total than those three. Empty when there is no split to show.
+ */
+export function splitRows(split: EngagementSplit | null | undefined): SplitRow[] {
+  if (!split) return [];
+  const rows: SplitRow[] = [
+    { key: 'likes', label: 'Likes', value: split.likes, icon: 'heart' },
+    { key: 'comments', label: 'Comments', value: split.comments, icon: 'chatbubble' },
+    { key: 'shares', label: 'Shares', value: split.shares, icon: 'arrow-redo' },
+  ];
+  if (split.other > 0) rows.push({ key: 'other', label: 'Saves & other', value: split.other, icon: 'bookmark' });
+  return rows;
+}
+
+/** A line under the rows when part of the total comes from accounts that only report one number; null otherwise. */
+export function splitNote(split: EngagementSplit | null | undefined): string | null {
+  if (!split || split.unsplit <= 0) return null;
+  return `+${fmtCompact(split.unsplit)} from accounts that only report a total`;
+}
+
+/** What a screen reader says for the breakdown: "Likes 120, comments 14, shares 6." */
+export function splitSpoken(split: EngagementSplit | null | undefined): string {
+  const rows = splitRows(split);
+  if (rows.length === 0) return '';
+  const text = rows.map((r) => `${r.label.toLowerCase()} ${fmtCompact(r.value)}`).join(', ');
+  const note = splitNote(split);
+  return `${text[0].toUpperCase()}${text.slice(1)}${note ? `, ${note}` : ''}.`;
+}
 
 export interface MetricDef {
   key: MetricKey;

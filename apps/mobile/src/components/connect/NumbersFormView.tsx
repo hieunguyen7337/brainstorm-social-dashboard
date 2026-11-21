@@ -108,12 +108,21 @@ export function NumbersFormView({
         <Field label="Followers" value={form.followers} error={errors.followers} disabled={saving} onChange={(followers) => onChange({ followers })} />
         <Field label="Views" value={form.views} error={errors.views} disabled={saving} onChange={(views) => onChange({ views })} />
         <Field
-          label="Engagements"
+          label="Engagements (total)"
           value={form.engagements}
           error={errors.engagements}
           disabled={saving}
           onChange={(engagements) => onChange({ engagements })}
         />
+        <Field label="Likes" value={form.likes} error={errors.likes} disabled={saving} onChange={(likes) => onChange({ likes })} />
+        <Field
+          label="Comments"
+          value={form.comments}
+          error={errors.comments}
+          disabled={saving}
+          onChange={(comments) => onChange({ comments })}
+        />
+        <Field label="Shares" value={form.shares} error={errors.shares} disabled={saving} onChange={(shares) => onChange({ shares })} />
         <Field
           label="Profile views"
           value={form.profileViews}
@@ -122,6 +131,11 @@ export function NumbersFormView({
           onChange={(profileViews) => onChange({ profileViews })}
         />
       </View>
+
+      <Text style={t.small}>
+        Your insights show likes, comments and shares apart? Fill them in and leave the total blank: Pulse adds them up
+        and shows Engagements broken down.
+      </Text>
 
       <View style={styles.period}>
         <Text style={t.label}>Views, engagements and profile views cover the last</Text>

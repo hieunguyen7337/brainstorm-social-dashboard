@@ -163,6 +163,21 @@ class Totals(BaseModel):
     conversions: int
 
 
+class EngagementSplit(BaseModel):
+    """The Engagements tile broken into likes, comments and shares (docs/CONTRACT.md, "Engagement split").
+
+    Only from platforms whose account numbers were saved with the split. `likes + comments + shares + other +
+    unsplit` equals `totals.engagements`.
+    """
+
+    likes: int = 0
+    comments: int = 0
+    shares: int = 0
+    other: int = 0  # saves and anything else a split platform counts in its engagements total
+    unsplit: int = 0  # engagements from platforms that only report a total
+    platforms: list[Platform] = []  # the platforms whose split is included
+
+
 class DashboardSummary(BaseModel):
     days: int
     totals: Totals
@@ -179,6 +194,8 @@ class DashboardSummary(BaseModel):
     # or None when it was never read (a real workspace never shows a placeholder 0). Sample: equal to totals.
     tiles: dict[str, int | None] = {}
     not_read: dict[str, str] = {}  # metric -> short reason, only for the keys whose tiles value is None
+    # Engagements as likes / comments / shares; None unless a real workspace saved at least one account split.
+    engagement_split: EngagementSplit | None = None
 
 
 class ActivityItem(BaseModel):

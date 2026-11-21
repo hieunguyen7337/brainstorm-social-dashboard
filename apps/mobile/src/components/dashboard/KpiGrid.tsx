@@ -6,8 +6,9 @@ import { Sparkline } from '@/src/charts';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
 import { fmtCompact } from '@/src/format';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
-import type { DashboardSummary, DayStats, Totals } from '@/src/types';
+import type { DashboardSummary, DayStats, EngagementSplit, Totals } from '@/src/types';
 import { Card } from '@/src/ui';
+import { EngagementSplitRows, hasSplit } from './EngagementSplitRows';
 import { LiveNumber, useStable } from './live';
 import { changeView, kpiTile, METRICS, NOT_READ_MARK, type KpiTileView, type MetricDef } from './model';
 
@@ -44,6 +45,7 @@ export function KpiGrid({
   real = false,
   tiles,
   notRead,
+  split,
 }: {
   totals: Totals;
   change: Totals;
@@ -57,6 +59,8 @@ export function KpiGrid({
   tiles?: DashboardSummary['tiles'];
   /** The summary's `not_read`: why a tile has no number. */
   notRead?: DashboardSummary['not_read'];
+  /** The summary's `engagement_split`: when present the Engagements tile shows likes, comments and shares. */
+  split?: EngagementSplit | null;
 }) {
   const { onLayout, tileWidth } = useKpiLayout();
   return (
@@ -71,6 +75,7 @@ export function KpiGrid({
           width={tileWidth}
           context={context}
           real={real}
+          split={m.key === 'engagements' ? split : null}
         />
       ))}
     </View>
@@ -85,6 +90,7 @@ function KpiTile({
   width,
   context,
   real,
+  split,
 }: {
   metric: MetricDef;
   tile: KpiTileView;
@@ -93,6 +99,8 @@ function KpiTile({
   width: number;
   context: string;
   real: boolean;
+  /** Engagements only: likes, comments and shares, drawn in place of the trend line. */
+  split: EngagementSplit | null | undefined;
 }) {
   const series = useStable(values, values.join(','));
   const view = changeView(changePct, real);
@@ -126,7 +134,9 @@ function KpiTile({
           </Text>
         ) : null}
       </View>
-      {tile.showSparkline && series.length >= 2 ? (
+      {value !== null && hasSplit(split) ? (
+        <EngagementSplitRows split={split} color={metric.color} inset={KPI_PAD} />
+      ) : tile.showSparkline && series.length >= 2 ? (
         <Sparkline
           values={series}
           color={metric.color}
