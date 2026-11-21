@@ -23,3 +23,13 @@ def test_get_page_is_public_with_the_qr_and_no_token(client, monkeypatch):
     assert qr.qr_svg("https://pulse-hackathon.fly.dev/download/android") in r.text
     assert "Scan to install Pulse on Android" in r.text
     assert "token" not in r.text.lower()
+
+
+def test_every_web_path_shows_the_download_page_not_the_web_app(client):
+    # Owner, 2026-11-21: "don't show the web app, show the download page only".
+    for path in ("/", "/create", "/settings", "/dashboard?x=1"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert "Install Pulse on Android" in r.text, path
+        assert "/download/android" in r.text, path
+    assert client.get("/api/nope").status_code == 404
