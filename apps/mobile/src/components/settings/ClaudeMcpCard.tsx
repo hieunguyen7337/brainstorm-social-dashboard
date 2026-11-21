@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { mcpCommand, mcpUrl, mcpUrlWithToken } from '@/src/api';
+import { mcpCommand, mcpSetupPrompt, mcpUrl, mcpUrlWithToken } from '@/src/api';
 import { useSession } from '@/src/session';
 import { colors, gradient, radius, space, type as t, withAlpha } from '@/src/theme';
 import { Button, IconButton, copyText, haptic, useToast } from '@/src/ui';
@@ -24,6 +24,7 @@ export function ClaudeMcpCard() {
   const { token, mock } = useSession();
   const toast = useToast();
   const [revealed, setRevealed] = useState(false);
+  const [manual, setManual] = useState(false);
 
   const shownCommand = mcpCommand(token ? (revealed ? token : maskToken(token)) : null);
 
@@ -47,8 +48,7 @@ export function ClaudeMcpCard() {
         </View>
 
         <Text style={t.dim}>
-          Let Claude Desktop, Claude Code or claude.ai manage this workspace: read the dashboard, generate and publish
-          posts, run autopilot.
+          Let Claude read your dashboard, write and publish posts, and run autopilot. One prompt sets it up.
         </Text>
 
         {mock ? (
@@ -60,6 +60,35 @@ export function ClaudeMcpCard() {
           </View>
         ) : null}
 
+        <Button
+          title="Copy setup prompt"
+          icon="copy-outline"
+          disabled={!token}
+          onPress={() => void copy(mcpSetupPrompt(token), 'Prompt copied: paste it into Claude')}
+          full
+        />
+
+        <View style={styles.steps}>
+          <Step n={1}>Paste it into Claude (Claude Code, claude.ai or the Claude app).</Step>
+          <Step n={2}>Claude sets Pulse up for you. Then ask: “How is my social dashboard doing?”</Step>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={manual ? 'Hide manual setup' : 'Show manual setup'}
+          hitSlop={8}
+          onPress={() => {
+            haptic.select();
+            setManual((m) => !m);
+          }}
+          style={({ pressed }) => [styles.reveal, pressed && styles.pressed]}
+        >
+          <Ionicons name={manual ? 'chevron-up' : 'chevron-down'} size={16} color={colors.accent} />
+          <Text style={styles.revealText}>{manual ? 'Hide manual setup' : 'Manual setup'}</Text>
+        </Pressable>
+
+        {manual ? (
+        <>
         <View style={styles.block}>
           <Text style={t.label}>MCP URL</Text>
           <View style={styles.urlRow}>
@@ -121,11 +150,8 @@ export function ClaudeMcpCard() {
         <Text style={t.small}>
           claude.ai custom connectors can&apos;t send headers, so paste the URL with token there instead.
         </Text>
-
-        <View style={styles.steps}>
-          <Step n={1}>Run the command in your terminal.</Step>
-          <Step n={2}>{'Ask Claude: “How is my social dashboard doing?”'}</Step>
-        </View>
+        </>
+        ) : null}
 
         <View style={styles.warn}>
           <Ionicons name="warning-outline" size={14} color={colors.warn} style={styles.warnIcon} />

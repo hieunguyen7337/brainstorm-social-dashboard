@@ -21,6 +21,7 @@ export {
   isMock,
   loadStorage,
   mcpCommand,
+  mcpSetupPrompt,
   mcpUrl,
   mcpUrlWithToken,
   publicBaseUrl,

@@ -120,6 +120,31 @@ export const mcpCommand = (tok: string | null = token): string =>
 export const mcpUrlWithToken = (tok: string | null = token): string =>
   `${mcpUrl()}?token=${tok ?? '<token>'}`;
 
+/**
+ * One prompt to paste into Claude that sets Pulse up by itself: Claude Code runs the install and checks it; claude.ai
+ * and Claude Desktop (which cannot run commands) get told exactly what to click. Uses the URL-with-token form, which
+ * every client accepts.
+ */
+export const mcpSetupPrompt = (tok: string | null = token): string => {
+  const url = mcpUrlWithToken(tok);
+  return [
+    'Connect my Pulse social dashboard to Claude for me. Do every step you can yourself.',
+    '',
+    'If you can run terminal commands (Claude Code):',
+    `1. Run: claude mcp add --transport http --scope user pulse "${url}"`,
+    '   If it says pulse already exists, run: claude mcp remove pulse --scope user, then add it again.',
+    '2. Run: claude mcp list, and check that pulse shows as connected. If it does not, tell me the error.',
+    '3. Tell me to type /mcp (or restart Claude Code) so the Pulse tools load, then ask: How is my social dashboard doing?',
+    '',
+    'If you cannot run commands (claude.ai or the Claude desktop app), tell me exactly what to click:',
+    'Settings > Connectors > Add custom connector. Name: Pulse. URL:',
+    url,
+    'Then start a new chat and ask: How is my social dashboard doing?',
+    '',
+    'Keep that URL private: it contains my access key.',
+  ].join('\n');
+};
+
 export const androidDownloadUrl = (): string => `${publicBaseUrl()}/download/android`;
 
 // ---- fetch wrapper ----------------------------------------------------------------------------
