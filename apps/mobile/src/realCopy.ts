@@ -32,7 +32,7 @@ export function publishedAllToast(count: number, real: boolean, every = false): 
 
 /** Title of the card that replaces the buttons of a published post on the Create screen. */
 export function publishedCardTitle(label: string, real: boolean): string {
-  return real ? `Marked as published on ${label}` : `Published to ${label}`;
+  return `Published to ${label}`;
 }
 
 /** The line under that title. The share buttons sit right below it. */
@@ -42,7 +42,7 @@ export function publishedCardNote(real: boolean, platform?: Platform, demo = fal
   const how = copiesCaption(platform)
     ? 'Use the button below to copy the caption, then paste it into the app.'
     : 'Use the button below to open the composer, then post it.';
-  return `Pulse doesn't post for you. ${how} Your numbers come from the tracked link and your next screenshot.`;
+  return `If Pulse posted it for you, you're done. If not, ${how.charAt(0).toLowerCase()}${how.slice(1)} Clicks on the tracked link show up on your dashboard.`;
 }
 
 /** Under "Ask me before publishing" when the switch is off. (The "on" line is true in both kinds of workspace.) */
