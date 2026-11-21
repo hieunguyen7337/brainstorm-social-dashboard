@@ -10,6 +10,7 @@ import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_NAME } from '@/src/config';
+import { desktopTitleBarInset } from '@/src/desktop';
 import { useSession } from '@/src/session';
 import { Logo } from '@/src/ui/Logo';
 import { colors, radius, space, withAlpha } from '@/src/theme';
@@ -64,6 +65,8 @@ function SidebarItem({ label, focused, testID, accessibilityLabel, icon, onPress
 
 export function Sidebar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
   const { workspace } = useSession();
+  // Pulse Desktop: the brand sits below the title bar strip (macOS traffic lights live over the sidebar's top left).
+  const titleBar = desktopTitleBarInset();
   const brand = workspace?.brand_name?.trim() || workspace?.name?.trim() || APP_NAME;
 
   return (
@@ -71,7 +74,7 @@ export function Sidebar({ state, descriptors, navigation, insets }: BottomTabBar
       testID="sidebar"
       role="navigation"
       aria-label="Main"
-      style={[styles.root, { paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.lg }]}
+      style={[styles.root, { paddingTop: titleBar ? titleBar + space.md : insets.top + space.xl, paddingBottom: insets.bottom + space.lg }]}
     >
       <View style={styles.brandRow}>
         <Logo size={38} />

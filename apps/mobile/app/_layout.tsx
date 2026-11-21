@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { DesktopTitleBar } from '@/src/layout/DesktopTitleBar';
 import { ConnectSheetProvider } from '@/src/components/connect/ConnectSheet';
 import { SessionProvider, useSession, type SessionStatus } from '@/src/session';
 import { colors } from '@/src/theme';
@@ -110,6 +111,8 @@ function Gate() {
       </ConnectSheetProvider>
       {/* iPhone browsers only: one line on adding Pulse to the Home Screen (no Apple account, so no iOS build). */}
       <IosInstallHint />
+      {/* Pulse Desktop: draggable strip under the hidden native title bar (null elsewhere). */}
+      <DesktopTitleBar />
     </>
   );
 }

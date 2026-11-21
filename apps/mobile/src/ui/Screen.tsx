@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MAX_CONTENT_WIDTH } from '@/src/config';
+import { desktopTitleBarInset } from '@/src/desktop';
 import { BOARD_MAX_WIDTH, useWide } from '@/src/layout';
 import { colors, space, type as t } from '@/src/theme';
 
@@ -109,7 +110,8 @@ export function Screen({
 
   return (
     <KeyboardAvoidingView
-      style={[styles.root, { paddingTop: insets.top }]}
+      // Pulse Desktop: content starts below the title bar strip, clear of the Windows window controls.
+      style={[styles.root, { paddingTop: insets.top + desktopTitleBarInset() }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {fixed ? (

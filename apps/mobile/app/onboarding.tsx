@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_NAME } from '@/src/config';
 import { autoReadAvailable } from '@/src/autoRead';
+import { desktopTitleBarInset } from '@/src/desktop';
 import { ConnectAccounts } from '@/src/components/connect/ConnectAccounts';
 import { ROOM_GUEST_BRAND, useRoomJoin } from '@/src/components/room/roomStore';
 import { useSession } from '@/src/session';
@@ -79,7 +80,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={[
           styles.scroll,
           connectStep && styles.scrollTop,
-          { paddingTop: insets.top + space.xl, paddingBottom: connectStep ? space.xl : insets.bottom + space.xl },
+          { paddingTop: insets.top + desktopTitleBarInset() + space.xl, paddingBottom: connectStep ? space.xl : insets.bottom + space.xl },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

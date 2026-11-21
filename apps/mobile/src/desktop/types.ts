@@ -64,8 +64,13 @@ export type PublishConfirmAnswer =
   | { ok: true; caption: string; imageBase64: string; mediaType: 'image/jpeg' | 'image/png' }
   | { ok: false };
 
+/** Height in px of the immersive title bar strip (draggable, holds the traffic lights / window controls). */
+export const DESKTOP_TITLEBAR_HEIGHT = 40;
+
 export interface PulseDesktop {
   version: number;
+  /** Node `process.platform` of the host ('darwin', 'win32', 'linux'). */
+  platform: string;
   /** Fly API base (no trailing slash) for the bundled renderer, which is served from `app://pulse/`. */
   apiUrl: string;
   social: {
