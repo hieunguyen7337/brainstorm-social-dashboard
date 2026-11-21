@@ -170,6 +170,8 @@ export function DashboardBoard({
                     context={dataContext}
                     real={summary.data_mode === 'real'}
                     followers={followers}
+                    tiles={summary.tiles}
+                    notRead={summary.not_read}
                   />
                 ) : (
                   <KpiSkeleton count={real ? 5 : 4} />

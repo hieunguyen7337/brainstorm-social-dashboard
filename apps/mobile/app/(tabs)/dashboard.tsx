@@ -193,6 +193,8 @@ export default function DashboardScreen() {
                   timeseries={days}
                   context={dataContext}
                   real={realNumbers}
+                  tiles={summary.tiles}
+                  notRead={summary.not_read}
                 />
               </View>
             ) : (
@@ -202,6 +204,8 @@ export default function DashboardScreen() {
                 timeseries={days}
                 context={dataContext}
                 real={realNumbers}
+                tiles={summary.tiles}
+                notRead={summary.not_read}
               />
             )}
           </Reveal>

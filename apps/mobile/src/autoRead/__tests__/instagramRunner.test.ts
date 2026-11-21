@@ -2,6 +2,8 @@ import { AutoReadRunner, type RunnerDeps, type RunnerStatus } from '../runner';
 import { FALLBACK_LOAD_MS, INJECT_DELAY_MS, MAX_INJECTIONS, READ_TIMEOUT_MS, SETTLE_MS, STALE_PAGE_MS } from '../config';
 import { AUTO_READ_FAILED, type DeviceRead } from '../types';
 import { flowFor, parsePageUrl } from '../platforms';
+import { readerScript } from '../readers';
+import { feedJson, makeEnv } from './igHarness';
 
 const FEED = 'https://www.instagram.com/';
 const LOGIN = 'https://www.instagram.com/accounts/login/';
@@ -155,6 +157,58 @@ describe('instagram runner', () => {
       await adv(10);
       expect(log.results).toHaveLength(1);
       expect(log.results[0]).toMatchObject({ handle: 'jane.doe', followers: 1, confidence: 'high' });
+    });
+
+    it('fallback path end to end: the real step-1 reader on the profile (web_profile_info 429) gives posts with likes, comments, views', async () => {
+      // Run the real generated scripts in the jsdom page; hand what they post to the runner.
+      const pageRun = async (url: string, step: number, html: string) => {
+        const env = makeEnv({
+          url,
+          html,
+          cookies: ['csrftoken=C'],
+          routes: [
+            ['accounts/current_user', { status: 200, body: { user: { username: 'jane.doe' } } }],
+            ['web_profile_info', { status: 429 }],
+            ['feed/user/jane.doe/username/', { status: 200, body: feedJson('jane.doe') }],
+          ],
+        });
+        Object.defineProperty(env.dom.window.HTMLElement.prototype, 'innerText', {
+          configurable: true,
+          get(this: HTMLElement) {
+            return Array.from(this.querySelectorAll('div')).map((d) => d.textContent).join('\n');
+          },
+        });
+        env.inject(readerScript('instagram', step));
+        await env.advance(20_000);
+        expect(env.rawPosted).toHaveLength(1);
+        return env;
+      };
+      const { runner, log, adv } = setup();
+      runner.start();
+      runner.navigated(FEED, false);
+      runner.loadEnded(FEED);
+      await adv(INJECT_DELAY_MS + 10);
+      const feedPage = await pageRun(FEED, 0, '<!doctype html><html><body></body></html>');
+      expect(feedPage.calls.some((c) => c.url.includes('feed/user/'))).toBe(false); // step 0 only asks for the profile
+      runner.message(feedPage.rawPosted[0]);
+      await adv(10);
+      expect(log.loads[log.loads.length - 1]).toBe(PROFILE);
+      runner.navigated(PROFILE, false);
+      runner.loadEnded(PROFILE);
+      await adv(INJECT_DELAY_MS + 10);
+      expect(log.injects).toHaveLength(2);
+      const header = '<header><div>3</div><div>posts</div><div>1,234</div><div>followers</div><div>56</div><div>following</div></header>';
+      const profilePage = await pageRun(PROFILE, 1, '<!doctype html><html><body>' + header + '</body></html>');
+      runner.message(profilePage.rawPosted[0]);
+      await adv(10);
+      expect(log.results).toHaveLength(1);
+      const r = log.results[0];
+      expect(r).toMatchObject({ source: 'device', handle: 'jane.doe', followers: 1234, following: 56, posts_count: 3, confidence: 'high' });
+      expect(r.posts).toEqual([
+        { content: ('reel caption ' + 'x'.repeat(400)).slice(0, 200), views: 900, likes: 40, comments: 3, shares: null, posted_at: '2023-11-14' },
+        { content: null, views: 70, likes: 5, comments: 1, shares: null, posted_at: '2023-11-15' },
+        { content: 'photo', views: null, likes: null, comments: 0, shares: null, posted_at: '2023-11-16' }, // likes hidden
+      ]);
     });
 
     it('login page, then the feed: injects once and emits the numbers exactly once', async () => {

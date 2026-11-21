@@ -68,6 +68,60 @@ def _snapshot_change(hist: dict[tuple[str, str], list[tuple[int, int]]], connect
     return out
 
 
+NOT_READ = "Not read yet: open Connect to read"
+NO_PHOTO_VIEWS = "Instagram does not share views for photo posts"
+NO_LINK = "No tracked link yet: publish a post to count {}"
+
+
+def _tiles(conn: sqlite3.Connection, workspace_id: str, days: int, platform: str | None, connected: list[str],
+           totals: dict[str, int]) -> tuple[dict[str, int | None], dict[str, str]]:
+    """A real workspace's tiles: totals[k] when metric k was ever read, else None and a short reason.
+
+    Views/engagements need a snapshot of a connected platform in scope: a post snapshot at any time (an Instagram
+    post's views of 0 do not count: Instagram gives none for photo posts), or an account snapshot whose window
+    fits the dashboard's (the same rule as _snapshot_history: others never reach the totals, so they would show
+    a false 0). Clicks/conversions need a published post with a tracked link in scope, or a real click/conversion
+    event, at any time. A nonzero total is always read. Three aggregate queries.
+    """
+    plat_sql, plat_args = (" AND platform = ?", (platform,)) if platform else ("", ())
+    fits = "post_id IS NULL AND period_days IS NOT NULL AND period_days <= ?"
+    snaps = {r["platform"]: r for r in conn.execute(
+        f"SELECT platform, MAX({fits} AND views IS NOT NULL) AS acc_views,"
+        f" MAX({fits} AND engagements IS NOT NULL) AS acc_eng, MAX(post_id IS NOT NULL) AS posts,"
+        " MAX(post_id IS NOT NULL AND views > 0) AS post_views"
+        f" FROM metric_snapshots WHERE workspace_id = ?{plat_sql} GROUP BY platform",
+        (days, days, workspace_id, *plat_args))}
+    scoped = [snaps[p] for p in connected if p in snaps]
+    links = conn.execute(
+        "SELECT COUNT(*) FROM posts WHERE workspace_id = ? AND status = 'published' AND link_code IS NOT NULL"
+        f"{plat_sql}", (workspace_id, *plat_args)).fetchone()[0]
+    real_events = {r["type"]: r["n"] for r in conn.execute(
+        "SELECT type, COUNT(*) AS n FROM events WHERE workspace_id = ? AND real = 1"
+        f" AND type IN ('click', 'conversion'){plat_sql} GROUP BY type", (workspace_id, *plat_args))}
+
+    read = {
+        "views": any(r["acc_views"] or r["post_views"] or (r["posts"] and r["platform"] != "instagram")
+                     for r in scoped),
+        "engagements": any(r["acc_eng"] or r["posts"] for r in scoped),
+        "clicks": links > 0 or real_events.get("click", 0) > 0,
+        "conversions": links > 0 or real_events.get("conversion", 0) > 0,
+    }
+    tiles: dict[str, int | None] = {}
+    not_read: dict[str, str] = {}
+    for k in KEYS:
+        if read[k] or totals[k] > 0:
+            tiles[k] = totals[k]
+            continue
+        tiles[k] = None
+        if k == "views" and snaps.get("instagram") and "instagram" in connected and snaps["instagram"]["posts"]:
+            not_read[k] = NO_PHOTO_VIEWS
+        elif k in ("clicks", "conversions") and connected:
+            not_read[k] = NO_LINK.format(k)
+        else:
+            not_read[k] = NOT_READ
+    return tiles, not_read
+
+
 @router.get("/api/dashboard", response_model=DashboardSummary)
 def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
               ws: sqlite3.Row = Depends(get_workspace), conn: sqlite3.Connection = Depends(get_db)):
@@ -150,6 +204,8 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
             (ws["id"], kind, start.isoformat(), *plat_args),
         ).fetchone()[0]
 
+    tiles, not_read = (_tiles(conn, ws["id"], days, platform, connected, cur_tot) if ws["data_mode"] == "real"
+                       else (dict(cur_tot), {}))
     return {
         "days": days,
         "totals": cur_tot,
@@ -162,6 +218,8 @@ def dashboard(days: int = Query(30, ge=1, le=365), platform: str | None = None,
         "real_conversions": real("conversion"),
         "data_mode": ws["data_mode"],
         "followers_total": sum(x["followers"] for x in by_platform),
+        "tiles": tiles,
+        "not_read": not_read,
     }
 
 

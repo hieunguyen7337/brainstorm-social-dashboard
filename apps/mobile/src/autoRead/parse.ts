@@ -569,9 +569,52 @@ function readInstagramPost(node: unknown): ReadPost | null {
   return empty ? null : post;
 }
 
+/**
+ * One item of `/api/v1/feed/user/<name>/username/` (the page sends it pruned: like_count, comment_count, play_count,
+ * ig_play_count, view_count, taken_at, caption.text, media_type, product_type, like_and_view_counts_disabled).
+ * Views are the first present of play_count / ig_play_count / view_count (only videos and reels have them). With
+ * like_and_view_counts_disabled, or a missing or negative count, likes and views stay null, never 0.
+ */
+function readInstagramFeedItem(item: unknown): ReadPost | null {
+  if (!isObj(item)) return null;
+  const hidden = item.like_and_view_counts_disabled === true;
+  const text = dig(item, 'caption', 'text');
+  const post: ReadPost = {
+    content: typeof text === 'string' && text.trim() !== '' ? clip(text) : null,
+    views: hidden ? null : firstPresentCount(item.play_count, item.ig_play_count, item.view_count),
+    likes: hidden ? null : firstPresentCount(item.like_count),
+    comments: firstPresentCount(item.comment_count),
+    shares: null,
+    posted_at: utcDay(item.taken_at),
+  };
+  const empty =
+    post.content === null &&
+    post.views === null &&
+    post.likes === null &&
+    post.comments === null &&
+    post.posted_at === null;
+  return empty ? null : post;
+}
+
+/** Up to 12 posts from `list`, read by `one`; items that give nothing are skipped. */
+function readInstagramPosts(list: unknown, one: (item: unknown) => ReadPost | null): ReadPost[] {
+  const posts: ReadPost[] = [];
+  if (!Array.isArray(list)) return posts;
+  for (let i = 0; i < list.length && i < MAX_IG_EDGES_SCANNED && posts.length < MAX_IG_POSTS; i++) {
+    const post = one(list[i]);
+    if (post !== null) posts.push(post);
+  }
+  return posts;
+}
+
 function readInstagram(json: unknown): ParsedRead {
   const user = findInstagramUser(json);
-  if (user === null) return {};
+  // The reader's feed fallback (`{ user, feed: [...] }`), or the raw feed response (`{ items: [...] }`).
+  const feed = isObj(json) ? (Array.isArray(json.feed) ? json.feed : json.items) : undefined;
+  if (user === null) {
+    const feedPosts = readInstagramPosts(feed, readInstagramFeedItem);
+    return feedPosts.length > 0 ? { posts: feedPosts } : {};
+  }
   const out: ParsedRead = {};
   const handle = cleanHandle(user.username);
   if (handle !== null) out.handle = handle;
@@ -579,21 +622,18 @@ function readInstagram(json: unknown): ParsedRead {
   setNum(out, 'following', parseCount(dig(user, 'edge_follow', 'count')));
   setNum(out, 'posts_count', parseCount(dig(user, 'edge_owner_to_timeline_media', 'count')));
 
+  // web_profile_info's own posts win; the feed call's posts are used only when those gave none (never both).
   const edges = dig(user, 'edge_owner_to_timeline_media', 'edges');
-  if (Array.isArray(edges)) {
-    const posts: ReadPost[] = [];
-    for (let i = 0; i < edges.length && i < MAX_IG_EDGES_SCANNED && posts.length < MAX_IG_POSTS; i++) {
-      const post = readInstagramPost(dig(edges[i], 'node'));
-      if (post !== null) posts.push(post);
-    }
-    if (posts.length > 0) out.posts = posts;
-  }
+  let posts = readInstagramPosts(edges, (e) => readInstagramPost(dig(e, 'node')));
+  if (posts.length === 0) posts = readInstagramPosts(feed, readInstagramFeedItem);
+  if (posts.length > 0) out.posts = posts;
   return out;
 }
 
 /**
- * `{ user: U }` (what the page script posts), `{ data: { user: U } }` (the raw web_profile_info response) or `U`.
- * Reads the counts plus up to 12 recent posts; a hidden count (-1) is null. There are no account-level views.
+ * `{ user: U, feed?: F[] }` (what the page script posts), `{ data: { user: U } }` (the raw web_profile_info response)
+ * or `U`; `F` is an item of the feed call (or `{ items: F[] }`, its raw response). Reads the counts plus up to 12
+ * recent posts, from `U`'s edges or else from `F`; a hidden count (-1, or hidden likes) is null. No account-level views.
  */
 export function parseInstagramJson(json: unknown): ParsedRead {
   return guard(() => readInstagram(json));

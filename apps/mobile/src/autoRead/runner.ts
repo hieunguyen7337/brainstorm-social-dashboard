@@ -23,6 +23,7 @@ import {
 } from './config';
 import { hasNumbers, toScreenshotRead } from './parse';
 import { flowFor, parsePageUrl, type Flow, type PageUrl, type StepOutcome } from './platforms';
+import type * as TraceModule from './trace';
 import {
   AUTO_READ_FAILED,
   type DeviceRead,
@@ -95,6 +96,41 @@ function parseMessage(raw: unknown): PageMessage | null {
   return o as unknown as PageMessage;
 }
 
+const SECRETISH_KEY = /pass|pwd|secret|token|cookie|csrf|xsrf|sess|auth|bearer|otp|code|pin|credential|key/i;
+
+/**
+ * Numbers and yes/no only, nested at most 3 deep and 24 wide, and no number under a secret-like key (a one-time code):
+ * stricter than `scrub`, which also keeps some strings.
+ */
+function numbersOnly(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'object' || depth >= 3) return null;
+  if (Array.isArray(value)) return value.slice(0, 24).map((v) => numbersOnly(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>).slice(0, 24)) {
+    const n = numbersOnly(v, depth + 1);
+    if (n === null || !/^[A-Za-z_]\w{0,15}$/.test(k)) continue;
+    if (typeof n !== 'boolean' && SECRETISH_KEY.test(k)) continue;
+    out[k] = n;
+  }
+  return out;
+}
+
+/**
+ * A page-supplied value made safe for a console line (logcat): `scrub` from trace.ts. Loaded lazily, because trace.ts
+ * pulls in react-native and this file must stay importable under plain Node; where it cannot be loaded, only numbers
+ * and yes/no are kept. Never the raw value.
+ */
+export function scrubForLog(value: unknown, key: string): unknown {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require('./trace') as typeof TraceModule).scrub(value, key);
+  } catch {
+    return numbersOnly(value);
+  }
+}
+
 export class AutoReadRunner {
   private readonly flow: Flow;
   private phase: Phase = 'login';
@@ -165,10 +201,12 @@ export class AutoReadRunner {
       const d = msg.data as { diag?: unknown } | null | undefined;
       this.t('msg', { status: msg.status, step: msg.step, diag: d && typeof d === 'object' ? d.diag : undefined });
       // A failed read says which step failed (status codes, no cookie values): visible in `adb logcat -s ReactNativeJS`.
-      if (msg.status !== 'ok') console.log(`[autoRead] ${String(raw).slice(0, 500)}`);
+      // Both go through `scrub` (trace.ts): a page can put anything in its message, and logcat is not a safe place for it.
+      if (msg.status !== 'ok')
+        console.log(`[autoRead] ${msg.platform} step ${msg.step} ${msg.status} ${JSON.stringify(scrubForLog(msg.data, 'data')).slice(0, 500)}`);
       // An `ok` message may carry page text: log only its `diag` (status codes and yes/no), never the data itself.
       else if (msg.data && typeof msg.data === 'object' && 'diag' in msg.data)
-        console.log(`[autoRead] ${msg.platform} step ${msg.step} ok ${JSON.stringify((msg.data as { diag: unknown }).diag).slice(0, 300)}`);
+        console.log(`[autoRead] ${msg.platform} step ${msg.step} ok ${JSON.stringify(scrubForLog((msg.data as { diag: unknown }).diag, 'diag')).slice(0, 300)}`);
       if (msg.status === 'ok') this.onStepData(msg.data);
       else if (msg.status === 'signed_out') this.toLogin(false);
       else void this.stepEmpty(msg.data);

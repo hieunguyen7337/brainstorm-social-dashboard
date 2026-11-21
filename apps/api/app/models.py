@@ -174,6 +174,10 @@ class DashboardSummary(BaseModel):
     real_conversions: int
     data_mode: DataMode = "sample"  # the workspace's data_mode (docs/REAL.md)
     followers_total: int = 0  # followers across the connected platforms listed in by_platform
+    # What each tile shows ("views", "engagements", "clicks", "conversions"): the number read from the platform,
+    # or None when it was never read (a real workspace never shows a placeholder 0). Sample: equal to totals.
+    tiles: dict[str, int | None] = {}
+    not_read: dict[str, str] = {}  # metric -> short reason, only for the keys whose tiles value is None
 
 
 class ActivityItem(BaseModel):

@@ -6,10 +6,10 @@ import { Sparkline } from '@/src/charts';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
 import { fmtCompact } from '@/src/format';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
-import type { DayStats, Totals } from '@/src/types';
+import type { DashboardSummary, DayStats, Totals } from '@/src/types';
 import { Card } from '@/src/ui';
 import { LiveNumber, useStable } from './live';
-import { changeView, METRICS, type MetricDef } from './model';
+import { changeView, kpiTile, METRICS, NOT_READ_MARK, type KpiTileView, type MetricDef } from './model';
 
 const GAP = space.md;
 /** Column width at which the four tiles go 4 across instead of 2x2. */
@@ -42,6 +42,8 @@ export function KpiGrid({
   timeseries,
   context,
   real = false,
+  tiles,
+  notRead,
 }: {
   totals: Totals;
   change: Totals;
@@ -51,6 +53,10 @@ export function KpiGrid({
   context: string;
   /** The summary's `data_mode` is 'real': a change of 0 means nothing earlier to compare, so the pill says "new". */
   real?: boolean;
+  /** The summary's `tiles`: a null there means never read, and that tile shows "—" and its reason. Absent on old servers. */
+  tiles?: DashboardSummary['tiles'];
+  /** The summary's `not_read`: why a tile has no number. */
+  notRead?: DashboardSummary['not_read'];
 }) {
   const { onLayout, tileWidth } = useKpiLayout();
   return (
@@ -59,7 +65,7 @@ export function KpiGrid({
         <KpiTile
           key={m.key}
           metric={m}
-          value={totals[m.key]}
+          tile={kpiTile({ totals, tiles, not_read: notRead }, m.key)}
           changePct={change[m.key]}
           values={timeseries.map((d) => d[m.key])}
           width={tileWidth}
@@ -73,7 +79,7 @@ export function KpiGrid({
 
 function KpiTile({
   metric,
-  value,
+  tile,
   changePct,
   values,
   width,
@@ -81,7 +87,7 @@ function KpiTile({
   real,
 }: {
   metric: MetricDef;
-  value: number;
+  tile: KpiTileView;
   changePct: number;
   values: number[];
   width: number;
@@ -90,27 +96,37 @@ function KpiTile({
 }) {
   const series = useStable(values, values.join(','));
   const view = changeView(changePct, real);
+  const { value, reason } = tile;
+  const spoken =
+    value === null ? `${metric.label} not read, ${reason ?? ''}` : `${metric.label} ${fmtCompact(value)}, ${view.spoken}`;
 
   return (
     <Card padded={false} style={{ width }}>
-      <View
-        style={styles.top}
-        accessible
-        accessibilityLabel={`${metric.label} ${fmtCompact(value)}, ${view.spoken}`}
-      >
+      <View style={styles.top} accessible accessibilityLabel={spoken}>
         <View style={styles.labelRow}>
           <View style={[styles.dot, { backgroundColor: metric.color }]} />
           <Text style={t.label} numberOfLines={1}>
             {metric.label}
           </Text>
         </View>
-        <LiveNumber value={value} format={fmtCompact} fromZero context={context} style={styles.number} />
-        <View style={[styles.pill, { backgroundColor: withAlpha(view.tone, 0.14) }]}>
-          <Ionicons name={view.icon} size={11} color={view.tone} />
-          <Text style={[styles.pillText, { color: view.tone }]}>{view.label}</Text>
-        </View>
+        {value === null ? (
+          <Text style={[styles.number, styles.notRead]}>{NOT_READ_MARK}</Text>
+        ) : (
+          <LiveNumber value={value} format={fmtCompact} fromZero context={context} style={styles.number} />
+        )}
+        {tile.showBadge ? (
+          <View style={[styles.pill, { backgroundColor: withAlpha(view.tone, 0.14) }]}>
+            <Ionicons name={view.icon} size={11} color={view.tone} />
+            <Text style={[styles.pillText, { color: view.tone }]}>{view.label}</Text>
+          </View>
+        ) : null}
+        {reason !== null ? (
+          <Text style={t.small} numberOfLines={3}>
+            {reason}
+          </Text>
+        ) : null}
       </View>
-      {series.length >= 2 ? (
+      {tile.showSparkline && series.length >= 2 ? (
         <Sparkline
           values={series}
           color={metric.color}
@@ -131,6 +147,7 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   number: { color: colors.text, fontSize: 30, lineHeight: 36, fontWeight: '800', letterSpacing: -0.8 },
+  notRead: { color: colors.textMute },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

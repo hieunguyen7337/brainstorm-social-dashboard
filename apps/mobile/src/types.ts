@@ -213,6 +213,10 @@ export interface DashboardSummary {
   data_mode?: DataMode;
   /** Followers across the connected platforms. Absent on servers older than docs/REAL.md. */
   followers_total?: number;
+  /** The number each KPI tile shows; null = never read from the platform (show "—" and the reason). Absent on older servers: fall back to today's values. */
+  tiles?: Partial<Record<keyof Totals, number | null>>;
+  /** Short reason per metric whose `tiles` value is null, e.g. "Instagram does not share views for photo posts", "Not read yet: open Connect to read". */
+  not_read?: Partial<Record<keyof Totals, string>>;
 }
 
 export interface ActivityItem {

@@ -12,7 +12,8 @@
  * - is ES2017 at most (no `?.`, no `??`, no object spread: stale Android WebViews exist) and ends with `true;`;
  * - reads only what `PageMessage` documents: `innerText` capped at 20000 chars, or JSON fields pruned to a whitelist.
  *   It never touches cookies, web storage, form-field values, tokens or page HTML, and never logs;
- * - makes no network request except the same-origin GETs listed per platform, each with an 8 s timeout (less when
+ * - makes no network request except the same-origin GETs listed per platform (Instagram: current_user, users/<id>/info,
+ *   web_profile_info, feed/user/<name>/username; see `INSTAGRAM_0`), each with an 8 s timeout (less when
  *   the script's own deadline is nearer, so every reader posts by `READER_DEADLINE_MS`, plus the settle for text readers);
  * - never throws into the page: an exception becomes `status: 'error'`.
  *
@@ -216,8 +217,13 @@ start();
 // ---- platform code --------------------------------------------------------------------------------------------------
 
 /**
- * Instagram: two same-origin GETs. `current_user` says who is signed in (else `signed_out`; 429/5xx/timeouts are
- * `error`, not `signed_out`); `web_profile_info` gives the numbers (any failure there is `empty` with the username).
+ * Instagram: up to four same-origin GETs, all with `igHeaders()`. `current_user` says who is signed in (else
+ * `signed_out`; 429/5xx/timeouts are `error`, not `signed_out`); `users/<ds_user_id>/info/` only when it gave no
+ * username; `web_profile_info` gives the numbers and up to 12 posts. On the profile page (the step that reads the live
+ * header), when `web_profile_info` gave no posts (on the phone it answers 429/404), `feed/user/<name>/username/?count=12`
+ * gives them, run while the header is read: each item pruned to `IG_FEED_NUMS`, product_type,
+ * like_and_view_counts_disabled and caption.text (200 chars), posted as `feed`; `diag.f` is its status code only (-1
+ * on a timeout or failure). A failed feed call keeps the header read (`ok` without `feed`).
  */
 const INSTAGRAM_0 = String.raw`
 var IG_HEADERS = { 'x-ig-app-id': '936619743392459' };
@@ -355,6 +361,39 @@ async function igJson(path) {
     return { status: 0, json: null };
   }
 }
+var IG_FEED_NUMS = ['like_count', 'comment_count', 'play_count', 'ig_play_count', 'view_count', 'taken_at', 'media_type'];
+function igFeedItem(it) {
+  var m = !('taken_at' in it) && isObj(it.media) ? it.media : it;
+  var o = {};
+  for (var k = 0; k < IG_FEED_NUMS.length; k++) {
+    var v = num(m[IG_FEED_NUMS[k]]);
+    if (v !== undefined) o[IG_FEED_NUMS[k]] = v;
+  }
+  if (typeof m.product_type === 'string') o.product_type = cut(m.product_type, 40);
+  if (typeof m.like_and_view_counts_disabled === 'boolean') o.like_and_view_counts_disabled = m.like_and_view_counts_disabled;
+  if (isObj(m.caption) && typeof m.caption.text === 'string') o.caption = { text: cut(m.caption.text, 200) };
+  return o;
+}
+function igHasPosts(u) {
+  var m = u.edge_owner_to_timeline_media;
+  return isObj(m) && Array.isArray(m.edges) && m.edges.length > 0;
+}
+// The account's last 12 posts, pruned: { status, items }. status is -1 on a timeout or failure; no body is kept.
+async function igFeed(username) {
+  var out = { status: -1, items: [] };
+  try {
+    var r = await fetchText('/api/v1/feed/user/' + encodeURIComponent(username) + '/username/?count=12', igHeaders());
+    out.status = r.status;
+    var j = r.ok ? asJson(r.text) : null;
+    var list = j && Array.isArray(j.items) ? j.items : [];
+    for (var i = 0; i < list.length && out.items.length < 12; i++) {
+      if (isObj(list[i])) out.items.push(igFeedItem(list[i]));
+    }
+  } catch (e) {
+    out.items = [];
+  }
+  return out;
+}
 async function run() {
   var a = await igJson('/api/v1/accounts/current_user/?edit=true');
   var aj = a.json;
@@ -417,6 +456,9 @@ async function run() {
   // come back as error"). The data calls are Instagram's server answers and can fail or lag, so the live header the
   // person sees wins over them; without it this step comes back empty, and the app
   // falls back to a screenshot of this page read by Claude, or reports an error. No number is ever guessed.
+  // web_profile_info gave no posts: ask the feed for them now, so it runs while the header is read. Its own timeout
+  // is never later than this script's deadline, so waiting for it below still posts in time.
+  var feedCall = igHasPosts(out) ? null : igFeed(username);
   var apiF = isObj(out.edge_followed_by) ? num(out.edge_followed_by.count) : undefined;
   diag.api = apiF === undefined ? -1 : apiF;
   var tc = null;
@@ -445,7 +487,13 @@ async function run() {
     if (!isObj(out.edge_owner_to_timeline_media)) out.edge_owner_to_timeline_media = {};
     out.edge_owner_to_timeline_media.count = p;
   }
-  finish('ok', { user: out, diag: diag });
+  var data = { user: out, diag: diag };
+  if (feedCall) {
+    var fr = await feedCall;
+    diag.f = fr.status;
+    if (fr.items.length > 0) data.feed = fr.items;
+  }
+  finish('ok', data);
 }
 `;
 

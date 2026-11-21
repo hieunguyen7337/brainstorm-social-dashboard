@@ -46,7 +46,11 @@ export interface ParsedRead {
  *   instagram step 0   `{ user: <web_profile_info data.user, pruned: username, edge_followed_by.count, edge_follow.count,
  *                         edge_owner_to_timeline_media.{count, edges[<=12].node.{taken_at_timestamp, is_video,
  *                         video_view_count, edge_liked_by.count, edge_media_preview_like.count,
- *                         edge_media_to_comment.count, edge_media_to_caption.edges[0].node.text}}> }`
+ *                         edge_media_to_comment.count, edge_media_to_caption.edges[0].node.text}}>,
+ *                       feed?: <=12 items of /api/v1/feed/user/<name>/username/, pruned to like_count, comment_count,
+ *                         play_count, ig_play_count, view_count, taken_at, media_type, product_type,
+ *                         like_and_view_counts_disabled, caption.text (200 chars)>, diag, go? }`
+ *                       (step 1, the profile page, sends the same shape; `feed` only when web_profile_info gave no posts)
  *   tiktok    step 0   `{ userInfo: { user: { uniqueId }, stats: { followerCount, followingCount, heartCount,
  *                         videoCount } } }`
  *   linkedin  step 0   `{ publicId, followers?, connections?, page?: 'dashboard' | 'profile', text?, diag }` (counts
