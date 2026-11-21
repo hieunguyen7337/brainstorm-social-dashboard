@@ -311,6 +311,53 @@ function igNavUsername() {
   } catch (e) {}
   return out;
 }
+// "1,234" -> 1234, "1.2K" -> 1200, "3M" -> 3000000; undefined when it is not a count.
+function igAbbr(s) {
+  var m = /^([0-9][0-9.,]*)\s*([KkMmBb]?)$/.exec(String(s || '').replace(/ /g, ' ').trim());
+  if (!m) return undefined;
+  var unit = lower(m[2]);
+  var n = unit ? parseFloat(m[1].replace(/,/g, '')) : parseInt(m[1].replace(/[.,]/g, ''), 10);
+  if (!isFinite(n)) return undefined;
+  if (unit === 'k') n *= 1e3;
+  else if (unit === 'm') n *= 1e6;
+  else if (unit === 'b') n *= 1e9;
+  return Math.round(n);
+}
+var IG_NUM = '([0-9][0-9.,]*\\s?[KkMmBb]?)';
+// Followers, following and posts from profile text: the meta description first, then the visible header.
+function igCountsFromText(text) {
+  var s = String(text || '').replace(/ /g, ' ');
+  var m = new RegExp(IG_NUM + '\\s+Followers?,\\s*' + IG_NUM + '\\s+Following,\\s*' + IG_NUM + '\\s+Posts?', 'i').exec(s);
+  if (m) {
+    var f = igAbbr(m[1]), g = igAbbr(m[2]), p = igAbbr(m[3]);
+    if (f !== undefined) return { followers: f, following: g, posts: p };
+  }
+  function one(word) {
+    var r = new RegExp(IG_NUM + '\\s*' + word + '\\b', 'i').exec(s);
+    return r ? igAbbr(r[1]) : undefined;
+  }
+  var fol = one('followers?');
+  if (fol === undefined) return null;
+  return { followers: fol, following: one('following'), posts: one('posts?') };
+}
+function igMeta(doc) {
+  var out = [];
+  try {
+    var metas = doc.querySelectorAll('meta[property="og:description"], meta[name="description"]');
+    for (var i = 0; i < metas.length; i++) out.push(metas[i].getAttribute('content') || '');
+  } catch (e) {}
+  return out.join('\n');
+}
+function igMetaFromHtml(html) {
+  var out = [];
+  var re = /<meta[^>]+(?:property|name)="(?:og:description|description)"[^>]*>/gi;
+  var m;
+  while ((m = re.exec(String(html || ''))) && out.length < 4) {
+    var c = /content="([^"]*)"/i.exec(m[0]);
+    if (c) out.push(c[1].replace(/&#0?44;/g, ',').replace(/&amp;/g, '&'));
+  }
+  return out.join('\n');
+}
 async function igJson(path) {
   try {
     var r = await fetchText(path, igHeaders());
@@ -369,6 +416,28 @@ async function run() {
       edge_follow: { count: num(info.following_count) },
       edge_owner_to_timeline_media: { count: num(info.media_count) },
     };
+  }
+  // Last way before a screenshot: the profile page's own text ("12 Followers, 34 Following, 5 Posts"), which Instagram
+  // serves even when its data calls answer 400/429/404 (2026-11-21, on the owner's phone).
+  if (!user) {
+    var counts = null;
+    if (pathIs('/' + lower(username))) counts = igCountsFromText(igMeta(document) + '\n' + String((document.body && document.body.innerText) || ''));
+    if (!counts && remaining() > 1500) {
+      try {
+        var h = await fetchText('/' + encodeURIComponent(username) + '/', { accept: 'text/html' });
+        diag.h = h.status;
+        if (h.ok) counts = igCountsFromText(igMetaFromHtml(h.text));
+      } catch (e) {}
+    }
+    diag.t = !!counts;
+    if (counts) {
+      user = {
+        username: username,
+        edge_followed_by: { count: counts.followers },
+        edge_follow: { count: counts.following },
+        edge_owner_to_timeline_media: { count: counts.posts },
+      };
+    }
   }
   if (!user) return finish('empty', { username: username, diag: diag });
   finish('ok', { user: igUser(user, username) });
