@@ -1,0 +1,25 @@
+{
+  "name": "pulse-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pulse Desktop: Electron shell for the Pulse web app",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "renderer": "cd ../mobile && npx expo export --platform web --output-dir \"$(cd ../desktop && pwd)/renderer\"",
+    "dev": "npm run build && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "electron": "45.4.1",
+    "electron-builder": "26.0.12",
+    "esbuild": "0.25.5",
+    "typescript": "5.8.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.12.1",
+    "zod": "3.25.46"
+  }
+}
