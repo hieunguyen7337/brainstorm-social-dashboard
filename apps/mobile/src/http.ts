@@ -5,6 +5,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform as RNPlatform } from 'react-native';
 
+import { desktopApiUrl } from './desktop';
+
 const TOKEN_KEY = 'pulse.token';
 const MOCK_KEY = 'pulse.mock';
 
@@ -91,9 +93,12 @@ export function raiseUnauthorized(message = 'Your session expired. Start a new w
 
 // ---- URLs -------------------------------------------------------------------------------------
 
-/** Base for API requests: same origin on web (the API serves the export), EXPO_PUBLIC_API_URL elsewhere. */
+/** Base for API requests: Pulse Desktop's API URL, else same origin on web (the API serves the export), EXPO_PUBLIC_API_URL elsewhere. */
 export function apiBase(): string {
   if (RNPlatform.OS === 'web') {
+    // Inside Pulse Desktop the page is served from app://pulse/, so the API is the bridge's URL.
+    const desktop = desktopApiUrl();
+    if (desktop) return desktop;
     // `expo start --web` serves from Metro, so allow an explicit override in dev only.
     return __DEV__ && ENV_API_URL ? ENV_API_URL : '';
   }

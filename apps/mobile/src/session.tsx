@@ -21,6 +21,7 @@ import {
   type Workspace,
 } from './api';
 import { forgetSignIns } from './autoRead';
+import { getDesktop } from './desktop';
 import { clearRoomWelcome, markRoomJoined, ROOM_GUEST_BRAND } from './components/room/roomStore';
 import { clearVault } from './vault';
 
@@ -102,6 +103,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [starting, setStarting] = useState(false);
   const [connectRequest, setConnectRequest] = useState<PulsePlatform | null>(null);
   const alive = useRef(true);
+
+  // Pulse Desktop: the main process needs the workspace token (screenshot fallback, MCP config); null on sign-out.
+  // Not while loading: the saved token is not read yet, and null would wipe the one the main process holds.
+  useEffect(() => {
+    if (status === 'loading') return;
+    try {
+      getDesktop()?.setWorkspaceToken(token)?.catch(() => undefined);
+    } catch {
+      // the bridge is optional
+    }
+  }, [token, status]);
 
   useEffect(() => {
     alive.current = true;
