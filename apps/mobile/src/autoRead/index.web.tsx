@@ -17,3 +17,13 @@ export function autoReadAvailable(): boolean {
 export function AutoReadSheet(_props: AutoReadSheetProps): null {
   return null;
 }
+
+/** Renders nothing on web: no background refresh. */
+export function AutoRefresh(): null {
+  return null;
+}
+
+/** Nothing to forget on web. */
+export function forgetSignIns(): Promise<void> {
+  return Promise.resolve();
+}

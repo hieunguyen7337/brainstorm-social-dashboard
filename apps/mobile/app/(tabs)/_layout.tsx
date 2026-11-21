@@ -5,6 +5,7 @@ import type { BottomTabBarProps } from 'expo-router/tabs';
 import { Platform, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AutoRefresh } from '@/src/autoRead';
 import { OfflineView, SplashView } from '@/src/components/BootStates';
 import { MAX_CONTENT_WIDTH } from '@/src/config';
 import { useWide } from '@/src/layout';
@@ -37,6 +38,7 @@ export default function TabsLayout() {
   if (status === 'offline') return <OfflineView />;
 
   return (
+    <>
     <Tabs
       // Below 1024 px: the stock bottom tab bar, options untouched. At >= 1024 px: `tabBarPosition: 'left'` makes the
       // navigator lay out [bar | scenes] as a row (no bottom bar is rendered) and the custom bar is the sidebar.
@@ -106,6 +108,9 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    {/* Android: re-reads connected accounts in the background (no-op elsewhere). */}
+    <AutoRefresh />
+    </>
   );
 }
 

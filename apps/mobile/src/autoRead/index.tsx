@@ -9,28 +9,26 @@
  *     onClose={(reason) => { setOpen(false); if (reason) showMessage(reason); }}  // reason only when reading gave up
  *     readScreenshot={(base64, mediaType) => api.readScreenshot(platform, base64, mediaType)} />
  *
- * The sheet is a full-screen modal with an incognito WebView on the platform's login page. After the person signs in it
+ * The sheet is a full-screen modal with a WebView (not incognito: the sign-in stays in Android's cookie store, so a later
+ * read opens signed in; `forgetSignIns()` drops it) on the platform's login page. After the person signs in it
  * opens the page with their numbers and reads them with a script it injects (never cookies, tokens or page HTML); if that
  * finds nothing within 12 s it captures the WebView as a JPEG and sends it to `readScreenshot`. `onResult` gets a
  * `ScreenshotRead` plus `source: 'device'`.
  *
- * OTA safety: the installed 1.0.0 APK has neither native module. Both libraries throw while being imported when their
- * native side is missing, and Metro reports an exception thrown by a lazy `require` as a FATAL error (it does not reach a
- * try/catch). So the native modules are probed first (`TurboModuleRegistry.get` returns null instead of throwing), and the
- * JS packages are required only when both are present. Nothing here imports them at the top level.
+ * `<AutoRefresh />` (refresh.tsx, mounted once in the tab layout) re-reads connected platforms in the background.
+ *
+ * OTA safety: see native.ts. Nothing here imports the native packages at the top level.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Modal,
-  NativeModules,
   PixelRatio,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TurboModuleRegistry,
   View,
   type LayoutChangeEvent,
 } from 'react-native';
@@ -45,59 +43,21 @@ import {
   CAPTURE_QUALITY,
   CAPTURE_RETRY_QUALITY,
   CAPTURE_RETRY_WIDTH,
-  SESSION_RESET_STEP_MS,
   UA_ANDROID,
   UA_IOS,
 } from './config';
+import { loadNative, type NativeBits, type WebViewRef } from './native';
 import { AutoReadRunner, type RunnerStatus } from './runner';
 import { AUTO_READ_FAILED, type AutoReadSheetProps } from './types';
 
 export { AUTO_READ_FAILED } from './types';
 export type { AutoReadSheetProps, DeviceRead, ReadPost, ScreenshotRead } from './types';
-
-// ---- native modules (loaded at call time, never at the top level) --------------------------------------------------------
-
-type WebViewModule = typeof import('react-native-webview');
-type ViewShotModule = typeof import('react-native-view-shot');
-interface NativeBits {
-  WebView: WebViewModule['WebView'];
-  captureRef: ViewShotModule['captureRef'];
-}
-
-/** `TurboModuleRegistry.get` returns null (it never throws) for a module that is not in the native binary. */
-function nativeModulePresent(name: string): boolean {
-  try {
-    return TurboModuleRegistry.get(name) != null || (NativeModules as Record<string, unknown>)[name] != null;
-  } catch {
-    return false;
-  }
-}
-
-let loaded: NativeBits | null | undefined;
-
-/** Both native modules, or null. Probes the native side first, then requires the JS packages (see the file comment). */
-function loadNative(): NativeBits | null {
-  if (loaded !== undefined) return loaded;
-  loaded = null;
-  if (Platform.OS === 'web') return loaded;
-  // react-native-view-shot registers 'RNViewShot' and react-native-webview 'RNCWebViewModule' (both TurboModule names).
-  if (!nativeModulePresent('RNViewShot') || !nativeModulePresent('RNCWebViewModule')) return loaded;
-  try {
-    const { WebView } = require('react-native-webview') as WebViewModule;
-    const { captureRef } = require('react-native-view-shot') as ViewShotModule;
-    if (WebView && typeof captureRef === 'function') loaded = { WebView, captureRef };
-  } catch {
-    loaded = null;
-  }
-  return loaded;
-}
-
-/** True only on native when both native modules are present and load. Cheap: safe to call on every render. */
-export function autoReadAvailable(): boolean {
-  return Platform.OS !== 'web' && loadNative() !== null;
-}
+export { autoReadAvailable } from './native';
+export { AutoRefresh, forgetSignIns } from './refresh';
 
 // ---- the sheet --------------------------------------------------------------------------------------------------------
+
+const STAYS_SIGNED_IN = 'Pulse stays signed in on this phone to refresh your numbers. Sign out in Settings.';
 
 const STATUS_TEXT: Record<RunnerStatus, string> = {
   anon: 'Checking your public profile…',
@@ -107,11 +67,8 @@ const STATUS_TEXT: Record<RunnerStatus, string> = {
   claude: 'Reading your page with Claude…',
 };
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 /** Only web pages load inside the sheet; app deep links (instagram://, intent://) are dropped instead of opened. */
 const allowWebUrl = (req: { url: string }) => /^(https?:\/\/|about:blank)/i.test(req.url);
-
-type WebViewRef = InstanceType<WebViewModule['WebView']>;
 
 function Sheet({
   platform,
@@ -126,9 +83,7 @@ function Sheet({
   const meta = platformMeta[platform];
   const [status, setStatus] = useState<RunnerStatus>('login');
   const [source, setSource] = useState<{ uri: string } | null>(null);
-  const [incognito, setIncognito] = useState(true);
   const webRef = useRef<WebViewRef | null>(null);
-  const webMounted = useRef(false);
   const shotRef = useRef<View>(null);
   const size = useRef({ w: 0, h: 0 });
   const runner = useRef<AutoReadRunner | null>(null);
@@ -160,33 +115,17 @@ function Sheet({
     throw new Error('capture too large');
   }, [captureRef]);
 
-  /**
-   * Android's `incognito` clears cookies when the flag is APPLIED, not when the WebView goes away, so the sign-in would
-   * stay in the app's cookie store until the next sheet opens. Flip the flag off and on again before reporting back.
-   */
-  const resetSession = useCallback(async (): Promise<void> => {
-    if (Platform.OS !== 'android' || !webMounted.current) return; // no WebView, no sign-in to drop
-    setIncognito(false);
-    await sleep(SESSION_RESET_STEP_MS);
-    setIncognito(true);
-    await sleep(SESSION_RESET_STEP_MS);
-  }, []);
-
   useEffect(() => {
     const r = new AutoReadRunner({
       platform,
       handle: latest.current.handle,
-      loadUrl: (uri) => {
-        webMounted.current = true;
-        setSource({ uri });
-      },
+      loadUrl: (uri) => setSource({ uri }),
       inject: (js) => webRef.current?.injectJavaScript(js),
       capture,
       readScreenshot: (base64, mediaType) => latest.current.readScreenshot(base64, mediaType),
       emitResult: (read) => latest.current.onResult(read),
       emitClose: (reason) => latest.current.onClose(reason),
       onStatus: setStatus,
-      clearSession: resetSession,
     });
     runner.current = r;
     r.start();
@@ -194,7 +133,7 @@ function Sheet({
       r.dispose();
       if (runner.current === r) runner.current = null;
     };
-  }, [platform, capture, resetSession]);
+  }, [platform, capture]);
 
   const close = () => (runner.current ? runner.current.cancel() : latest.current.onClose());
   const onLayout = (e: LayoutChangeEvent) => {
@@ -230,6 +169,10 @@ function Sheet({
           </Pressable>
         </View>
 
+        <Text style={styles.note} testID="auto-read-stays-signed-in">
+          {STAYS_SIGNED_IN}
+        </Text>
+
         <View style={styles.body}>
           {source ? (
             <View ref={shotRef} collapsable={false} style={StyleSheet.absoluteFill} onLayout={onLayout}>
@@ -237,7 +180,7 @@ function Sheet({
                 ref={webRef}
                 testID="auto-read-webview"
                 source={source}
-                incognito={incognito}
+                incognito={false}
                 userAgent={Platform.OS === 'ios' ? UA_IOS : UA_ANDROID}
                 javaScriptEnabled
                 domStorageEnabled
@@ -334,6 +277,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardHi,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderHi,
+  },
+  note: {
+    color: colors.textDim,
+    fontSize: 12,
+    lineHeight: 16,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.xs,
+    backgroundColor: colors.card,
   },
   closeText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.7 },
