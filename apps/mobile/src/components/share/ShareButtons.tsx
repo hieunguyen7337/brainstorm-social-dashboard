@@ -6,6 +6,8 @@ import { colors, platformMeta, radius, space, type as t, withAlpha } from '@/src
 import type { Post } from '@/src/types';
 import { PlatformIcon, haptic } from '@/src/ui';
 
+import { IgPostSheet } from '@/src/igPost/IgPostSheet';
+
 import { useShare, type ShareAction, type ShareWiring } from './useShare';
 
 export interface ShareButtonsProps extends ShareWiring {
@@ -117,6 +119,7 @@ export function ShareButtons({ post, compact = false, small = false, disabled = 
           </Text>
         </Pressable>
       ))}
+      {share.igSheet ? <IgPostSheet {...share.igSheet} /> : null}
     </View>
   );
 }

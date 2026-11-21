@@ -101,6 +101,7 @@ export class AutoReadRunner {
   private injectTimer: unknown = null;
   private navigations = 0;
   private injections = 0;
+  private fallbackTarget: PageUrl | null = null;
   private lastInject: { url: string; at: number; ran: boolean } | null = null;
   private disposed = false;
 
@@ -181,6 +182,25 @@ export class AutoReadRunner {
     void this.end(() => this.deps.emitClose());
   }
 
+  /**
+   * Close pressed while still waiting for the sign-in: when the page is already signed in (any non-login page), read it
+   * now instead of throwing the sign-in away. Returns true when a read started; the sheet then closes itself when done.
+   */
+  readBeforeClose(): boolean {
+    let started = false;
+    this.guard(() => {
+      if (this.isOver() || this.phase !== 'login' || !this.currentUrl || !this.currentRaw) return;
+      if (!this.flow.pastLogin(this.currentUrl)) return;
+      this.stale = null;
+      this.lastInject = null;
+      this.injections = 0;
+      this.navigations = 0;
+      this.onPage(this.currentUrl, this.currentRaw, true);
+      started = this.phase !== 'login';
+    });
+    return started;
+  }
+
   /** The sheet is going away: stop everything and call nothing back. */
   dispose(): void {
     this.disposed = true;
@@ -213,7 +233,11 @@ export class AutoReadRunner {
       this.stale = null;
     }
     if (this.phase === 'login') {
-      if (!this.flow.pastLogin(u)) return;
+      if (!this.flow.pastLogin(u)) {
+        // A real login page resets the read budget: the person is signing in again, not looping on a signed-out feed.
+        if (this.flow.isLogin(u)) this.injections = 0;
+        return;
+      }
       const first = this.flow.steps[0];
       if (first.direct?.(u, this.ctx)) {
         this.enterStep(0, false);
@@ -228,7 +252,8 @@ export class AutoReadRunner {
     } else if (this.phase === 'fallback') {
       if (!this.flow.hostOk(u)) return;
       if (this.flow.isLogin(u)) this.toLogin(false);
-      else this.arm(SETTLE_MS, () => void this.captureNow());
+      else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path)))
+        this.arm(SETTLE_MS, () => void this.captureNow());
     }
   }
 
@@ -325,6 +350,7 @@ export class AutoReadRunner {
       return;
     }
     this.setPhase('fallback');
+    this.fallbackTarget = t;
     if (target && t && !(this.currentUrl && this.currentUrl.host === t.host && samePath(this.currentUrl.path, t.path))) {
       this.navigateTo(target);
       this.arm(FALLBACK_LOAD_MS, () => void this.captureNow());
