@@ -301,6 +301,47 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expectNoSecrets(env.rawPosted);
     });
 
+    it('on the feed, step 0 sends the numbers and asks for the profile page', async () => {
+      const env = await run({
+        routes: [
+          [CURRENT, ok({ user: { username: 'jane' } })],
+          [PROFILE, ok({ data: { user: { username: 'jane', edge_followed_by: { count: 7 } } } })],
+        ],
+      });
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.go).toBe('jane');
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 7 });
+    });
+
+    it('fixed: the profile page wins over a data call that says 0 followers (tester, 2026-11-21)', async () => {
+      const page = '<meta property="og:description" content="1 Followers, 3 Following, 0 Posts - See Instagram photos" />';
+      const env = await run({
+        url: 'https://www.instagram.com/jane/',
+        routes: [
+          [CURRENT, ok({ user: { username: 'jane' } })],
+          [PROFILE, ok({ data: { user: { username: 'jane', edge_followed_by: { count: 0 }, edge_follow: { count: 3 } } } })],
+          ['/jane/', ok(page)],
+        ],
+      });
+      expect(env.posted[0].status).toBe('ok');
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1 });
+      expect(env.posted[0].data.diag).toMatchObject({ api: 0, txt: 1, src: 'page' });
+    });
+
+    it('an abbreviated page count does not replace the exact count from the data call', async () => {
+      const page = '<meta property="og:description" content="1.2K Followers, 3 Following, 9 Posts" />';
+      const env = await run({
+        url: 'https://www.instagram.com/jane/',
+        routes: [
+          [CURRENT, ok({ user: { username: 'jane' } })],
+          [PROFILE, ok({ data: { user: { username: 'jane', edge_followed_by: { count: 1234 } } } })],
+          ['/jane/', ok(page)],
+        ],
+      });
+      expect(env.posted[0].data.user.edge_followed_by).toEqual({ count: 1234 });
+      expect(env.posted[0].data.diag.src).toBeUndefined();
+    });
+
     it('a username given by the API without numbers anywhere is not turned into numbers', async () => {
       const env = await run({
         routes: [[CURRENT, ok({ user: { username: 'jane' } })], [PROFILE, ok({ data: { user: { username: 'jane' } } })]],
