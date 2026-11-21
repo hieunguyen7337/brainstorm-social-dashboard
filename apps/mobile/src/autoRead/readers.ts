@@ -326,8 +326,10 @@ async function run() {
   // Second way to the username: the account id cookie and that account's info.
   var info = null;
   var uid = igCookie('ds_user_id');
+  var cStatus = -1;
   if (!username && /^[0-9]{1,30}$/.test(uid)) {
     var c = await igJson('/api/v1/users/' + uid + '/info/');
+    cStatus = c.status;
     if (c.json && isObj(c.json.user)) {
       info = c.json.user;
       if (typeof info.username === 'string') username = info.username;
@@ -335,16 +337,25 @@ async function run() {
   }
   // Third way: the profile tab of the page's own navigation bar links to /<username>/ (2026-11-21: on a signed-in phone
   // both calls above gave no username and the sheet looped on the feed).
+  // The bar may not be drawn yet when the script lands: wait for it, leaving time for the profile call.
   var nav = igNavUsername();
+  var navT0 = Date.now();
+  while (!username && !nav.name && Date.now() - navT0 < 6000 && remaining() > 3500) {
+    await tick();
+    nav = igNavUsername();
+  }
   if (!username && nav.name) username = nav.name;
+  // Which step failed, for the app log: status codes and yes/no only, never a cookie value.
+  var diag = { a: a.status, c: cStatus, uid: !!uid, csrf: !!igCookie('csrftoken'), nav: !!nav.name, bar: nav.signedIn, path: location.pathname };
   if (!username) {
     if (a.status === 429 || a.status >= 500) return finish('error');
     // Signed out only when the page has no account cookie and no signed-in navigation bar.
-    return finish(uid || nav.signedIn ? 'empty' : 'signed_out');
+    return finish(uid || nav.signedIn ? 'empty' : 'signed_out', { diag: diag });
   }
   var user = null;
   try {
     var b = await igJson('/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username));
+    diag.b = b.status;
     var bj = b.json;
     if (bj && isObj(bj.data) && isObj(bj.data.user)) user = bj.data.user;
   } catch (e) {
@@ -359,7 +370,7 @@ async function run() {
       edge_owner_to_timeline_media: { count: num(info.media_count) },
     };
   }
-  if (!user) return finish('empty', { username: username });
+  if (!user) return finish('empty', { username: username, diag: diag });
   finish('ok', { user: igUser(user, username) });
 }
 `;

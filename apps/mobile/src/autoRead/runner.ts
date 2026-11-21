@@ -152,6 +152,8 @@ export class AutoReadRunner {
       if (this.phase !== 'reading') return;
       const msg = parseMessage(raw);
       if (!msg || msg.platform !== this.deps.platform || msg.step !== this.step) return;
+      // A failed read says which step failed (status codes, no cookie values): visible in `adb logcat -s ReactNativeJS`.
+      if (msg.status !== 'ok') console.log(`[autoRead] ${String(raw).slice(0, 500)}`);
       if (msg.status === 'ok') this.onStepData(msg.data);
       else if (msg.status === 'signed_out') this.toLogin(false);
       else void this.stepEmpty(msg.data);
