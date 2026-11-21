@@ -172,6 +172,7 @@ export function DashboardBoard({
                     followers={followers}
                     tiles={summary.tiles}
                     notRead={summary.not_read}
+                    split={summary.engagement_split}
                   />
                 ) : (
                   <KpiSkeleton count={real ? 5 : 4} />

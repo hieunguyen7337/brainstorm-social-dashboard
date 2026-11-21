@@ -914,7 +914,8 @@ TINY = base64.b64encode(b"not a real png: the bytes are never sniffed").decode()
 UNAVAILABLE = {"detail": "Couldn't read the screenshot right now. Try again in a moment."}
 READ_KEYS = {
     "platform", "detected_platform", "handle", "followers", "following", "posts_count", "views",
-    "engagements", "profile_views", "period_days", "posts", "confidence", "notes", "ai_used",
+    "engagements", "likes", "comments", "shares", "profile_views", "period_days", "posts", "confidence", "notes",
+    "ai_used",
 }
 POST_KEYS = {"content", "views", "likes", "comments", "shares", "posted_at"}
 COUNT_KEYS = ("followers", "following", "posts_count", "views", "engagements", "profile_views")
@@ -922,8 +923,8 @@ POST_COUNT_KEYS = ("views", "likes", "comments", "shares")
 REQUEST = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
 BLANK_READING = {
     "detected_platform": None, "handle": None, "followers": None, "following": None, "posts_count": None,
-    "views": None, "engagements": None, "profile_views": None, "period_days": None, "confidence": "medium",
-    "notes": None,
+    "views": None, "engagements": None, "likes": -1, "comments": -1, "shares": -1,  # -1: not shown (plain ints)
+    "profile_views": None, "period_days": None, "confidence": "medium", "notes": None,
 }
 BLANK_POST = {
     "content": None, "views": None, "likes": None, "comments": None, "shares": None, "posted_at": None,
@@ -1220,7 +1221,8 @@ def test_vision_success_maps_the_reading(auth, monkeypatch):
     client, headers, ws = auth
     reading = _reading(
         detected_platform="instagram", handle="acme_studio", followers=1200, following=48, posts_count=12,
-        views=34000, engagements=560, profile_views=215, period_days=30, confidence="high",
+        views=34000, engagements=560, likes=300, comments=12, shares=4, profile_views=215, period_days=30,
+        confidence="high",
         notes="Read followers, following and posts from your Instagram profile.",
         posts=[
             _post(content="Launch day!", views=900, likes=40, comments=3, shares=2, posted_at="2026-11-02"),
@@ -1517,7 +1519,9 @@ def test_vision_real_sdk_sends_the_expected_request_and_parses_the_reply(vision_
 
     result = vision.read_screenshot(vision_db, "w_test", "x", TINY, "image/jpeg")
 
-    assert result.model_dump() == {"platform": "x", "ai_used": True, **answer.model_dump()}
+    # the reading's -1 ("not shown") for likes, comments and shares reaches the app as null
+    not_shown = {"likes": None, "comments": None, "shares": None}
+    assert result.model_dump() == {"platform": "x", "ai_used": True, **answer.model_dump(), **not_shown}
     (request,) = sent
     assert request["model"] == settings.ai_model and request["max_tokens"] == 4000
     assert request["system"] == vision.SYSTEM_PROMPT
@@ -1640,7 +1644,7 @@ def test_real_workspace_screenshot_ingest_dashboard(client, monkeypatch):
     # 2. Claude reads a screenshot of an Instagram profile and its insights (mocked; no key, no network).
     reading = vision.ScreenshotReading(
         detected_platform="instagram", handle="@hieu73372025", followers=46, following=48, posts_count=2,
-        views=1234, engagements=56, profile_views=215, period_days=30,
+        views=1234, engagements=56, likes=-1, comments=-1, shares=-1, profile_views=215, period_days=30,
         posts=[vision.ScreenshotPost(content="Our first reel", views=900, likes=40, comments=6, shares=2,
                                      posted_at="2026-11-10")],
         confidence="high", notes="Read your Instagram profile and insights.",

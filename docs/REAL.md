@@ -35,7 +35,8 @@ Response `ScreenshotRead`:
   "handle": "hieu73372025"|null,
   "followers": 46|null, "following": 48|null, "posts_count": 0|null,
   "views": 1234|null, "engagements": 56|null, "profile_views": 215|null,
-  "period_days": 7|30|90|null,          // the window views/engagements/profile_views cover, if shown
+  "likes": 40|null, "comments": 12|null, "shares": 4|null,  // the account's own split, only when shown apart
+  "period_days": 7|30|90|null,          // the window views/engagements/likes/comments/shares/profile_views cover
   "posts": [ { "content": "first 200 chars"|null, "views": 0|null, "likes": 0|null,
                "comments": 0|null, "shares": 0|null, "posted_at": "YYYY-MM-DD"|null } ],  // max 20
   "confidence": "high"|"medium"|"low",
@@ -56,6 +57,8 @@ The app saves with the existing `POST /api/metrics/ingest`, with these changes:
 - Ingest marks the connection `status 'connected'`, `mode 'live'`, sets `handle` when given and `followers` when
   given, records a `connected` event the first time ("Connected Instagram (real)"), and keeps everything else it
   does today (snapshots, posts matched or created with `metrics_source 'real'`, daily_metrics deltas).
+- Account `likes`, `comments`, `shares` are optional too (see "Engagement split" in CONTRACT.md); with none of them
+  the Engagements tile shows one number as before.
 - Post-level numbers: `views` and `engagements` (likes + comments + shares when only those are known) are
   required on `IngestPost` today; the app sends 0 for a missing one only when the other is known, else skips the
   post.

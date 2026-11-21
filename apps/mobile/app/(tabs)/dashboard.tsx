@@ -196,6 +196,7 @@ export default function DashboardScreen() {
                   real={realNumbers}
                   tiles={summary.tiles}
                   notRead={summary.not_read}
+                  split={summary.engagement_split}
                 />
               </View>
             ) : (
@@ -207,6 +208,7 @@ export default function DashboardScreen() {
                 real={realNumbers}
                 tiles={summary.tiles}
                 notRead={summary.not_read}
+                split={summary.engagement_split}
               />
             )}
           </Reveal>

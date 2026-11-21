@@ -197,6 +197,22 @@ export interface Totals {
   conversions: number;
 }
 
+/**
+ * Engagements as likes / comments / shares (docs/CONTRACT.md, "Engagement split"). `likes + comments + shares + other +
+ * unsplit` is `totals.engagements`.
+ */
+export interface EngagementSplit {
+  likes: number;
+  comments: number;
+  shares: number;
+  /** Saves and anything else a split platform counts in its engagements total. */
+  other: number;
+  /** Engagements from platforms that only report a total. */
+  unsplit: number;
+  /** The platforms whose split is included. */
+  platforms: Platform[];
+}
+
 export interface DashboardSummary {
   days: number;
   totals: Totals;
@@ -217,6 +233,8 @@ export interface DashboardSummary {
   tiles?: Partial<Record<keyof Totals, number | null>>;
   /** Short reason per metric whose `tiles` value is null, e.g. "Instagram does not share views for photo posts", "Not read yet: open Connect to read". */
   not_read?: Partial<Record<keyof Totals, string>>;
+  /** Engagements broken down; null/absent in a sample workspace, on older servers, or when no platform saved a split. */
+  engagement_split?: EngagementSplit | null;
 }
 
 export interface ActivityItem {
@@ -442,6 +460,10 @@ export interface ScreenshotRead {
   posts_count: number | null;
   views: number | null;
   engagements: number | null;
+  /** The account's own likes, comments and shares, when the image shows them as separate figures. Absent on older servers. */
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
   profile_views: number | null;
   /** The window views, engagements and profile views cover, when the image shows one. */
   period_days: 7 | 30 | 90 | null;
@@ -460,6 +482,10 @@ export interface IngestAccount {
   followers?: number | null;
   views?: number | null;
   engagements?: number | null;
+  /** The account's engagements split up. With only these the server totals them into `engagements`. */
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
   clicks?: number | null;
   profile_views?: number | null;
 }

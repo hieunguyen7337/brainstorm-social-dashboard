@@ -75,11 +75,23 @@ class IngestAccount(BaseModel):
     followers: Count | None = None
     views: Count | None = None
     engagements: Count | None = None
+    # engagements split up, when the platform shows them apart (Instagram and LinkedIn insights do)
+    likes: Count | None = None
+    comments: Count | None = None
+    shares: Count | None = None
     clicks: Count | None = None
     profile_views: Count | None = None
     # Also accepted here, as a convenience: IngestRequest.handle / .period_days (top level) win when both are sent.
     handle: str | None = Field(default=None, max_length=MAX_HANDLE)
     period_days: PeriodDays | None = None
+
+    @model_validator(mode="after")
+    def _engagements_cover_the_split(self) -> "IngestAccount":
+        """The total can never be smaller than its parts; with no total given it is the sum of the parts given."""
+        parts = [v for v in (self.likes, self.comments, self.shares) if v is not None]
+        if parts:
+            self.engagements = max(self.engagements or 0, min(sum(parts), 10**12))
+        return self
 
     def numbers(self) -> dict[str, int]:
         """The account-level counts that were given (handle and period_days are not counts)."""
@@ -409,13 +421,15 @@ def _insert_post(conn: sqlite3.Connection, workspace_id: str, platform: str, p: 
 
 def _snapshot(conn: sqlite3.Connection, workspace_id: str, platform: str, post_id: str | None, source: str,
               captured_at: str, *, followers: int | None = None, period_days: int | None = None,
+              likes: int | None = None, comments: int | None = None, shares: int | None = None,
               **counts: int | None) -> None:
     """One metric_snapshots row; a metric that was not captured stays NULL."""
     conn.execute(
         "INSERT INTO metric_snapshots (id, workspace_id, post_id, platform, views, engagements, clicks,"
-        " conversions, followers, source, captured_at, period_days) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        " conversions, followers, source, captured_at, period_days, likes, comments, shares)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (new_id("s_"), workspace_id, post_id, platform, *(counts.get(k) for k in KEYS), followers, source,
-         captured_at, period_days),
+         captured_at, period_days, likes, comments, shares),
     )
 
 
@@ -478,7 +492,7 @@ def ingest(conn: sqlite3.Connection, workspace_id: str, req: IngestRequest) -> d
         if acc.numbers():
             _snapshot(conn, workspace_id, platform, None, req.source, now, followers=acc.followers,
                       period_days=req.period_days, views=acc.views, engagements=acc.engagements,
-                      clicks=acc.clicks)
+                      clicks=acc.clicks, likes=acc.likes, comments=acc.comments, shares=acc.shares)
             snapshots += 1
         if acc.followers is not None:
             conn.execute("UPDATE connections SET followers = ? WHERE workspace_id = ? AND platform = ?",

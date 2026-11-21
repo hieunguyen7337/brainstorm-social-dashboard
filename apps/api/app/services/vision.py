@@ -38,8 +38,10 @@ TOO_LARGE_DETAIL = "image too large: 5 MB at most"
 UNAVAILABLE_DETAIL = "Couldn't read the screenshot right now. Try again in a moment."
 
 PeriodDays = Literal[7, 30, 90]
-COUNTS = ("followers", "following", "posts_count", "views", "engagements", "profile_views")
+COUNTS = ("followers", "following", "posts_count", "views", "engagements", "likes", "comments", "shares",
+          "profile_views")
 POST_COUNTS = ("views", "likes", "comments", "shares")
+SPLIT_COUNTS = ("likes", "comments", "shares")  # the account's engagements split, see ScreenshotReading
 
 
 class VisionUnavailable(Exception):
@@ -76,6 +78,19 @@ class ScreenshotReading(BaseModel):
     engagements: int | None = Field(
         description="Total interactions (likes, comments, shares, saves) shown as one figure"
     )
+    # The next three are plain integers, not nullable: the live API refuses a schema with more than 16 union-typed
+    # (nullable) parameters ("Schema is too complex") and this one already has exactly 16. So "not shown" is -1 here;
+    # `_sanitise` turns it into None (see test_vision_schema_fits_the_structured_output_limits).
+    likes: int = Field(
+        description="The account's total likes or reactions in the period, when shown as its own figure; -1 if not shown"
+    )
+    comments: int = Field(
+        description="The account's total comments in the period, when shown as its own figure; -1 if not shown"
+    )
+    shares: int = Field(
+        description="The account's total shares, reposts or retweets in the period, when shown as its own figure; "
+        "-1 if not shown"
+    )
     profile_views: int | None = Field(description="Profile visits or profile viewers in the period shown")
     period_days: PeriodDays | None = Field(
         description="Days that views, engagements and profile_views cover when the screen states it, rounded "
@@ -96,6 +111,10 @@ class ScreenshotRead(ScreenshotReading):
 
     platform: Platform
     ai_used: bool = True
+    # Claude's -1 ("not shown") arrives here as None, like every other number.
+    likes: int | None = None
+    comments: int | None = None
+    shares: int | None = None
 
 
 SYSTEM_PROMPT = """You read screenshots of a person's own social media account (a profile page, or a \
@@ -126,9 +145,16 @@ reached" only when no views or impressions figure is shown.
 screen shows them as one figure, such as "Interactions" or "Engagements". On a TikTok profile the \
 "Likes" count is the account's total likes: use it. If only separate likes, comments or shares are \
 shown, do not add them up: null.
+- likes, comments, shares: the account's own totals for the period, when the screen shows them as separate \
+figures (an insights "Interactions" breakdown, for example): likes or reactions; comments or replies; \
+shares, reposts or retweets. Copy only the ones that are shown and use -1 (never 0, never null) for each \
+one that is not, and never work one out from the others or from engagements. Saves are not a field. These \
+are the account's totals, not one post's numbers (those go under posts). A lone "Likes" on a TikTok \
+profile is engagements, not likes.
 - profile_views: how often the profile was visited ("Profile views", "Profile visits", "Profile \
 viewers").
-- period_days: the window that views, engagements and profile_views cover, when the screen states it: \
+- period_days: the window that views, engagements (and its likes, comments and shares) and profile_views \
+cover, when the screen states it: \
 "Last 7 days" is 7, "Last 30 days" is 30. Round up to the next of 7, 30 or 90 (28 days is 30, 60 days is \
 90). null when no window is stated, when it is longer than 90 days ("12 months", "All time"), or for \
 all-time totals. If the figures cover different windows, use the window of views (of engagements when \
@@ -247,6 +273,11 @@ def _sanitise(platform: str, parsed: Any) -> ScreenshotRead:
     raw_posts = getattr(parsed, "posts", None)
     detected = getattr(parsed, "detected_platform", None)
     confidence = getattr(parsed, "confidence", None)
+    counts = {name: _count(getattr(parsed, name, None)) for name in COUNTS}
+    if all(counts[name] == 0 for name in SPLIT_COUNTS):
+        # Asked for -1 when a figure is not shown, a model can still answer 0 for all three. A split of nothing but
+        # zeros says nothing the total does not, and would read as "no likes" on a screenshot that only gave a total.
+        counts.update(dict.fromkeys(SPLIT_COUNTS))
     return ScreenshotRead(
         platform=platform,
         detected_platform=detected if detected in PLATFORMS else None,
@@ -255,7 +286,7 @@ def _sanitise(platform: str, parsed: Any) -> ScreenshotRead:
         posts=[_post(p) for p in raw_posts[:MAX_POSTS]] if isinstance(raw_posts, list | tuple) else [],
         confidence=confidence if confidence in ("high", "medium", "low") else "low",
         notes=_text(getattr(parsed, "notes", None), MAX_NOTES),
-        **{name: _count(getattr(parsed, name, None)) for name in COUNTS},
+        **counts,
     )
 
 

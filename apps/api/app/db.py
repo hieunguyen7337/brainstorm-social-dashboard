@@ -193,6 +193,11 @@ COLUMNS_V2 = (
     ("metric_snapshots", "period_days", "INTEGER"),
     # the person's learned writing style (WritingStyle as JSON; '' until they upload writing samples)
     ("workspaces", "writing_style", "TEXT NOT NULL DEFAULT ''"),
+    # an account snapshot's engagements split into likes / comments / shares, when the platform shows them apart
+    # (NULL: not captured, never read as 0)
+    ("metric_snapshots", "likes", "INTEGER"),
+    ("metric_snapshots", "comments", "INTEGER"),
+    ("metric_snapshots", "shares", "INTEGER"),
 )
 
 

@@ -40,6 +40,9 @@ class Snapshot(BaseModel):
     clicks: int | None
     conversions: int | None
     followers: int | None  # NULL = not captured
+    likes: int | None = None  # an account snapshot's engagements split; NULL = not captured
+    comments: int | None = None
+    shares: int | None = None
     source: str
     captured_at: str
 
