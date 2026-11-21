@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import { ActivityIndicator, Image, Linking, Platform as RNPlatform, StyleSheet, Text, View } from 'react-native';
 
-import { api, getToken, publicBaseUrl } from '@/src/api';
+import { androidDownloadUrl, api, getToken, publicBaseUrl } from '@/src/api';
 import { AutoReadSheet, autoReadAvailable, type DeviceRead } from '@/src/autoRead';
 import {
   checkForm,
@@ -207,6 +207,26 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
     setAuto(platform);
   };
 
+  // Web and iOS cannot sign in inside Pulse (a website cannot read another site, and the server is rate-limited by
+  // Instagram, 2026-11-21): "Connect" still comes first and leads to the Android app; the screenshot stays the fallback.
+  const androidBrowser =
+    RNPlatform.OS === 'web' && typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent ?? '');
+  const connectElsewhere = (platform: Platform) => {
+    if (busy) return;
+    if (androidBrowser) {
+      setNote(platform, {
+        tone: 'info',
+        text: 'Opening the Pulse Android app download. Install it, open Pulse and tap Connect: you sign in once and your numbers are read for you.',
+      });
+      void Linking.openURL(androidDownloadUrl()).catch(() => undefined);
+    } else {
+      setNote(platform, {
+        tone: 'info',
+        text: `Connecting signs you in inside the Pulse Android app. On an Android phone, open ${publicBaseUrl()} and tap Connect to get it. On iPhone or a computer for now, upload a screenshot.`,
+      });
+    }
+  };
+
   /** Numbers read on the phone: saved at once with source "device". */
   const autoResult = (platform: Platform, read: DeviceRead) => {
     if (!alive.current) return;
@@ -299,7 +319,7 @@ export function ConnectAccounts({ initialPlatform = null, onSaved, handleRef }: 
               else setExpanded((cur) => (cur === platform ? null : platform));
             }}
             onUpload={() => upload(platform)}
-            onConnect={canAutoRead ? () => connect(platform) : undefined}
+            onConnect={canAutoRead ? () => connect(platform) : () => connectElsewhere(platform)}
           >
             {mine?.step === 'reading' ? <Reading thumb={mine.thumb} onCancel={cancel} /> : null}
             {mine?.step === 'saving' ? <Saving /> : null}

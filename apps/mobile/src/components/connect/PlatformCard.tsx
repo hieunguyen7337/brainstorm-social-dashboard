@@ -35,7 +35,7 @@ export interface PlatformCardProps {
   note: CardNote | null;
   onUpdate: () => void;
   onUpload: () => void;
-  /** Sign in inside Pulse and read the numbers on the phone. Absent where that is not available (web, iOS, an older APK). */
+  /** Sign in inside Pulse and read the numbers (Android app); on web and iOS it points to the Android app. */
   onConnect?: () => void;
   children?: ReactNode;
 }
@@ -108,7 +108,7 @@ export function PlatformCard({
           <>
             <Text style={t.small}>
               {onConnect
-                ? `Sign in to ${meta.label} here and Pulse reads your numbers. Or upload a screenshot: ${PLATFORM_HELP[platform]}.`
+                ? `Connect and Pulse reads your numbers for you. Only if that fails, upload a screenshot: ${PLATFORM_HELP[platform]}.`
                 : `Screenshot: ${PLATFORM_HELP[platform]}.`}
             </Text>
             <View style={styles.actions}>
@@ -124,12 +124,14 @@ export function PlatformCard({
               ) : null}
               <Button
                 small
-                variant={onConnect ? 'secondary' : 'primary'}
-                title="Upload a screenshot"
+                variant={onConnect ? 'ghost' : 'primary'}
+                title={onConnect ? 'Or upload a screenshot' : 'Upload a screenshot'}
                 icon="image-outline"
                 accessibilityLabel={`Upload ${meta.label} screenshot`}
                 disabled={busy}
                 onPress={onUpload}
+                // Connecting comes first: the upload is the fallback, so it is drawn greyed out (still pressable).
+                style={onConnect ? styles.fallback : undefined}
               />
             </View>
           </>
@@ -158,6 +160,7 @@ const styles = StyleSheet.create({
   headInfo: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.md },
   avatar: { width: 40, height: 40 },
   dimmed: { opacity: 0.5 },
+  fallback: { opacity: 0.5 },
   dot: {
     position: 'absolute',
     right: -2,

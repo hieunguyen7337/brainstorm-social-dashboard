@@ -40,7 +40,7 @@ export function ConnectCta({ style }: { style?: StyleProp<ViewStyle> }) {
         <Text style={[t.dim, styles.body]}>
           {Platform.OS === 'android' && autoReadAvailable()
             ? 'Sign in to your accounts inside Pulse and your numbers are read for you, then kept up to date. Everything on this dashboard comes from you.'
-            : 'Upload a screenshot of your profile or insights page and Claude reads the numbers. Everything on this dashboard comes from you.'}
+            : 'Connect your accounts and Pulse reads your numbers for you (in the Android app). No Android? Upload a screenshot instead. Everything on this dashboard comes from you.'}
         </Text>
       </View>
 
