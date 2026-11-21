@@ -115,9 +115,11 @@ behaviour is unchanged.
 
 - `src/autoRead/index.web.tsx`: `autoReadAvailable()` returns `true` when `window.pulseDesktop` exists, and
   `AutoReadSheet` calls `pulseDesktop.social.connect(platform)` and resolves to the same `onResult` / `onClose`
-  contract. `forgetSignIns()` calls `pulseDesktop.social.signOut()`. The connect cards
-  (`components/connect/PlatformCard.tsx`, `ConnectAccounts.tsx`) need no change: they already show
-  "Connect with <Platform>" when `autoReadAvailable()` is true.
+  contract. `forgetSignIns()` calls `pulseDesktop.social.signOut()`.
+- Connect cards (`components/connect/PlatformCard.tsx`, `ConnectAccounts.tsx`), owner decision: on desktop the
+  card's action is a **"Connect with <Platform>" button that opens the platform's login window**, not a screenshot
+  upload. The screenshot upload is shown only after a connect has failed (as the fallback link in the failure note).
+  A connected card's "Update" re-reads in the hidden window; a "Show <Platform>" link opens the signed-in site.
 - New `src/desktop/` (types for `window.pulseDesktop`, a hook `useDesktop()`).
 - New Assistant panel (desktop only): a chat screen/drawer that streams Claude's output (text deltas, tool calls,
   sub-agents, results), modelled on LocalBridge's `public/index.html` renderer. Shows a "Claude not found / not
@@ -342,8 +344,10 @@ panel is the demo. D4 Instagram publish with the in-app confirm if time allows.
 1. **Windows:** sign in once; afterwards social windows stay hidden and exist only while a task runs, one at a
    time. A window appears only for the first login, a platform checkpoint, or "Show Instagram" (section 3, 4.4).
 2. **Main window:** the web export is bundled in the app (`app://pulse/`), API on Fly (4.1).
-3. **v1 platform:** Instagram only for reading via the session and for publishing. Others keep the current
-   screenshot path and share links.
+3. **v1 platform:** Instagram first: it is the platform we test end to end and the only one `social_publish`
+   posts to. The login button and hidden read use the same generic `autoRead` flows, so the other five platforms get
+   them too (best effort, screenshot fallback after a failure); publishing for them is phase 2.
+6. **Connect cards:** the connect position is a button that opens a login window; screenshot only after a failure.
 4. **Confirmation:** one click in Pulse's confirm dialog publishes; no second confirmation on Instagram.
 5. **Claude:** rely on the person's own Claude Code CLI login. When detection fails, the Assistant panel says
    exactly what to do (install, sign in, update) (4.5).
