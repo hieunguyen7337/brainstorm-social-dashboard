@@ -112,7 +112,7 @@ def _mount_web(app: FastAPI) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def web(path: str):
-        if path.startswith(("api/", "mcp", "r/", "l/")):
+        if path.startswith(("api/", "mcp", "r/", "l/", "v/", "room/")):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         return HTMLResponse(install_page(android_download_url()), headers={"Cache-Control": "public, max-age=300"})
 
