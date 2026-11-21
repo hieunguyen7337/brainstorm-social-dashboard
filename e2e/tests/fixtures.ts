@@ -28,10 +28,17 @@ test.afterEach(async ({ page }, info) => {
   }
 });
 
-/** Onboard through the UI. Lands on the dashboard. */
+/**
+ * Onboard through the UI with the demo workspace (docs/REAL.md, "Demo workspaces"): Try the demo, sign in to Instagram
+ * with the synthetic demo account, then go to the dashboard. Lands on the dashboard with Instagram's numbers.
+ */
 export async function onboard(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: /start my demo/i }).click();
+  await page.getByRole('button', { name: /^try the demo$/i }).click();
+  await page.getByRole('button', { name: /^connect with instagram$/i }).click();
+  await page.getByRole('button', { name: /^sign in$/i }).click();
+  // The sheet reads for about three seconds, then hands back; the onboarding footer then offers the dashboard.
+  await page.getByRole('button', { name: /^go to my dashboard$/i }).click({ timeout: 30_000 });
   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
 }
 

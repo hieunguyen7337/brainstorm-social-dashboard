@@ -19,7 +19,7 @@ does not matter. Tab/button lookup uses role/text labels from the brief.
 ## Layout check (every tab at desktop 1440x900 and phone 390x844)
 
 `tests/layout.spec.ts` + `playwright.layout.config.ts` (separate from the phone functional suite above; Chromium only,
-projects `desktop` and `phone`). For each project it onboards ("Start my demo"), opens Dashboard, Trends, Create, Queue,
+projects `desktop` and `phone`). For each project it onboards ("Try the demo", then the synthetic Instagram sign-in), opens Dashboard, Trends, Create, Queue,
 Settings in turn, writes a full-content screenshot to `e2e/screenshots/layout-<project>-<tab>.png` and fails on:
 
 - horizontal overflow: `scrollWidth` of `html`/`body` beyond the viewport, `window.innerWidth` growing past it, or any visible

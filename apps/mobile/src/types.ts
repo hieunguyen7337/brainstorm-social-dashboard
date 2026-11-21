@@ -24,10 +24,18 @@ export interface WorkspaceCreate {
    * account. The app always sends true. false keeps the sample seed (tests, the MCP demo).
    */
   real?: boolean;
+  /**
+   * true: a demo workspace (docs/REAL.md, "Demo workspaces"): sign-ins and numbers are synthetic and labelled as such.
+   * Only the "Try the demo" link sends it. Never combined with `real`.
+   */
+  demo?: boolean;
 }
 
-/** 'real': every number comes from the person (a screenshot or typed). 'sample': the seeded demo workspace. */
-export type DataMode = 'sample' | 'real';
+/**
+ * 'real': every number comes from the person (a screenshot or typed). 'sample': an old seeded workspace (tests, the MCP
+ * demo). 'demo': the labelled synthetic workspace behind "Try the demo".
+ */
+export type DataMode = 'sample' | 'real' | 'demo';
 
 export interface Workspace {
   id: string;
@@ -538,6 +546,21 @@ export interface HarvestStatus {
   snapshots: number;
 }
 
+/** POST /api/connections/{platform}/demo (demo workspaces only): the synthetic sign-in and the numbers it "read". */
+export interface DemoSignInResult {
+  platform: Platform;
+  connection: Connection;
+  followers: number;
+  /** 30-day totals of the synthetic numbers. */
+  views: number;
+  engagements: number;
+  period_days: number;
+  posts_added: number;
+  /** false when the platform was already signed in: nothing was added twice. */
+  fresh: boolean;
+  captured_at: string;
+}
+
 // ---- the client surface (real client and in-memory mock both implement this) -------------------
 
 export interface DashboardQuery {
@@ -630,6 +653,8 @@ export interface PulseApi {
   ingestMetrics(body: IngestRequest): Promise<IngestResult>;
   /** GET /api/connections/harvest-status: when each platform's numbers were last saved. */
   getHarvestStatus(): Promise<HarvestStatus[]>;
+  /** POST /api/connections/{platform}/demo: the synthetic sign-in of a demo workspace (409 anywhere else). */
+  demoSignIn(platform: Platform): Promise<DemoSignInResult>;
 
   /** GET /api/posts/{id}/share (may 404 until the room/share API is deployed: callers fall back to `buildShareInfo`). */
   getShare(postId: string): Promise<ShareInfo>;

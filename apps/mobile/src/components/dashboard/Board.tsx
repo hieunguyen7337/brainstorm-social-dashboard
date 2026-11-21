@@ -32,7 +32,7 @@ import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
 import { POLL_MS } from '@/src/config';
 import { useAsync, type AsyncState } from '@/src/hooks';
 import { Col, Grid } from '@/src/layout';
-import { useIsRealWorkspace } from '@/src/session';
+import { useIsAccountsWorkspace, useIsDemoWorkspace } from '@/src/session';
 import { platformMeta, space, type as t } from '@/src/theme';
 import { LIVE_PLATFORMS } from '@/src/platforms';
 import { Card, Chip, ComingSoonLine, ChipRow, ErrorState, Skeleton } from '@/src/ui';
@@ -90,7 +90,9 @@ export function DashboardBoard({
   reconnecting,
   reloadSignal,
 }: DashboardBoardProps) {
-  const real = useIsRealWorkspace();
+  // Real or demo (docs/REAL.md): the numbers come from connected accounts. The demo's are synthetic, labelled "Demo".
+  const real = useIsAccountsWorkspace();
+  const demo = useIsDemoWorkspace();
   // Bumps after every save in the connect dialog: what a save changes is refetched at once instead of at the next poll.
   const { version } = useConnectSheet();
   const trends = useAsync(() => api.listTrends({ limit: 5 }), [reloadSignal], { intervalMs: TRENDS_POLL_MS });
@@ -135,6 +137,7 @@ export function DashboardBoard({
         error={connections.error}
         onRetry={() => void connections.reload()}
         real={real}
+        demo={demo}
         harvest={harvest.data}
       />
     </Reveal>
@@ -182,6 +185,7 @@ export function DashboardBoard({
                     compact
                     clicks={summary.real_clicks}
                     conversions={summary.real_conversions}
+                    notRead={summary.tiles?.clicks === null}
                     context={dataContext}
                     filterLabel={dataPlatform ? platformMeta[dataPlatform].label : undefined}
                     linkPost={linkPost}

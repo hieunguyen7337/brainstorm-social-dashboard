@@ -41,13 +41,14 @@ The MCP server accepts the same token as `Authorization: Bearer` or `?token=`.
 | Method | Path | Body -> Response | Owner |
 |---|---|---|---|
 | GET | /api/health | -> `{ok, app, version}` | core (main.py) |
-| POST | /api/workspaces | `WorkspaceCreate?` -> `WorkspaceWithToken` (seeds 30 days of data, 6 connections, 4 themes, ~24 posts) | U1 |
+| POST | /api/workspaces | `WorkspaceCreate?` -> `WorkspaceWithToken` (default: the sample seed of 30 days of data, 6 connections, 4 themes, ~24 posts; `real: true` seeds no numbers; `demo: true` makes an empty demo workspace, see `docs/REAL.md`; `real` and `demo` together is 422). `data_mode` is `sample`, `real` or `demo` | U1 |
 | GET | /api/workspace | -> `Workspace` | U1 |
 | PATCH | /api/workspace | `WorkspacePatch` -> `Workspace` | U1 |
 | POST | /api/workspace/style | `StyleLearnRequest` `{files: [{name, media_type, data_base64}] (at most 10), text}` -> `StyleLearnResult` `{style: WritingStyle, skipped: [{name, reason}]}`. One batch of the person's own writing (.txt, .md, .pdf, .docx, PNG/JPEG/WebP screenshots, pasted text; 5 MB a file, 15 MB a batch) refines the stored style with one Claude call (purpose `style`); the app sends up to 100 files as batches in turn. 409 busy, 413/415/422 bad upload, 503 AI unavailable. See "Writing style" | S1 |
 | DELETE | /api/workspace/style | -> `{ok: true}` (forget the learned style) | S1 |
 | GET | /api/connections | -> `list[Connection]` | U1 |
 | POST | /api/connections/{platform} | `ConnectionCreate` -> `Connection` | U1 |
+| POST | /api/connections/{platform}/demo | -> `DemoSignInResult` (the synthetic sign-in of a demo workspace: connects the platform and backfills synthetic numbers; 409 in any other workspace; see `docs/REAL.md`) | U1 |
 | DELETE | /api/connections/{platform} | -> `Connection` (status disconnected) | U1 |
 | GET | /api/dashboard?days=30&platform= | -> `DashboardSummary` | U1 |
 | GET | /api/activity?limit=30 | -> `list[ActivityItem]` | U1 |
@@ -144,3 +145,19 @@ against the FastAPI app, forwarding the caller's token), so MCP stays decoupled 
 ## Config (env, `app.config.settings`)
 `APP_NAME`, `DATABASE_PATH`, `WEB_DIST`, `PUBLIC_BASE_URL`, `ANTHROPIC_API_KEY`, `AI_MODEL`,
 `AI_WORKSPACE_LIMIT`, `AI_GLOBAL_CAP_USD`, `ANDROID_APK_URL`, `AUTOPILOT_LOOP_SECONDS`, `TRENDS_TTL_SECONDS`.
+
+## Desktop (Electron, `apps/desktop`; plan and rules: `docs/DESKTOP.md`)
+- The app bundles the web export and serves it from `app://pulse/`; the API stays on Fly (CORS is already `*`,
+  auth is Bearer). `apiBase()` uses `window.pulseDesktop.apiUrl` when the bridge exists.
+- Bridge `window.pulseDesktop`, IPC channel names and the publish-confirm shapes: `apps/mobile/src/desktop/types.ts`
+  (lead-owned, shared by both sides).
+- Social sign-in: one persistent session partition per platform (`persist:pulse-<platform>`). The connect card's
+  primary action on desktop is "Connect with <Platform>", which opens a login window the first time; later reads run
+  in a hidden window, one task at a time, destroyed when done. Screenshot upload is only the fallback after a failed
+  connect. Reads reuse `src/autoRead` (readers, parsers, runner) unchanged and save with ingest `source "device"`.
+- Cookie values, tokens and page HTML never leave a social window; only `PageMessage` payloads do.
+- Claude: the person's own Claude Code CLI (`claude -p --output-format stream-json`), with `--strict-mcp-config`,
+  no built-in tools, an empty cwd, and two MCP servers: `pulse` (this API's `/mcp`) and `pulse_desktop` (loopback,
+  per-launch port + token) with `social_status`, `social_read_metrics`, `social_publish` (v1 Instagram only).
+- Every real post needs one click in Pulse's confirm dialog (which also picks the photo); no second confirmation on
+  the platform, no auto-publish in desktop v1.

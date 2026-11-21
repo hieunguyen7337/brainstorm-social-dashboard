@@ -26,6 +26,7 @@ export function RealPeopleCard({
   linkPost,
   onFired,
   compact,
+  notRead,
 }: {
   clicks: number;
   conversions: number;
@@ -39,6 +40,8 @@ export function RealPeopleCard({
   onFired: () => void;
   /** One slim row (title, both counters and the button) for the wide board instead of the full card. */
   compact?: boolean;
+  /** The server says clicks were not read (no tracked link yet): show a dash, never a 0 that looks measured. */
+  notRead?: boolean;
 }) {
   const toast = useToast();
   const settled = useSettled(context);
@@ -117,13 +120,14 @@ export function RealPeopleCard({
                 {filterLabel ? <Badge label={`${filterLabel} only`} /> : null}
               </View>
               <View style={styles.compactStats}>
-                <Stat compact label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
+                <Stat compact label="Clicks" icon="finger-print" color={colors.info} value={clicks} notRead={notRead} context={context} />
                 <Stat
                   compact
                   label="Conversions"
                   icon="checkmark-circle"
                   color={colors.success}
                   value={conversions}
+                  notRead={notRead}
                   context={context}
                 />
               </View>
@@ -138,8 +142,8 @@ export function RealPeopleCard({
               </View>
 
               <View style={styles.stats}>
-                <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} context={context} />
-                <Stat label="Conversions" icon="checkmark-circle" color={colors.success} value={conversions} context={context} />
+                <Stat label="Clicks" icon="finger-print" color={colors.info} value={clicks} notRead={notRead} context={context} />
+                <Stat label="Conversions" icon="checkmark-circle" color={colors.success} value={conversions} notRead={notRead} context={context} />
               </View>
 
               <Text style={t.dim}>
@@ -189,6 +193,7 @@ function Stat({
   value,
   context,
   compact,
+  notRead,
 }: {
   label: string;
   icon: IconName;
@@ -196,12 +201,13 @@ function Stat({
   value: number;
   context: string;
   compact?: boolean;
+  notRead?: boolean;
 }) {
   return (
     <View
       style={[styles.stat, compact && styles.statCompact]}
       accessible
-      accessibilityLabel={`${value} real ${label.toLowerCase()}`}
+      accessibilityLabel={notRead ? `${label}: not read yet` : `${value} real ${label.toLowerCase()}`}
     >
       <View style={styles.statHead}>
         <Ionicons name={icon} size={14} color={color} />
@@ -209,7 +215,11 @@ function Stat({
           {label}
         </Text>
       </View>
-      <LiveNumber value={value} fromZero context={context} style={compact ? styles.statNumberCompact : styles.statNumber} />
+      {notRead ? (
+        <Text style={[compact ? styles.statNumberCompact : styles.statNumber, styles.dash]}>—</Text>
+      ) : (
+        <LiveNumber value={value} fromZero context={context} style={compact ? styles.statNumberCompact : styles.statNumber} />
+      )}
     </View>
   );
 }
@@ -234,6 +244,7 @@ const styles = StyleSheet.create({
   compactStats: { flexDirection: 'row', gap: space.sm },
   statCompact: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6, paddingHorizontal: 10 },
   statNumberCompact: { color: colors.text, fontSize: 22, lineHeight: 26, fontWeight: '800', letterSpacing: -0.5 },
+  dash: { color: colors.textDim },
   flash: { backgroundColor: withAlpha(colors.success, 0.2) },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   title: { flexShrink: 1, marginRight: 'auto' },
