@@ -23,6 +23,16 @@ TOOLS = {
     "record_metrics",
     "harvest_status",
     "harvest_instructions",
+    "browser_status",
+    "browser_open",
+    "browser_back",
+    "browser_screenshot",
+    "browser_read_text",
+    "browser_elements",
+    "browser_click",
+    "browser_type",
+    "browser_press",
+    "browser_scroll",
 }
 
 
