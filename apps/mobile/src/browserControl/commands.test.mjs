@@ -5,14 +5,19 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 
 import {
+  FILL_QUIET_MS,
   MESSAGE_TAG,
   allowedUrl,
+  captureBlock,
   describeCommand,
   elementsInShotPixels,
+  loginUrl,
   pageArgs,
+  pageHasSecret,
   pageScript,
   parseCommand,
   parsePageMessage,
+  safeUrl,
   shotSize,
 } from './commands.ts';
 
@@ -172,4 +177,148 @@ test('type with nothing focused asks for a click first', () => {
   vm.runInNewContext(pageScript({ id: 't4', action: 'type', args: { text: 'x' } }, SHOT), page.ctx);
   assert.equal(page.posted[0].ok, false);
   assert.match(page.posted[0].error, /click the field first/);
+});
+
+// ---- secrets never reach the agent: values, URLs, screenshots -----------------------------------------------------
+
+/** A text-typed input (a real DOM `type` property, as on a phone) holding a value, with a fixed on-screen box. */
+function input(attrs, value = '') {
+  const el = Object.create(HTMLInputElementProxy.prototype);
+  Object.assign(el, {
+    tagName: 'INPUT',
+    type: attrs.type ?? 'text',
+    events: [],
+    getAttribute: (n) => attrs[n] ?? null,
+    focus() {},
+    dispatchEvent(e) {
+      this.events.push(e.type);
+      return true;
+    },
+    getBoundingClientRect: () => ({ left: 10, top: 10, width: 100, height: 20, bottom: 30, right: 110 }),
+  });
+  el.value = value;
+  return el;
+}
+
+class HTMLInputElementProxy {
+  get value() {
+    return this._v ?? '';
+  }
+  set value(v) {
+    this._v = v;
+  }
+}
+
+/** A page whose body holds `fields` (what querySelectorAll returns) and whose activeElement is `active`. */
+function pageWith(fields, active) {
+  const page = fakePage({ active });
+  page.ctx.document.querySelectorAll = () => fields;
+  page.ctx.document.elementFromPoint = () => null;
+  page.ctx.getComputedStyle = () => ({ visibility: 'visible', display: 'block', opacity: '1' });
+  return page;
+}
+
+const SECRET_VALUE = 'hunter2-fake';
+
+test('elements never returns the value of a password or one-time-code field, even one typed as text', () => {
+  const fields = [
+    input({ type: 'text', autocomplete: 'current-password' }, SECRET_VALUE),
+    input({ type: 'text', name: 'otp', inputmode: 'numeric' }, '482913'),
+    input({ type: 'text', autocomplete: 'one-time-code' }, '482913'),
+    input({ type: 'password' }, SECRET_VALUE),
+    input({ type: 'text', name: 'q' }, 'cats'),
+  ];
+  const page = pageWith(fields, null);
+  vm.runInNewContext(pageScript({ id: 'e1', action: 'elements', args: {} }, SHOT), page.ctx);
+  const res = page.posted[0];
+  assert.equal(res.ok, true);
+  const dump = JSON.stringify(res);
+  assert.ok(!dump.includes(SECRET_VALUE), dump);
+  assert.ok(!dump.includes('482913'), dump);
+  assert.ok(dump.includes('cats'), 'an ordinary field keeps its value');
+  assert.deepEqual(
+    res.data.filter((e) => e.secret).map((e) => e.type),
+    ['text', 'text', 'text', 'password'],
+  );
+});
+
+test('a click or press result never names the value of a password field', () => {
+  const pw = input({ type: 'text', autocomplete: 'current-password' }, SECRET_VALUE);
+  const page = pageWith([pw], pw);
+  vm.runInNewContext(pageScript({ id: 'p1', action: 'press', args: { key: 'Tab' } }, SHOT), page.ctx);
+  assert.ok(!JSON.stringify(page.posted[0]).includes(SECRET_VALUE), JSON.stringify(page.posted[0]));
+});
+
+test('type refuses a password field inside a shadow root', () => {
+  const pw = input({ type: 'text', autocomplete: 'current-password' }, '');
+  const host = { tagName: 'MY-LOGIN', shadowRoot: { activeElement: pw }, getAttribute: () => null, focus() {} };
+  const page = fakePage({ active: host });
+  vm.runInNewContext(pageScript({ id: 's1', action: 'type', args: { text: SECRET_VALUE } }, SHOT), page.ctx);
+  assert.equal(page.posted[0].ok, false);
+  assert.match(page.posted[0].error, /password or code/);
+  assert.equal(pw.value, '');
+});
+
+test('type refuses a field inside an iframe: nothing is typed and the script never reaches into it', () => {
+  const frame = { tagName: 'IFRAME', getAttribute: () => null, focus() {} };
+  const page = fakePage({ active: frame });
+  vm.runInNewContext(pageScript({ id: 'f1', action: 'type', args: { text: SECRET_VALUE } }, SHOT), page.ctx);
+  assert.equal(page.posted[0].ok, false);
+});
+
+test('type refuses a password field by its autocomplete value, typed as text', () => {
+  const pw = input({ type: 'text', autocomplete: 'current-password' }, '');
+  const page = fakePage({ active: pw });
+  vm.runInNewContext(pageScript({ id: 'a1', action: 'type', args: { text: SECRET_VALUE } }, SHOT), page.ctx);
+  assert.equal(page.posted[0].ok, false);
+  assert.equal(pw.value, '');
+});
+
+test('safeUrl drops userinfo and fragments and redacts sensitive query values', () => {
+  assert.equal(
+    safeUrl('https://www.example.com/cb?trk=1&code=hunter2-fake&access_token=hunter2-fake#access_token=hunter2-fake'),
+    'https://www.example.com/cb?trk=1&code=REDACTED&access_token=REDACTED',
+  );
+  assert.equal(safeUrl('https://user:hunter2-fake@www.example.com/a?b=1'), 'https://www.example.com/a?b=1');
+  assert.equal(safeUrl('https://www.instagram.com/accounts/login/?next=%2F'), 'https://www.instagram.com/accounts/login/?next=%2F');
+  assert.equal(safeUrl('https://x.com/?sig=hunter2-fake&key=hunter2-fake'), 'https://x.com/?sig=REDACTED&key=REDACTED');
+  assert.equal(
+    safeUrl('https://x.com/cb?oauth_token=hunter2-fake&reset-token=hunter2-fake&trk=1'),
+    'https://x.com/cb?oauth_token=REDACTED&reset-token=REDACTED&trk=1',
+  );
+  assert.equal(safeUrl('about:blank'), 'about:blank');
+});
+
+test('page results carry the redacted url, so a one-time code in the address never leaves the phone', () => {
+  const msg = JSON.stringify({ tag: MESSAGE_TAG, id: 'u1', ok: true, url: 'https://www.example.com/cb?code=hunter2-fake' });
+  assert.equal(parsePageMessage(msg, 'u1').url, 'https://www.example.com/cb?code=REDACTED');
+});
+
+test('loginUrl recognises sign-in and challenge pages and leaves ordinary pages alone', () => {
+  assert.equal(loginUrl('https://www.instagram.com/accounts/login/'), true);
+  assert.equal(loginUrl('https://www.linkedin.com/checkpoint/challenge/AgX?x=1'), true);
+  assert.equal(loginUrl('https://www.linkedin.com/login'), true);
+  assert.equal(loginUrl('https://x.com/i/flow/login'), true);
+  assert.equal(loginUrl('https://accounts.example.com/'), true);
+  assert.equal(loginUrl('https://www.linkedin.com/feed/'), false);
+  assert.equal(loginUrl('https://www.instagram.com/someone/'), false);
+  assert.equal(loginUrl('about:blank'), false);
+});
+
+test('a screenshot is blocked on a sign-in page, while a password field is on screen, and for 10 s after a fill', () => {
+  const now = 100_000;
+  assert.equal(FILL_QUIET_MS, 10_000);
+  const calm = { url: 'https://www.linkedin.com/feed/', now, lastFillAt: 0, secretOnPage: false };
+  assert.equal(captureBlock(calm), null);
+  assert.match(captureBlock({ ...calm, lastFillAt: now - 3_000 }), /types/);
+  assert.equal(captureBlock({ ...calm, lastFillAt: now - FILL_QUIET_MS }), null);
+  assert.match(captureBlock({ ...calm, url: 'https://www.instagram.com/accounts/login/' }), /sign-in/);
+  assert.match(captureBlock({ ...calm, secretOnPage: true }), /password or code/);
+  assert.match(captureBlock({ ...calm, secretOnPage: null }), /did not answer/);
+});
+
+test('the sign-in check reads the elements probe: a secret field, none, or unknown', () => {
+  assert.equal(pageHasSecret({ ok: true, data: [{ tag: 'input', label: '', secret: true }] }), true);
+  assert.equal(pageHasSecret({ ok: true, data: [{ tag: 'a', label: 'Home' }] }), false);
+  assert.equal(pageHasSecret({ ok: false, error: 'The page did not answer (still loading?). Try again.' }), null);
 });

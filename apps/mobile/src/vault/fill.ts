@@ -4,7 +4,8 @@
  * `buildFillScript(platform, creds)` returns the one script that ever carries a saved username and password. The sign-in
  * sheet injects it into the platform's own login page after the person approved. The script:
  *   - re-checks, inside the page, that it is on the platform's https login page (a redirect between our check and the
- *     injection makes it refuse with `wrong_host`);
+ *     injection makes it refuse with `wrong_host`), with code a hostile page cannot subvert by replacing built-ins;
+ *   - refuses (`no_form`) when the page shows a one-time-code or account-check field, even on a login URL;
  *   - fills the username and password fields it finds (through open shadow roots too), the way React forms notice;
  *   - for two-step flows (X: username, Next, then password) waits for the password field to appear;
  *   - submits, then posts back ONLY `{ pulse: 'vaultFill', platform, status }`. Values are never posted back, logged or
@@ -73,6 +74,14 @@ const TARGETS: Record<Platform, FillTarget> = {
 /** Any path segment containing one of these is a challenge / second-factor / recovery screen: never filled. */
 const DENY = ['two_factor', 'two-factor', 'twofactor', '2fa', 'challenge', 'checkpoint', 'verify', 'verification',
   'otp', 'recover', 'reset', 'password', 'signup', 'sign-up', 'register', 'consent', 'suspended', 'captcha', 'code'];
+
+/**
+ * A visible field whose name, id, autocomplete or test id contains one of these (or is exactly `code` / `pin`) is a
+ * one-time-code or account check. X runs its unusual-activity check and 2FA code on the login URL itself, and TikTok
+ * opens its code dialog over the login form, so the URL alone cannot rule them out.
+ */
+const ONE_TIME = ['one-time-code', 'otp', 'verif', 'two_factor', 'two-factor', 'twofactor', '2fa', 'approvals_code',
+  'security_code', 'securitycode', 'passcode', 'challenge', 'ocfentertext'];
 
 const GENERIC_USER = [
   'input[autocomplete="username"]',
@@ -146,6 +155,7 @@ export function buildFillScript(platform: Platform, creds: FillCreds, timing: Fi
     domains: target.domains,
     paths: target.paths,
     deny: DENY,
+    otp: ONE_TIME,
     user: [...target.user, ...GENERIC_USER],
   };
   // ES5 on purpose: older Android System WebViews. No arrow functions, no let/const, no template strings.
@@ -161,22 +171,47 @@ export function buildFillScript(platform: Platform, creds: FillCreds, timing: Fi
       }
     } catch (e) {}
   }
+  // here() runs on whatever page the WebView is really on, and that page shares this script's JS realm: it may have
+  // replaced String, String.prototype or Array.prototype to make a check pass. So here() reads only location (its
+  // properties are unforgeable) and uses only operators, in-range string indexing and .length, never a method.
+  var UP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', LO = 'abcdefghijklmnopqrstuvwxyz';
+  function lower(s) {
+    var out = '', i, j, c;
+    for (i = 0; i < s.length; i++) {
+      c = s[i];
+      for (j = 0; j < 26; j++) if (c === UP[j]) { c = LO[j]; break; }
+      out += c;
+    }
+    return out;
+  }
+  function at(s, sub, off) {
+    if (off < 0 || off + sub.length > s.length) return false;
+    for (var i = 0; i < sub.length; i++) if (s[off + i] !== sub[i]) return false;
+    return true;
+  }
+  function has(s, sub) {
+    for (var i = 0; i + sub.length <= s.length; i++) if (at(s, sub, i)) return true;
+    return false;
+  }
   function seg(path, prefix) {
-    return path === prefix || path.indexOf(prefix.charAt(prefix.length - 1) === '/' ? prefix : prefix + '/') === 0;
+    return path === prefix || at(path, prefix[prefix.length - 1] === '/' ? prefix : prefix + '/', 0);
   }
   function here() {
-    var host = String(location.hostname || '').toLowerCase();
-    var path = String(location.pathname || '/').toLowerCase();
-    if (location.protocol !== 'https:') return false;
-    var hostOk = false, pathOk = false, i, j;
+    var proto = location.protocol, h = location.hostname, pa = location.pathname;
+    if (proto !== 'https:' || typeof h !== 'string' || typeof pa !== 'string') return false;
+    var host = lower(h), path = lower(pa || '/');
+    var hostOk = false, pathOk = false, i, j, d, part = '';
     for (i = 0; i < K.domains.length; i++) {
-      var d = K.domains[i];
-      if (host === d || host.slice(-(d.length + 1)) === '.' + d) hostOk = true;
+      d = K.domains[i];
+      if (host === d || (host.length > d.length && host[host.length - d.length - 1] === '.' &&
+        at(host, d, host.length - d.length))) hostOk = true;
     }
     for (i = 0; i < K.paths.length; i++) if (seg(path, K.paths[i])) pathOk = true;
-    var parts = path.split('/');
-    for (i = 0; i < parts.length; i++) {
-      for (j = 0; j < K.deny.length; j++) if (parts[i] && parts[i].indexOf(K.deny[j]) >= 0) return false;
+    for (i = 0; i <= path.length; i++) {
+      if (i === path.length || path[i] === '/') {
+        if (part) for (j = 0; j < K.deny.length; j++) if (has(part, K.deny[j])) return false;
+        part = '';
+      } else part += path[i];
     }
     return hostOk && pathOk;
   }
@@ -207,6 +242,18 @@ export function buildFillScript(platform: Platform, creds: FillCreds, timing: Fi
     return null;
   }
   function password() { return first('input[type="password"]'); }
+  function oneTimeCode() {
+    var list = all('input'), names = ['name', 'id', 'autocomplete', 'data-testid'], i, j, k, a;
+    for (i = 0; i < list.length; i++) {
+      if (!usable(list[i]) || String(list[i].type || '').toLowerCase() === 'password') continue;
+      for (k = 0; k < names.length; k++) {
+        a = String((list[i].getAttribute && list[i].getAttribute(names[k])) || '').toLowerCase();
+        if (a === 'code' || a === 'pin') return true;
+        for (j = 0; a && j < K.otp.length; j++) if (a.indexOf(K.otp[j]) >= 0) return true;
+      }
+    }
+    return false;
+  }
   function username(pw) {
     for (var i = 0; i < K.user.length; i++) {
       var el = first(K.user[i]);
@@ -250,6 +297,7 @@ export function buildFillScript(platform: Platform, creds: FillCreds, timing: Fi
     if (form && form.requestSubmit) form.requestSubmit();
   }
   if (!here()) { C = null; post('wrong_host'); return; }
+  if (oneTimeCode()) { C = null; post('no_form'); return; }
   var pw = password();
   var us = username(pw);
   if (!pw && !us) { C = null; post('no_form'); return; }

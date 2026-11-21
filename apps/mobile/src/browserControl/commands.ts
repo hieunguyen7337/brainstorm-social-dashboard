@@ -176,6 +176,78 @@ export function describeCommand(cmd: BrowserCommand): string {
   }
 }
 
+/** Query parameters whose values are credentials or one-time codes (OAuth, magic links, one-time codes). */
+const SENSITIVE_KEYS = new Set([
+  'code', 'token', 'access_token', 'id_token', 'refresh_token', 'otp', 'passcode', 'pin', 'password', 'pass', 'pwd',
+  'secret', 'session', 'sessionid', 'sid', 'auth', 'signature', 'sig', 'api_key', 'key', 'verification_code',
+  'one_time_code',
+]);
+
+/** Exact names above, or any name ending in a credential word (oauth_token, reset-token, api_key, jwt...). */
+const SENSITIVE_SUFFIXES = ['token', 'secret', 'password', 'passwd', 'otp', 'code', 'signature', 'sig', 'key', 'jwt'];
+const sensitiveKey = (name: string) => {
+  const k = unescapeKey(name).toLowerCase().replace(/-/g, '_');
+  return SENSITIVE_KEYS.has(k) || SENSITIVE_SUFFIXES.some((suffix) => k.endsWith(suffix));
+};
+
+const unescapeKey = (s: string) => {
+  try {
+    return decodeURIComponent(s.replace(/\+/g, ' '));
+  } catch {
+    return s;
+  }
+};
+
+/**
+ * A page address as it may leave the phone: no user:password@ part, no #fragment (OAuth implicit tokens live there),
+ * and the value of every sensitive query parameter replaced by REDACTED. The server applies the same rules
+ * (apps/api/app/routes/browser.py `_public_url`).
+ */
+export function safeUrl(url: string): string {
+  const m = /^(https?:\/\/)([^/?#]*)([^?#]*)(\?[^#]*)?/i.exec(url);
+  if (!m) return url.replace(/[?#].*$/, '');
+  const [, scheme, authority, path, query] = m;
+  const host = authority.slice(authority.lastIndexOf('@') + 1);
+  const pairs = (query ?? '')
+    .slice(1)
+    .split('&')
+    .filter(Boolean)
+    .map((piece) => {
+      const eq = piece.indexOf('=');
+      const name = eq < 0 ? piece : piece.slice(0, eq);
+      return sensitiveKey(name) ? `${name}=REDACTED` : piece;
+    });
+  return `${scheme}${host}${path}${pairs.length ? `?${pairs.join('&')}` : ''}`;
+}
+
+/** A sign-in, two-step or challenge page, by its address. A page that shows a password field is caught separately. */
+const LOGIN_PATH = /(^|\/)(log-?in|sign-?in|sign_in|checkpoint|challenge|two-?factor|2fa|verify|password|otp)(\/|$)/i;
+const LOGIN_HOST = /^(accounts|login|auth|sso|signin)\./i;
+export function loginUrl(url: string): boolean {
+  const m = /^https?:\/\/([^/?#]*)([^?#]*)/i.exec(url);
+  if (!m) return false;
+  const host = m[1].slice(m[1].lastIndexOf('@') + 1);
+  return LOGIN_HOST.test(host) || LOGIN_PATH.test(m[2]);
+}
+
+/** After a `type` command the phone stays quiet for this long: no screenshot, so a typed value cannot be seen. */
+export const FILL_QUIET_MS = 10_000;
+
+/** Whether a screenshot must be refused now. `secretOnPage` is null when the page could not be checked (fails closed). */
+export function captureBlock(p: { url: string; now: number; lastFillAt: number; secretOnPage: boolean | null }): string | null {
+  if (p.now - p.lastFillAt < FILL_QUIET_MS) return 'No screenshot for 10 s after Claude types into a field. Try again shortly.';
+  if (p.secretOnPage === true) return 'No screenshot while a password or code field is on screen.';
+  if (loginUrl(p.url)) return 'No screenshot of a sign-in page. Ask the user to look at their phone.';
+  if (p.secretOnPage === null) return 'The page did not answer the sign-in check, so no screenshot was taken. Try again.';
+  return null;
+}
+
+/** Reads the answer of an `elements` probe: true when a password or code field is on screen, null when unknown. */
+export function pageHasSecret(r: BrowserResult): boolean | null {
+  if (!r.ok || !Array.isArray(r.data)) return null;
+  return r.data.some((e) => isObj(e) && e.secret === true);
+}
+
 /** The page's answer to a script, or null when the message is not one of ours (or not for `id`). */
 export function parsePageMessage(data: string, id?: string): (BrowserResult & { id: string }) | null {
   let msg: unknown;
@@ -189,7 +261,7 @@ export function parsePageMessage(data: string, id?: string): (BrowserResult & { 
   const out: BrowserResult & { id: string } = { id: msg.id, ok: msg.ok === true };
   if (typeof msg.text === 'string') out.text = msg.text.slice(0, MAX_TEXT);
   if (typeof msg.error === 'string') out.error = msg.error.slice(0, 500);
-  if (typeof msg.url === 'string') out.url = msg.url;
+  if (typeof msg.url === 'string') out.url = safeUrl(msg.url);
   if (typeof msg.title === 'string') out.title = msg.title.slice(0, 300);
   if (msg.data !== undefined) out.data = msg.data;
   return out;
@@ -219,7 +291,7 @@ function attr(el, n) { return (el && el.getAttribute && el.getAttribute(n)) || '
 function label(el) {
   if (!el) return '';
   var t = attr(el, 'aria-label') || attr(el, 'title') || attr(el, 'placeholder') || attr(el, 'alt');
-  if (!t) t = el.innerText || (el.tagName === 'INPUT' && el.type !== 'password' ? el.value : '') || '';
+  if (!t) t = el.innerText || (el.tagName === 'INPUT' && !isSecret(el) ? el.value : '') || '';
   return clean(t).slice(0, 80);
 }
 function visible(el) {
