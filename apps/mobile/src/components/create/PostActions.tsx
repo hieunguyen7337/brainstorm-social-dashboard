@@ -126,6 +126,8 @@ function DraftActions({
           />
         </View>
       ) : null}
+      {/* "Post on LinkedIn" first: making a post and posting it is Generate, then this one tap (owner, 2026-11-21). */}
+      <ShareButtons post={post} compact={compact || !wide} disabled={blocked} {...share} />
       {compact ? (
         <>
           <View style={styles.row}>
@@ -154,7 +156,6 @@ function DraftActions({
           </View>
         </>
       )}
-      <ShareButtons post={post} compact={compact || !wide} disabled={blocked} {...share} />
       {scheduleOpen ? (
         <View style={styles.choices}>
           <Text style={t.label}>Schedule for</Text>

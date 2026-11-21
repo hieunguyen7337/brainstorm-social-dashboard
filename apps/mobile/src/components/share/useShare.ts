@@ -22,6 +22,7 @@ import { igAutoPostAvailable, type IgPostOutcome } from '@/src/igPost/IgPostShee
 import { IG_AUTOPOST, igButtonMode, igFailureText, igNote } from '@/src/igPost/logic';
 import { isLivePlatform } from '@/src/platforms';
 import { buildShareInfo, captionFor } from '@/src/shareLinks';
+import { shareToLinkedInAndroid } from './androidShare';
 import { platformMeta } from '@/src/theme';
 import type { Platform, Post, ShareInfo } from '@/src/types';
 import { copyText, haptic, useToast } from '@/src/ui';
@@ -407,6 +408,11 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
       return;
     }
     const label = action.key === 'threads' ? 'Threads' : platformMeta[shown.platform].label;
+    // LinkedIn's Android app ignores the composer URL (opens the feed, drops the text): hand it the post instead.
+    if (RNPlatform.OS === 'android' && action.key === 'linkedin' && (await shareToLinkedInAndroid(info.caption))) {
+      await markPublished(`Opened ${label}`);
+      return;
+    }
     if (await openUrl(url, blank)) {
       await markPublished(`Opened ${label}`);
       return;
