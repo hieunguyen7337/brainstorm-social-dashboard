@@ -374,9 +374,20 @@ function igFeedItem(it) {
   if (isObj(m.caption) && typeof m.caption.text === 'string') o.caption = { text: cut(m.caption.text, 200) };
   return o;
 }
+// Posts the profile call gave that carry a like or comment count (a hidden count is -1, which is no number). Posts with
+// no counts at all would reach the app as nothing readable and be dropped, so the feed is asked for them instead.
 function igHasPosts(u) {
   var m = u.edge_owner_to_timeline_media;
-  return isObj(m) && Array.isArray(m.edges) && m.edges.length > 0;
+  if (!isObj(m) || !Array.isArray(m.edges)) return false;
+  var keys = ['edge_liked_by', 'edge_media_preview_like', 'edge_media_to_comment'];
+  for (var i = 0; i < m.edges.length; i++) {
+    var n = isObj(m.edges[i]) ? m.edges[i].node : null;
+    if (!isObj(n)) continue;
+    for (var k = 0; k < keys.length; k++) {
+      if (isObj(n[keys[k]]) && n[keys[k]].count >= 0) return true;
+    }
+  }
+  return false;
 }
 // The account's last 12 posts, pruned: { status, items }. status is -1 on a timeout or failure; no body is kept.
 async function igFeed(username) {

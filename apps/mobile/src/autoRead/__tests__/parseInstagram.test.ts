@@ -264,6 +264,15 @@ describe('parseInstagramJson', () => {
       expect(garbageEdges.posts).toEqual([expect.objectContaining({ likes: 12, comments: 0 })]);
     });
 
+    it('edge posts with no count (hidden -1, or missing) give way to the feed posts that have counts', () => {
+      const bare = { count: 1, edges: [{ node: { taken_at_timestamp: 1_700_000_000, edge_media_preview_like: { count: -1 } } }] };
+      const p = withFeed([photo], { username: 'j', edge_owner_to_timeline_media: bare });
+      expect(p.posts).toEqual([expect.objectContaining({ likes: 12, comments: 0 })]);
+      const noFeed = withFeed([], { username: 'j', edge_owner_to_timeline_media: bare });
+      expect(noFeed.posts).toHaveLength(1);
+      expect(noFeed.posts![0].likes).toBeNull();
+    });
+
     it('a raw feed response ({ items, user }) is read too', () => {
       const p = parseInstagramJson({ items: [reel], user: { username: 'jane.doe' }, num_results: 1 });
       expect(p).toEqual({ handle: 'jane.doe', posts: [expect.objectContaining({ likes: 40, views: 900 })] });
