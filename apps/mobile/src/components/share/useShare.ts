@@ -282,10 +282,12 @@ function ask<T>(title: string, message: string, buttons: { text: string; value: 
   });
 }
 
-const askIgRoute = (): Promise<IgRoute> =>
+const askIgRoute = (hasImage = false): Promise<IgRoute> =>
   ask<IgRoute>(
     'Post to Instagram now?',
-    'Pulse makes an image of this post and publishes it with the caption on your Instagram account, where everyone can see it.',
+    hasImage
+      ? 'Pulse publishes your image with the caption on your Instagram account, where everyone can see it.'
+      : 'Pulse makes an image of this post and publishes it with the caption on your Instagram account, where everyone can see it.',
     [
       { text: 'Cancel', value: 'cancel', cancel: true },
       { text: 'Use my own photo', value: 'share' },
@@ -440,7 +442,7 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
     // One tap: Pulse renders the post as an image card and posts it; "Use my own photo" keeps the picker flow.
     let route: IgRoute | null = null;
     if (IG_AUTOPOST && igAutoPostAvailable()) {
-      route = await askIgRoute();
+      route = await askIgRoute(!!image);
       if (route === 'cancel') return;
       if (route === 'auto') {
         const card = image ?? (await fetchPostCard(current().post.id));
@@ -468,7 +470,7 @@ export function useShare(post: Post, wiring: ShareWiring = {}): ShareState {
       return;
     }
     const { photo } = picked;
-    if (route === null && IG_AUTOPOST && igAutoPostAvailable()) route = await askIgRoute();
+    if (route === null && IG_AUTOPOST && igAutoPostAvailable()) route = await askIgRoute(true);
     if (route === 'cancel') return;
     if (route !== 'auto') {
       await shareToInstagram(photo, copied);
