@@ -37,6 +37,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { WebViewMessageEvent, WebViewNavigation } from 'react-native-webview';
 
 import { colors, platformMeta, radius, space, withAlpha } from '@/src/theme';
+import { holdUpdates } from '@/src/updateOnLaunch';
+import { makeTracer } from './trace';
 import {
   CAPTURE_MAX_BYTES,
   CAPTURE_MAX_WIDTH,
@@ -132,8 +134,11 @@ function Sheet({
   }, [captureRef]);
 
   useEffect(() => {
+    const tr = makeTracer(platform);
+    const release = holdUpdates();
     const r = new AutoReadRunner({
       platform,
+      trace: tr.trace,
       handle: latest.current.handle,
       loadUrl: (uri) => setSource({ uri }),
       inject: (js) => webRef.current?.injectJavaScript(js),
@@ -151,11 +156,19 @@ function Sheet({
     r.start();
     return () => {
       r.dispose();
+      tr.stop();
+      release();
       if (runner.current === r) runner.current = null;
     };
   }, [platform, capture]);
 
-  const close = () => (runner.current ? runner.current.cancel() : latest.current.onClose());
+  // Close on a signed-in page reads first (the person thinks they are done); a second Close, or Close on the login page,
+  // closes.
+  const close = () => {
+    const r = runner.current;
+    if (!r) return latest.current.onClose();
+    if (!r.readBeforeClose()) r.cancel();
+  };
   const onLayout = (e: LayoutChangeEvent) => {
     size.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
   };

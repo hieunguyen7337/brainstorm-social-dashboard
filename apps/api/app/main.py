@@ -29,6 +29,7 @@ ROUTERS = [
     ("app.routes.billing", "router"),
     ("app.routes.rooms", "router"),
     ("app.routes.share", "router"),
+    ("app.routes.autoread_trace", "router"),
 ]
 
 

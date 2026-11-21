@@ -309,7 +309,7 @@ describe('INSTAGRAM_0 executed in a jsdom page', () => {
       expect(env.posted[0].data.user).toEqual({ username: 'jane' });
     });
 
-    it.failing('BUG: a timed-out current_user with no cookie and no bar says signed_out, not error', async () => {
+    it('fixed: a timed-out current_user with no cookie and no bar says signed_out, not error', async () => {
       // readers.ts: `if (a.status === 429 || a.status >= 500) return finish('error')` - a timeout / network failure is
       // status 0, so it falls through to `signed_out`, which sends a signed-in person back to the login screen.
       // Fix: `if (a.status === 0 || a.status === 429 || a.status >= 500)`.

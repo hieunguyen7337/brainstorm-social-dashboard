@@ -50,6 +50,8 @@ export interface RunnerDeps {
   emitResult(read: DeviceRead): void;
   emitClose(reason?: string): void;
   onStatus(status: RunnerStatus): void;
+  /** Diagnostics for the server log: phases, page paths (no query), read statuses. Never page text or cookies. */
+  trace?(event: string, detail?: Record<string, unknown>): void;
   /** Best effort: drop the WebView's sign-in (cookies) before the sheet reports back. */
   clearSession?(): Promise<void>;
   /** login phase: the WebView is on a page not past sign-in (raw URL); fires again for every such page */
@@ -106,6 +108,7 @@ export class AutoReadRunner {
   private injectTimer: unknown = null;
   private navigations = 0;
   private injections = 0;
+  private fallbackTarget: PageUrl | null = null;
   private lastInject: { url: string; at: number; ran: boolean } | null = null;
   private disposed = false;
   private lastFillAt: number | null = null;
@@ -121,6 +124,7 @@ export class AutoReadRunner {
 
   /** Starts the run: the anonymous try when it applies, otherwise the login page. */
   start(): void {
+    this.t('start');
     const handle = cleanHandle(this.deps.handle);
     if (handle && ANON_PLATFORMS.includes(this.deps.platform)) {
       this.setPhase('anon');
@@ -158,6 +162,8 @@ export class AutoReadRunner {
       if (this.phase !== 'reading') return;
       const msg = parseMessage(raw);
       if (!msg || msg.platform !== this.deps.platform || msg.step !== this.step) return;
+      const d = msg.data as { diag?: unknown } | null | undefined;
+      this.t('msg', { status: msg.status, step: msg.step, diag: d && typeof d === 'object' ? d.diag : undefined });
       // A failed read says which step failed (status codes, no cookie values): visible in `adb logcat -s ReactNativeJS`.
       if (msg.status !== 'ok') console.log(`[autoRead] ${String(raw).slice(0, 500)}`);
       if (msg.status === 'ok') this.onStepData(msg.data);
@@ -187,6 +193,26 @@ export class AutoReadRunner {
     void this.end(() => this.deps.emitClose());
   }
 
+  /**
+   * Close pressed while still waiting for the sign-in: when the page is already signed in (any non-login page), read it
+   * now instead of throwing the sign-in away. Returns true when a read started; the sheet then closes itself when done.
+   */
+  readBeforeClose(): boolean {
+    let started = false;
+    this.guard(() => {
+      this.t('closePressed', { phase: this.phase, path: this.currentUrl?.path.slice(0, 80) ?? null });
+      if (this.isOver() || this.phase !== 'login' || !this.currentUrl || !this.currentRaw) return;
+      if (!this.flow.pastLogin(this.currentUrl)) return;
+      this.stale = null;
+      this.lastInject = null;
+      this.injections = 0;
+      this.navigations = 0;
+      this.onPage(this.currentUrl, this.currentRaw, true);
+      started = this.phase !== 'login';
+    });
+    return started;
+  }
+
   /** The sheet is going away: stop everything and call nothing back. */
   dispose(): void {
     this.disposed = true;
@@ -213,6 +239,11 @@ export class AutoReadRunner {
   /** `isLoad`: a document finished loading (`onLoadEnd`); false for a single-page-app route change. */
   private onPage(u: PageUrl, raw: string, isLoad: boolean): void {
     if (this.isOver()) return;
+    const key = `${this.phase} ${u.host}${u.path} ${isLoad}`;
+    if (key !== this.lastPageTrace) {
+      this.lastPageTrace = key;
+      this.t('page', { host: u.host, path: u.path.slice(0, 80), load: isLoad, phase: this.phase, past: this.flow.pastLogin(u) });
+    }
     if (this.stale) {
       const { url, until } = this.stale;
       if (raw === url && this.now() < until) return; // a late event for the page we just left
@@ -220,6 +251,8 @@ export class AutoReadRunner {
     }
     if (this.phase === 'login') {
       if (!this.flow.pastLogin(u)) {
+        // A real login page resets the read budget: the person is signing in again, not looping on a signed-out feed.
+        if (this.flow.isLogin(u)) this.injections = 0;
         this.signInPage(raw);
         return;
       }
@@ -241,7 +274,8 @@ export class AutoReadRunner {
       if (this.flow.isLogin(u)) {
         this.toLogin(false);
         this.signInPage(raw);
-      } else this.arm(SETTLE_MS, () => void this.captureNow());
+      } else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path)))
+        this.arm(SETTLE_MS, () => void this.captureNow());
     }
   }
 
@@ -266,6 +300,7 @@ export class AutoReadRunner {
   }
 
   private toLogin(load: boolean): void {
+    this.t('toLogin', { load, from: this.phase });
     this.clearTimers();
     this.setPhase('login');
     if (load) this.deps.loadUrl(this.flow.loginUrl);
@@ -288,7 +323,10 @@ export class AutoReadRunner {
     const at = this.now();
     const last = this.lastInject;
     if (last && last.url === raw && at - last.at < 2_000 && !(isLoad && last.ran)) return;
-    if (this.injections >= MAX_INJECTIONS) return;
+    if (this.injections >= MAX_INJECTIONS) {
+      this.t('budget', { n: this.injections });
+      return;
+    }
     this.lastInject = { url: raw, at, ran: false };
     this.clearInjectTimer();
     this.injectTimer = this.setTimer(() => this.injectNow(), INJECT_DELAY_MS);
@@ -298,6 +336,7 @@ export class AutoReadRunner {
     this.injectTimer = null;
     if (this.phase !== 'reading') return;
     this.injections += 1;
+    this.t('inject', { n: this.injections, step: this.step });
     if (this.lastInject) this.lastInject.ran = true;
     let script: string;
     try {
@@ -313,6 +352,7 @@ export class AutoReadRunner {
   /** We opened the stats page but never landed on a page the reader could run on. */
   private onNavTimeout(): void {
     if (this.phase !== 'reading') return;
+    this.t('navTimeout', { step: this.step });
     // Platforms whose post-login pages are recognisable by URL prove the person is signed in: capture what is on screen.
     // For the others the evidence is weak: go back to waiting for the person to sign in.
     if (this.flow.strongSignedIn) void this.stepEmpty(undefined);
@@ -352,6 +392,7 @@ export class AutoReadRunner {
       return;
     }
     this.setPhase('fallback');
+    this.fallbackTarget = t;
     if (target && t && !(this.currentUrl && this.currentUrl.host === t.host && samePath(this.currentUrl.path, t.path))) {
       this.navigateTo(target);
       this.arm(FALLBACK_LOAD_MS, () => void this.captureNow());
@@ -410,12 +451,14 @@ export class AutoReadRunner {
   }
 
   private fail(): Promise<void> {
+    this.t('fail', { phase: this.phase });
     return this.end(() => this.deps.emitClose(AUTO_READ_FAILED));
   }
 
   /** Marks the run finished, drops the sign-in, then reports back once (unless the sheet went away meanwhile). */
   private async end(report: () => void): Promise<void> {
     if (this.isOver()) return;
+    this.t('end', { phase: this.phase });
     this.phase = 'done';
     this.clearTimers();
     try {
@@ -447,8 +490,19 @@ export class AutoReadRunner {
   }
 
   private setPhase(phase: Exclude<Phase, 'done'>): void {
+    if (phase !== this.phase) this.t('phase', { p: phase });
     this.phase = phase;
     this.deps.onStatus(STATUS[phase]);
+  }
+
+  private lastPageTrace = '';
+
+  private t(event: string, detail?: Record<string, unknown>): void {
+    try {
+      this.deps.trace?.(event, detail);
+    } catch {
+      // diagnostics never break a read
+    }
   }
 
   private now(): number {

@@ -182,7 +182,8 @@ describe('instagram runner', () => {
 
   describe('SPA navigation events from the feed', () => {
     it('the same url reported by navigation + load events injects once', async () => {
-      const { runner, log, adv } = await onFeed();
+      const { runner, log, adv } = setup();
+      runner.start();
       runner.navigated(FEED, false);
       runner.loadEnded(FEED);
       runner.navigated(FEED, false);
@@ -280,7 +281,7 @@ describe('instagram runner', () => {
       expect(log.injects.length).toBeLessThanOrEqual(MAX_INJECTIONS);
     });
 
-    it.failing('BUG: the injection budget is spent by earlier signed_out cycles, so the real sign-in afterwards is never read', async () => {
+    it('fixed: after the budget is spent, signing in again through the login page still reads', async () => {
       // runner.ts `injections` is never reset when the run goes back to `login`; after 8 signed_out cycles the
       // person finally signs in, the feed event arrives and `scheduleInject` returns on `injections >= MAX_INJECTIONS`.
       // Fix: reset `this.injections = 0` in `toLogin()`.
@@ -292,6 +293,7 @@ describe('instagram runner', () => {
       }
       const before = log.injects.length;
       runner.message(msg('signed_out'));
+      runner.navigated(LOGIN, false);
       runner.navigated(`${FEED}?signedin`, false);
       await adv(INJECT_DELAY_MS + 10);
       expect(log.injects.length).toBe(before + 1);
@@ -302,6 +304,35 @@ describe('instagram runner', () => {
       runner.navigated('https://www.instagram.com/accounts/login/?next=/', false);
       await adv(10);
       expect(log.statuses[log.statuses.length - 1]).toBe('login');
+    });
+  });
+
+  describe('Close while waiting for the sign-in', () => {
+    it('on a signed-in feed (budget spent, same URL) reads instead of closing', async () => {
+      const { runner, log, adv } = await onFeed();
+      for (let i = 0; i < MAX_INJECTIONS + 2; i++) {
+        runner.message(msg('signed_out'));
+        runner.navigated(FEED, false);
+        await adv(INJECT_DELAY_MS + 10);
+      }
+      runner.message(msg('signed_out'));
+      await adv(10);
+      expect(log.statuses[log.statuses.length - 1]).toBe('login');
+      const before = log.injects.length;
+      expect(runner.readBeforeClose()).toBe(true);
+      await adv(INJECT_DELAY_MS + 10);
+      expect(log.injects.length).toBe(before + 1);
+      runner.message(msg('ok', okData));
+      await adv(10);
+      expect(log.results).toHaveLength(1);
+    });
+
+    it('on the login page closes as before', async () => {
+      const { runner, adv } = await onFeed();
+      runner.message(msg('signed_out'));
+      runner.navigated(LOGIN, false);
+      await adv(10);
+      expect(runner.readBeforeClose()).toBe(false);
     });
   });
 
@@ -345,7 +376,7 @@ describe('instagram runner', () => {
       void STALE_PAGE_MS;
     });
 
-    it.failing('BUG: a feed SPA event AFTER the stale window and before the profile loaded makes it screenshot the feed', async () => {
+    it('fixed: a feed SPA event AFTER the stale window and before the profile loaded makes it screenshot the feed', async () => {
       // runner.ts onPage(), `fallback` branch: any instagram.com page event arms the capture, not only the fallback
       // target's. A slow profile load + one more feed event (different url, e.g. ?variant=) => the feed is captured.
       // Fix: remember `this.fallbackTarget` in stepEmpty and in the fallback branch return unless the event's path equals it.
