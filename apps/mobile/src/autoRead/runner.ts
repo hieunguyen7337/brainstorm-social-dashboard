@@ -101,6 +101,7 @@ export class AutoReadRunner {
   private injectTimer: unknown = null;
   private navigations = 0;
   private injections = 0;
+  private fallbackTarget: PageUrl | null = null;
   private lastInject: { url: string; at: number; ran: boolean } | null = null;
   private disposed = false;
 
@@ -228,7 +229,8 @@ export class AutoReadRunner {
     } else if (this.phase === 'fallback') {
       if (!this.flow.hostOk(u)) return;
       if (this.flow.isLogin(u)) this.toLogin(false);
-      else this.arm(SETTLE_MS, () => void this.captureNow());
+      else if (!this.fallbackTarget || (u.host === this.fallbackTarget.host && samePath(u.path, this.fallbackTarget.path)))
+        this.arm(SETTLE_MS, () => void this.captureNow());
     }
   }
 
@@ -240,6 +242,7 @@ export class AutoReadRunner {
 
   private toLogin(load: boolean): void {
     this.clearTimers();
+    this.injections = 0;
     this.setPhase('login');
     if (load) this.deps.loadUrl(this.flow.loginUrl);
   }
@@ -325,6 +328,7 @@ export class AutoReadRunner {
       return;
     }
     this.setPhase('fallback');
+    this.fallbackTarget = t;
     if (target && t && !(this.currentUrl && this.currentUrl.host === t.host && samePath(this.currentUrl.path, t.path))) {
       this.navigateTo(target);
       this.arm(FALLBACK_LOAD_MS, () => void this.captureNow());

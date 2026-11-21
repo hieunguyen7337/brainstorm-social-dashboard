@@ -281,7 +281,7 @@ describe('instagram runner', () => {
       expect(log.injects.length).toBeLessThanOrEqual(MAX_INJECTIONS);
     });
 
-    it.failing('BUG: the injection budget is spent by earlier signed_out cycles, so the real sign-in afterwards is never read', async () => {
+    it('fixed: the injection budget is spent by earlier signed_out cycles, so the real sign-in afterwards is never read', async () => {
       // runner.ts `injections` is never reset when the run goes back to `login`; after 8 signed_out cycles the
       // person finally signs in, the feed event arrives and `scheduleInject` returns on `injections >= MAX_INJECTIONS`.
       // Fix: reset `this.injections = 0` in `toLogin()`.
@@ -346,7 +346,7 @@ describe('instagram runner', () => {
       void STALE_PAGE_MS;
     });
 
-    it.failing('BUG: a feed SPA event AFTER the stale window and before the profile loaded makes it screenshot the feed', async () => {
+    it('fixed: a feed SPA event AFTER the stale window and before the profile loaded makes it screenshot the feed', async () => {
       // runner.ts onPage(), `fallback` branch: any instagram.com page event arms the capture, not only the fallback
       // target's. A slow profile load + one more feed event (different url, e.g. ?variant=) => the feed is captured.
       // Fix: remember `this.fallbackTarget` in stepEmpty and in the fallback branch return unless the event's path equals it.

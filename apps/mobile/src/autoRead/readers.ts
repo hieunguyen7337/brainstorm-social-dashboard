@@ -395,7 +395,7 @@ async function run() {
   // Which step failed, for the app log: status codes and yes/no only, never a cookie value.
   var diag = { a: a.status, c: cStatus, uid: !!uid, csrf: !!igCookie('csrftoken'), nav: !!nav.name, bar: nav.signedIn, path: location.pathname };
   if (!username) {
-    if (a.status === 429 || a.status >= 500) return finish('error');
+    if (a.status === 0 || a.status === 429 || a.status >= 500) return finish('error');
     // Signed out only when the page has no account cookie and no signed-in navigation bar.
     return finish(uid || nav.signedIn ? 'empty' : 'signed_out', { diag: diag });
   }
