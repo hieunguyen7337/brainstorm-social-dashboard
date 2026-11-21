@@ -123,9 +123,9 @@ function numbersOnly(value: unknown, depth = 0): unknown {
  */
 export function scrubForLog(value: unknown, key: string): unknown {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     // Typed locally: even a type-only import of trace.ts pulls react-native's global typings into Pulse Desktop's tsc
     // program, where its setTimeout overload (returns number) shadows Node's.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return (require('./trace') as { scrub: (value: unknown, key: string) => unknown }).scrub(value, key);
   } catch {
     return numbersOnly(value);
