@@ -40,6 +40,8 @@ If the harvest script (tools/harvest) already ran successfully for LinkedIn, you
    - Use only the user's OWN LinkedIn account, in the browser they are already logged in to.
    - Never ask for, read or type a password. If a login page shows, stop, ask the user to log in
      themselves, then carry on once they say they are done.
+   - Saved logins live only in the Pulse phone app's vault. You cannot request, read or type them,
+     and no tool returns them.
    - Work at a human pace: wait 1-2 seconds between pages.
    - Read at most 30 posts.
    - Never like, comment, follow, connect, post or message anyone. Read only.
@@ -82,6 +84,8 @@ If the harvest script (tools/harvest) already ran successfully for Instagram, yo
    - Use only the user's OWN Instagram account, in the browser they are already logged in to.
    - Never ask for, read or type a password. If a login page shows, stop, ask the user to log in
      themselves, then carry on once they say they are done.
+   - Saved logins live only in the Pulse phone app's vault. You cannot request, read or type them,
+     and no tool returns them.
    - Work at a human pace: wait 1-2 seconds between pages.
    - Read at most 12 posts or reels.
    - Never like, comment, follow, post or message anyone. Read only.
