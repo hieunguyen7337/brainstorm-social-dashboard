@@ -214,7 +214,11 @@ export class AutoReadRunner {
       this.stale = null;
     }
     if (this.phase === 'login') {
-      if (!this.flow.pastLogin(u)) return;
+      if (!this.flow.pastLogin(u)) {
+        // A real login page resets the read budget: the person is signing in again, not looping on a signed-out feed.
+        if (this.flow.isLogin(u)) this.injections = 0;
+        return;
+      }
       const first = this.flow.steps[0];
       if (first.direct?.(u, this.ctx)) {
         this.enterStep(0, false);
@@ -242,7 +246,6 @@ export class AutoReadRunner {
 
   private toLogin(load: boolean): void {
     this.clearTimers();
-    this.injections = 0;
     this.setPhase('login');
     if (load) this.deps.loadUrl(this.flow.loginUrl);
   }

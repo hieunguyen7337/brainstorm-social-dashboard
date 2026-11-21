@@ -281,7 +281,7 @@ describe('instagram runner', () => {
       expect(log.injects.length).toBeLessThanOrEqual(MAX_INJECTIONS);
     });
 
-    it('fixed: the injection budget is spent by earlier signed_out cycles, so the real sign-in afterwards is never read', async () => {
+    it('fixed: after the budget is spent, signing in again through the login page still reads', async () => {
       // runner.ts `injections` is never reset when the run goes back to `login`; after 8 signed_out cycles the
       // person finally signs in, the feed event arrives and `scheduleInject` returns on `injections >= MAX_INJECTIONS`.
       // Fix: reset `this.injections = 0` in `toLogin()`.
@@ -293,6 +293,7 @@ describe('instagram runner', () => {
       }
       const before = log.injects.length;
       runner.message(msg('signed_out'));
+      runner.navigated(LOGIN, false);
       runner.navigated(`${FEED}?signedin`, false);
       await adv(INJECT_DELAY_MS + 10);
       expect(log.injects.length).toBe(before + 1);
