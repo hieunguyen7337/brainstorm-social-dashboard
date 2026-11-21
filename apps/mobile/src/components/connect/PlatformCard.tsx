@@ -34,12 +34,16 @@ export interface PlatformCardProps {
   open: boolean;
   note: CardNote | null;
   onUpdate: () => void;
-  onUpload: () => void;
+  /** Read a screenshot instead. Absent in a demo workspace (nothing real to read): the button is not drawn. */
+  onUpload?: () => void;
   /** Sign in inside Pulse and read the numbers (Android app); on web and iOS it points to the Android app. */
   onConnect?: () => void;
+  /** Demo workspace: the sign-in and the numbers are synthetic, so the badge says "Demo" instead of "Real". */
+  demo?: boolean;
   /**
    * Pulse Desktop: the only action is "Connect with <Platform>" (its own login window). The screenshot upload shows only
-   * once `uploadOffered` (a connect failed); a connected card gets a "Show <Platform>" link (`onShow`).
+   * once `uploadOffered` (a connect failed); a connected card gets a "Show <Platform>" link (`onShow`). Never set in a
+   * demo workspace: the demo's sign-in is synthetic and opens no window.
    */
   desktop?: boolean;
   uploadOffered?: boolean;
@@ -59,6 +63,7 @@ export function PlatformCard({
   onUpdate,
   onUpload,
   onConnect,
+  demo,
   desktop = false,
   uploadOffered = false,
   onShow,
@@ -86,7 +91,9 @@ export function PlatformCard({
                 <Text style={[styles.name, !connected && styles.nameOff]} numberOfLines={1}>
                   {meta.label}
                 </Text>
-                {connected ? <Badge label="Real" tone="success" icon="shield-checkmark" /> : null}
+                {connected ? (
+                  demo ? <Badge label="Demo" tone="warn" icon="flask-outline" /> : <Badge label="Real" tone="success" icon="shield-checkmark" />
+                ) : null}
               </View>
               {connected ? (
                 <>
@@ -146,9 +153,11 @@ export function PlatformCard({
         ) : showActions ? (
           <>
             <Text style={t.small}>
-              {onConnect
-                ? `Connect and Pulse reads your numbers for you. Only if that fails, upload a screenshot: ${PLATFORM_HELP[platform]}.`
-                : `Screenshot: ${PLATFORM_HELP[platform]}.`}
+              {demo
+                ? `Sign in with the demo account and Pulse shows synthetic ${meta.label} numbers. Nothing is sent to ${meta.label}.`
+                : onConnect
+                  ? `Connect and Pulse reads your numbers for you. Only if that fails, upload a screenshot: ${PLATFORM_HELP[platform]}.`
+                  : `Screenshot: ${PLATFORM_HELP[platform]}.`}
             </Text>
             <View style={styles.actions}>
               {onConnect ? (
@@ -161,17 +170,19 @@ export function PlatformCard({
                   onPress={onConnect}
                 />
               ) : null}
-              <Button
-                small
-                variant={onConnect ? 'ghost' : 'primary'}
-                title={onConnect ? 'Or upload a screenshot' : 'Upload a screenshot'}
-                icon="image-outline"
-                accessibilityLabel={`Upload ${meta.label} screenshot`}
-                disabled={busy}
-                onPress={onUpload}
-                // Connecting comes first: the upload is the fallback, so it is drawn greyed out (still pressable).
-                style={onConnect ? styles.fallback : undefined}
-              />
+              {onUpload ? (
+                <Button
+                  small
+                  variant={onConnect ? 'ghost' : 'primary'}
+                  title={onConnect ? 'Or upload a screenshot' : 'Upload a screenshot'}
+                  icon="image-outline"
+                  accessibilityLabel={`Upload ${meta.label} screenshot`}
+                  disabled={busy}
+                  onPress={onUpload}
+                  // Connecting comes first: the upload is the fallback, so it is drawn greyed out (still pressable).
+                  style={onConnect ? styles.fallback : undefined}
+                />
+              ) : null}
             </View>
           </>
         ) : null}

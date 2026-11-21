@@ -12,7 +12,7 @@ import { KeyboardAvoidingView, Modal, Platform as RNPlatform, Pressable, ScrollV
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useWide } from '@/src/layout';
-import { useSession } from '@/src/session';
+import { useIsDemoWorkspace, useSession } from '@/src/session';
 import { colors, radius, space, type as t } from '@/src/theme';
 import type { Platform } from '@/src/types';
 import { Button } from '@/src/ui';
@@ -65,6 +65,7 @@ export function ConnectSheetProvider({ children }: { children: ReactNode }) {
 function ConnectDialog({ initialPlatform, onClose }: { initialPlatform: Platform | null; onClose: () => void }) {
   const wide = useWide();
   const insets = useSafeAreaInsets();
+  const demo = useIsDemoWorkspace();
   return (
     <Modal transparent animationType={RNPlatform.OS === 'web' ? 'fade' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
@@ -80,9 +81,13 @@ function ConnectDialog({ initialPlatform, onClose }: { initialPlatform: Platform
           <View style={styles.header}>
             <View style={styles.headerText}>
               <Text style={t.h2} accessibilityRole="header">
-                Connect your real accounts
+                {demo ? 'Connect your demo accounts' : 'Connect your real accounts'}
               </Text>
-              <Text style={t.small}>Connect an account and Pulse reads your numbers for you. A screenshot is the fallback.</Text>
+              <Text style={t.small}>
+                {demo
+                  ? 'Sign in with the demo account and Pulse shows synthetic numbers. Nothing is sent to any platform.'
+                  : 'Connect an account and Pulse reads your numbers for you. A screenshot is the fallback.'}
+              </Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} onPress={onClose} style={styles.close}>
               <Ionicons name="close" size={20} color={colors.textDim} />

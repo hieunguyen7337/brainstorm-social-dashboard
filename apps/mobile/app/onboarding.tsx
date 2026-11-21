@@ -9,7 +9,7 @@ import { autoReadAvailable } from '@/src/autoRead';
 import { desktopTitleBarInset } from '@/src/desktop';
 import { ConnectAccounts } from '@/src/components/connect/ConnectAccounts';
 import { ROOM_GUEST_BRAND, useRoomJoin } from '@/src/components/room/roomStore';
-import { useSession } from '@/src/session';
+import { useIsDemoWorkspace, useSession } from '@/src/session';
 import { colors, radius, space, type as t, withAlpha } from '@/src/theme';
 import { Badge, Button, Logo, TextField } from '@/src/ui';
 
@@ -39,10 +39,16 @@ const FEATURES: { icon: IconName; color: string; title: string; text: string }[]
 /**
  * First screen, two steps. 1 (brand): no sign-up, one tap creates an empty private workspace. 2 (connect): the person adds
  * their real numbers by screenshot or typing, or skips with "Later". Nothing on screen is sample data.
+ *
+ * "Try the demo" (docs/REAL.md, "Demo workspaces") is the one exception: it creates a labelled demo workspace and goes through
+ * the same two steps, with a synthetic sign-in and synthetic numbers. "Start my workspace" is unchanged.
  */
 export default function OnboardingScreen() {
-  const { status, start, starting, error, networkError, mock } = useSession();
+  const { status, start, startDemo, starting, error, networkError, mock } = useSession();
+  const demoWorkspace = useIsDemoWorkspace();
   const [brand, setBrand] = useState('');
+  // Which button was used, so the error card's "Try again" repeats the same flow.
+  const [kind, setKind] = useState<'real' | 'demo'>('real');
   // Set at the tap, before the request: `start()` makes the session 'ready' before this screen re-renders, and a ready
   // session on this screen redirects to the dashboard, which would skip the connect step.
   const [connecting, setConnecting] = useState(false);
@@ -56,13 +62,17 @@ export default function OnboardingScreen() {
   if (status === 'ready' && !connecting) return <Redirect href="/dashboard" />;
   const connectStep = connecting && status === 'ready';
 
-  const go = async () => {
+  const begin = async (which: 'real' | 'demo') => {
     if (starting) return;
+    setKind(which);
     setSaved(false);
     setConnecting(true);
-    const ok = await start(brand || (inRoom ? ROOM_GUEST_BRAND : ''));
+    const name = brand || (inRoom ? ROOM_GUEST_BRAND : '');
+    const ok = await (which === 'demo' ? startDemo(name) : start(name));
     if (!ok) setConnecting(false);
   };
+  const go = () => begin('real');
+  const tryDemo = () => begin('demo');
 
   const finish = () => router.replace('/dashboard');
 
@@ -90,6 +100,7 @@ export default function OnboardingScreen() {
             <Logo size={44} />
             <Text style={t.h2}>{APP_NAME}</Text>
             {mock ? <Badge label="Test build" tone="warn" icon="cloud-offline" /> : null}
+            {connectStep && demoWorkspace ? <Badge label="Demo" tone="warn" icon="flask-outline" /> : null}
             {inRoom ? <Badge label={`Room ${room.code}`} tone="accent" icon="people" /> : null}
           </View>
 
@@ -97,12 +108,14 @@ export default function OnboardingScreen() {
             <>
               <View style={styles.hero}>
                 <Text style={t.h1} accessibilityRole="header">
-                  Connect your real accounts
+                  {demoWorkspace ? 'Connect your demo accounts' : 'Connect your real accounts'}
                 </Text>
                 <Text style={styles.sub}>
-                  {AUTO_READ
-                    ? 'Sign in to your accounts inside Pulse and your numbers are read for you, then kept up to date. You can also do this later in Settings.'
-                    : 'Upload a screenshot of your profile or insights page and Claude reads the numbers. You can also do this later in Settings.'}
+                  {demoWorkspace
+                    ? 'Sign in with the demo account and Pulse shows synthetic numbers for it. Nothing is sent to any platform. You can also do this later in Settings.'
+                    : AUTO_READ
+                      ? 'Sign in to your accounts inside Pulse and your numbers are read for you, then kept up to date. You can also do this later in Settings.'
+                      : 'Upload a screenshot of your profile or insights page and Claude reads the numbers. You can also do this later in Settings.'}
                 </Text>
               </View>
               <ConnectAccounts onSaved={() => setSaved(true)} />
@@ -147,7 +160,7 @@ export default function OnboardingScreen() {
                   editable={!starting}
                 />
                 <Button
-                  title={starting ? 'Creating your workspace…' : 'Start my workspace'}
+                  title={starting ? (kind === 'demo' ? 'Creating the demo…' : 'Creating your workspace…') : 'Start my workspace'}
                   icon={starting ? undefined : 'rocket'}
                   loading={starting}
                   onPress={() => void go()}
@@ -156,6 +169,16 @@ export default function OnboardingScreen() {
                 <Text style={[t.small, styles.center]}>
                   No sign-up. We create a private workspace with no data in it: every number comes from you.
                 </Text>
+                <Button
+                  title="Try the demo"
+                  variant="ghost"
+                  small
+                  icon="flask-outline"
+                  disabled={starting}
+                  onPress={() => void tryDemo()}
+                  full
+                />
+                <Text style={[t.small, styles.center]}>Synthetic numbers, no real accounts.</Text>
 
                 {error && !starting ? (
                   <View style={styles.errorCard} accessibilityRole="alert">
@@ -167,7 +190,7 @@ export default function OnboardingScreen() {
                     </View>
                     <Text style={t.dim}>{error}</Text>
                     <View style={styles.errorActions}>
-                      <Button title="Try again" variant="secondary" small icon="refresh" onPress={() => void go()} />
+                      <Button title="Try again" variant="secondary" small icon="refresh" onPress={() => void begin(kind)} />
                     </View>
                   </View>
                 ) : null}

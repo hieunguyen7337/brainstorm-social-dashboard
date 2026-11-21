@@ -42,12 +42,13 @@ export const realApi: PulseApi = {
 
   // Every workspace this app creates is a real one (docs/REAL.md): no seeded audience, posts or numbers. `real: false`
   // (the sample seed) is only for tests and the MCP demo, so it must be asked for explicitly.
+  // The one exception is the "Try the demo" link: `demo: true` asks for the labelled synthetic workspace instead.
   createWorkspace: (body) =>
     request('POST', '/api/workspaces', {
       auth: false,
       body: {
         ...(body?.brand_name?.trim() ? { brand_name: body.brand_name.trim() } : {}),
-        real: body?.real ?? true,
+        ...(body?.demo ? { demo: true } : { real: body?.real ?? true }),
       },
     }),
   getWorkspace: () => request('GET', '/api/workspace'),
@@ -90,6 +91,7 @@ export const realApi: PulseApi = {
   forgetStyle: () => request('DELETE', '/api/workspace/style'),
   ingestMetrics: (body) => request('POST', '/api/metrics/ingest', { body }),
   getHarvestStatus: () => request('GET', '/api/connections/harvest-status'),
+  demoSignIn: (platform) => request('POST', `/api/connections/${encodeURIComponent(platform)}/demo`),
 
   getAutopilot: () => request('GET', '/api/autopilot'),
   putAutopilot: (body) => request('PUT', '/api/autopilot', { body }),

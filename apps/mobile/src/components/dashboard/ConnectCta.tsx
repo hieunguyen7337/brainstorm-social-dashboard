@@ -5,10 +5,13 @@ import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from
 import { LIVE_PLATFORMS } from '@/src/platforms';
 import { autoReadAvailable } from '@/src/autoRead';
 import { useConnectSheet } from '@/src/components/connect/ConnectSheet';
+import { useIsDemoWorkspace } from '@/src/session';
 import { colors, gradient, platformMeta, space, type as t, withAlpha } from '@/src/theme';
 import { Button, Card, Chip, ChipRow } from '@/src/ui';
 
 export const CONNECT_CTA_TITLE = 'Connect an account to see your real numbers';
+/** The demo workspace's version (docs/REAL.md, "Demo workspaces"): the numbers it shows are synthetic. */
+export const CONNECT_CTA_DEMO_TITLE = 'Connect a demo account to see synthetic numbers';
 
 /**
  * What a real workspace's Dashboard shows while no account is connected (docs/REAL.md): one large call to action instead
@@ -17,6 +20,7 @@ export const CONNECT_CTA_TITLE = 'Connect an account to see your real numbers';
  */
 export function ConnectCta({ style }: { style?: StyleProp<ViewStyle> }) {
   const { open } = useConnectSheet();
+  const demo = useIsDemoWorkspace();
   return (
     <Card style={[styles.card, style]}>
       {/* A soft violet wash from the top, behind everything. */}
@@ -35,12 +39,14 @@ export function ConnectCta({ style }: { style?: StyleProp<ViewStyle> }) {
 
       <View style={styles.copy}>
         <Text style={styles.title} accessibilityRole="header">
-          {CONNECT_CTA_TITLE}
+          {demo ? CONNECT_CTA_DEMO_TITLE : CONNECT_CTA_TITLE}
         </Text>
         <Text style={[t.dim, styles.body]}>
-          {Platform.OS === 'android' && autoReadAvailable()
-            ? 'Sign in to your accounts inside Pulse and your numbers are read for you, then kept up to date. Everything on this dashboard comes from you.'
-            : 'Connect your accounts and Pulse reads your numbers for you (in the Android app). No Android? Upload a screenshot instead. Everything on this dashboard comes from you.'}
+          {demo
+            ? 'Sign in with the demo account and Pulse shows synthetic numbers for it. Nothing is sent to any platform, and nothing on this dashboard is real.'
+            : Platform.OS === 'android' && autoReadAvailable()
+              ? 'Sign in to your accounts inside Pulse and your numbers are read for you, then kept up to date. Everything on this dashboard comes from you.'
+              : 'Connect your accounts and Pulse reads your numbers for you (in the Android app). No Android? Upload a screenshot instead. Everything on this dashboard comes from you.'}
         </Text>
       </View>
 

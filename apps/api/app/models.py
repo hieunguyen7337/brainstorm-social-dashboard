@@ -6,12 +6,13 @@ from pydantic import BaseModel, Field
 
 Platform = Literal["linkedin", "instagram", "x", "tiktok", "reddit", "facebook"]
 PostStatus = Literal["draft", "scheduled", "published", "failed"]
-DataMode = Literal["sample", "real"]  # docs/REAL.md
+DataMode = Literal["sample", "real", "demo"]  # docs/REAL.md ("demo": the labelled synthetic workspace)
 
 
 class WorkspaceCreate(BaseModel):
     brand_name: str | None = None  # default: a demo brand
     real: bool = False  # True: no seeded numbers, they come from the person's own accounts (docs/REAL.md)
+    demo: bool = False  # True: a labelled demo workspace whose sign-ins and numbers are synthetic (docs/REAL.md)
 
 
 class WritingStyle(BaseModel):

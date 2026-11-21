@@ -16,7 +16,7 @@ import { ThemesSection } from '@/src/components/settings/ThemesSection';
 import { VaultSection } from '@/src/components/settings/VaultSection';
 import { APP_NAME } from '@/src/config';
 import { BOARD_MAX_WIDTH, Col, Grid, useWide } from '@/src/layout';
-import { useIsRealWorkspace, useSession } from '@/src/session';
+import { useIsAccountsWorkspace, useIsDemoWorkspace, useIsRealWorkspace, useSession } from '@/src/session';
 import { colors, space, type as t, withAlpha } from '@/src/theme';
 import { Button, Card, Screen, confirm } from '@/src/ui';
 
@@ -30,6 +30,9 @@ export default function SettingsScreen() {
   const wide = useWide();
   const { workspace } = useSession();
   const real = useIsRealWorkspace();
+  const demo = useIsDemoWorkspace();
+  const hasAccounts = useIsAccountsWorkspace(); // real or demo: the Connect pathway instead of the old sandbox connectors
+  const subtitle = workspace ? `${workspace.brand_name} · ${demo ? 'demo workspace (synthetic numbers)' : 'guest workspace'}` : undefined;
   // `ConnectAccountsHandle` has the same shape, so one ref serves both sections.
   const connectors = useRef<ConnectorsHandle>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,8 +48,9 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  // A real workspace connects accounts by screenshot or typed numbers; an old sample one keeps the sandbox connectors.
-  const accounts = real ? <AccountsSection handleRef={connectors} /> : <ConnectorsSection handleRef={connectors} />;
+  // A real workspace connects accounts by signing in or a screenshot, the demo one by its synthetic sign-in; an old sample
+  // one keeps the sandbox connectors.
+  const accounts = hasAccounts ? <AccountsSection handleRef={connectors} /> : <ConnectorsSection handleRef={connectors} />;
 
   // >= 1024 px: two independent stacked columns of the same sections (heights balanced by hand), footer underneath.
   // The narrow branch below is the original phone tree, untouched.
@@ -54,7 +58,7 @@ export default function SettingsScreen() {
     return (
       <Screen
         title="Settings"
-        subtitle={workspace ? `${workspace.brand_name} · guest workspace` : undefined}
+        subtitle={subtitle}
         onRefresh={() => void refresh()}
         refreshing={refreshing}
         contentStyle={styles.wideColumn}
@@ -83,7 +87,7 @@ export default function SettingsScreen() {
   return (
     <Screen
       title="Settings"
-      subtitle={workspace ? `${workspace.brand_name} · guest workspace` : undefined}
+      subtitle={subtitle}
       onRefresh={() => void refresh()}
       refreshing={refreshing}
       contentStyle={styles.column}
@@ -151,9 +155,11 @@ function ResetCard() {
 
 function Footer() {
   const { mock } = useSession();
+  const demo = useIsDemoWorkspace();
   return (
     <View style={styles.footer}>
       <Text style={styles.footerText}>{`${APP_NAME} · version ${APP_VERSION}`}</Text>
+      {demo ? <Text style={styles.footerText}>Demo workspace: sign-ins and numbers are synthetic</Text> : null}
       <Text style={styles.footerText} selectable>
         {mock ? 'Test build (mock data)' : `Connected to ${publicBaseUrl()}`}
       </Text>

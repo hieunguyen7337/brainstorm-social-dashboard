@@ -16,7 +16,7 @@ from app.models import (
     WorkspaceWithToken,
 )
 from app.platforms import ConnectionOut, live_sql_list, platform_status, require_live
-from app.services import harvest, style
+from app.services import demo, harvest, style
 from app.services.seed import DEMO, DEMO_BRAND, seed_real_workspace, seed_workspace
 
 router = APIRouter()
@@ -40,11 +40,14 @@ def create_workspace(body: WorkspaceCreate | None = None, conn: sqlite3.Connecti
     import secrets
 
     brand = (body.brand_name.strip() if body and body.brand_name else "") or DEMO_BRAND
-    demo = brand == DEMO_BRAND
+    demo_brand = brand == DEMO_BRAND
     real = bool(body and body.real)  # docs/REAL.md: no seeded numbers, they come from the person's accounts
+    demo_ws = bool(body and body.demo)  # docs/REAL.md: the labelled synthetic workspace
+    if real and demo_ws:
+        raise HTTPException(status_code=422, detail="a workspace is either real or demo, not both")
     wid = new_id("w_")
     token = secrets.token_urlsafe(24)
-    if demo:
+    if demo_brand:
         voice, audience, offer = DEMO["brand_voice"], DEMO["audience"], DEMO["offer"]
     else:
         voice = "Friendly, clear and helpful."
@@ -54,12 +57,14 @@ def create_workspace(body: WorkspaceCreate | None = None, conn: sqlite3.Connecti
         "INSERT INTO workspaces (id, token, name, brand_name, brand_voice, audience, offer, product_url,"
         " created_at, data_mode) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (wid, token, brand, brand, voice, audience, offer, settings.public_base_url, now_iso(),
-         "real" if real else "sample"),
+         "demo" if demo_ws else "real" if real else "sample"),
     )
-    if real:
+    if demo_ws:
+        demo.seed_demo_workspace(conn, wid)
+    elif real:
         seed_real_workspace(conn, wid)
     else:
-        seed_workspace(conn, wid, brand, demo=demo)
+        seed_workspace(conn, wid, brand, demo=demo_brand)
     row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
     return {**_ws(row), "token": token}
 
@@ -100,6 +105,11 @@ def connect_platform(platform: str, body: ConnectionCreate, ws: sqlite3.Row = De
                      conn: sqlite3.Connection = Depends(get_db)):
     _check_platform(platform)
     now = now_iso()
+    if demo.is_demo(ws):
+        # One synthetic path only: the same backfill and "(demo)" event as the demo sign-in endpoint below.
+        demo.sign_in(conn, ws, platform)
+        return _conn(conn.execute(
+            "SELECT * FROM connections WHERE workspace_id = ? AND platform = ?", (ws["id"], platform)).fetchone())
     if ws["data_mode"] == "real":
         # A real workspace never gets an invented follower count or a simulated audience (docs/REAL.md): connect
         # it live and leave the numbers to what the person saves with POST /api/metrics/ingest.
@@ -129,6 +139,19 @@ def connect_platform(platform: str, body: ConnectionCreate, ws: sqlite3.Row = De
     conn.commit()
     return _conn(conn.execute(
         "SELECT * FROM connections WHERE workspace_id = ? AND platform = ?", (ws["id"], platform)).fetchone())
+
+
+@router.post("/api/connections/{platform}/demo", response_model=demo.DemoSignInResult)
+def demo_sign_in(platform: str, ws: sqlite3.Row = Depends(get_workspace),
+                 conn: sqlite3.Connection = Depends(get_db)):
+    """The synthetic sign-in of a demo workspace (docs/REAL.md): connects the platform and reads synthetic numbers.
+
+    `_check_platform` also refuses a platform that is "coming soon" (docs: app/platforms.py), so the demo offers exactly
+    the platforms the real app does.
+    """
+    _check_platform(platform)
+    demo.require_demo(ws)
+    return demo.sign_in(conn, ws, platform)
 
 
 @router.delete("/api/connections/{platform}", response_model=ConnectionOut)

@@ -37,6 +37,7 @@ export function ConnectorsCard({
   onRetry,
   style,
   real = false,
+  demo = false,
   harvest,
 }: {
   connections: Connection[] | undefined;
@@ -44,8 +45,10 @@ export function ConnectorsCard({
   error: Error | null;
   onRetry: () => void;
   style?: StyleProp<ViewStyle>;
-  /** A real workspace: the connect dialog instead of Settings, and no sandbox wording. */
+  /** A workspace that works from connected accounts (real or demo): the connect dialog instead of Settings. */
   real?: boolean;
+  /** The demo workspace (docs/REAL.md): same layout as `real`, but the badges say "Demo" and the numbers are synthetic. */
+  demo?: boolean;
   /** `GET /api/connections/harvest-status`, best effort: its "last saved" time makes "Updated ..." exact. */
   harvest?: HarvestStatus[];
 }) {
@@ -78,9 +81,11 @@ export function ConnectorsCard({
       <SectionHeader
         title="Social media connectors"
         subtitle={
-          real
-            ? 'Your real numbers, from screenshots or typed in.'
-            : 'LinkedIn and Instagram bring real data. The rest are sandbox accounts.'
+          demo
+            ? 'Demo accounts with synthetic numbers.'
+            : real
+              ? 'Your real numbers, from screenshots or typed in.'
+              : 'LinkedIn and Instagram bring real data. The rest are sandbox accounts.'
         }
         right={
           <Button
@@ -111,6 +116,7 @@ export function ConnectorsCard({
                   platform={p}
                   conn={byPlatform.get(p)}
                   harvest={harvestBy.get(p)}
+                  demo={demo}
                   onOpen={open}
                 />
               ) : (
@@ -127,6 +133,7 @@ export function ConnectorsCard({
                   conn={byPlatform.get(p)}
                   harvest={harvestBy.get(p)}
                   width={otherWidth}
+                  demo={demo}
                   onOpen={open}
                 />
               ) : (
@@ -261,15 +268,22 @@ function detailLine(conn: Connection): string {
 const updatedOf = (conn: Connection, harvest: HarvestStatus | undefined): string | null =>
   updatedLabel(latestIso(harvest?.last_harvest_at, conn.last_harvested_at, conn.connected_at));
 
+/** "Real" for a real workspace, "Demo" for the demo workspace's synthetic numbers. */
+function SourceBadge({ demo }: { demo: boolean }) {
+  return demo ? <Badge label="Demo" tone="warn" icon="flask-outline" /> : <Badge label="Real" tone="success" icon="shield-checkmark" />;
+}
+
 function RealFeaturedConnector({
   platform,
   conn,
   harvest,
+  demo,
   onOpen,
 }: {
   platform: Platform;
   conn: Connection | undefined;
   harvest: HarvestStatus | undefined;
+  demo: boolean;
   onOpen: (platform: Platform) => void;
 }) {
   const meta = platformMeta[platform];
@@ -287,7 +301,7 @@ function RealFeaturedConnector({
           </Text>
           <View style={styles.statusRow}>
             <StatusDot on={!!connected} />
-            {connected ? <Badge label="Real" tone="success" icon="shield-checkmark" /> : null}
+            {connected ? <SourceBadge demo={demo} /> : null}
           </View>
         </View>
       </View>
@@ -333,12 +347,14 @@ function RealOtherConnector({
   conn,
   harvest,
   width,
+  demo,
   onOpen,
 }: {
   platform: Platform;
   conn: Connection | undefined;
   harvest: HarvestStatus | undefined;
   width: number | undefined;
+  demo: boolean;
   onOpen: (platform: Platform) => void;
 }) {
   const meta = platformMeta[platform];
@@ -366,7 +382,7 @@ function RealOtherConnector({
               {followersLabel(connected.followers, fmtCompact)}
             </Text>
           ) : null}
-          <Badge label="Real" tone="success" icon="shield-checkmark" />
+          <SourceBadge demo={demo} />
           {updated ? (
             <Text style={[t.small, styles.metaFull]} numberOfLines={1}>
               {updated}
