@@ -326,3 +326,19 @@ def test_share_is_read_only_and_works_for_any_status(auth):
         share = _share(client, h, pid)
         assert share["link_url"] and share["instagram"] is None, status
     assert snapshot() == before
+
+
+def test_instagram_caption_keeps_at_most_five_hashtags():
+    """Instagram keeps 5 hashtags and strips the '#' from the rest (phone, 2026-11-21), so a post saved with 12
+    copies only the first 5."""
+    import json as _json
+
+    from app.routes.share import build_share_links
+
+    tags = [f"#tag{i}" for i in range(12)]
+    row = {"content": "Fresh beans.", "hashtags": _json.dumps(tags), "link_code": None, "platform": "instagram"}
+    text = build_share_links(row)["text"]
+    assert text.count("#") == 5
+    assert "#tag4" in text and "#tag5" not in text
+    row["platform"] = "linkedin"
+    assert build_share_links(row)["text"].count("#") == 12

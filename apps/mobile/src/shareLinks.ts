@@ -13,9 +13,13 @@ const INSTAGRAM_NOTE =
 const TIKTOK_NOTE =
   "TikTok can't open a composer from a link. Copy the caption, open TikTok, and record the video from the shot list.";
 
-/** Caption = text plus hashtags that are not already in it. */
-export function captionFor(post: Pick<Post, 'content' | 'hashtags'>): string {
-  const missing = post.hashtags.filter((h) => !post.content.includes(h));
+/** Instagram keeps only the first 5 hashtags of a caption and strips the '#' from the rest. */
+export const IG_MAX_HASHTAGS = 5;
+
+/** Caption = text plus hashtags that are not already in it (at most 5 on Instagram and TikTok). */
+export function captionFor(post: Pick<Post, 'content' | 'hashtags'> & { platform?: Platform }): string {
+  const all = post.hashtags.filter((h) => !post.content.includes(h));
+  const missing = post.platform === 'instagram' || post.platform === 'tiktok' ? all.slice(0, IG_MAX_HASHTAGS) : all;
   return missing.length ? `${post.content.trim()}\n\n${missing.join(' ')}` : post.content.trim();
 }
 

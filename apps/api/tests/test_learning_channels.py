@@ -179,7 +179,7 @@ def test_channel_limits_follow_the_brief():
     c = channels.CHANNELS
     assert (c["linkedin"].min_chars, c["linkedin"].max_chars) == (1200, 1800)
     assert (c["linkedin"].min_hashtags, c["linkedin"].max_hashtags) == (3, 3)
-    assert (c["instagram"].min_hashtags, c["instagram"].max_hashtags, c["instagram"].max_chars) == (8, 15, 2200)
+    assert (c["instagram"].min_hashtags, c["instagram"].max_hashtags, c["instagram"].max_chars) == (3, 5, 2200)
     assert c["x"].max_chars <= 280
     assert c["reddit"].max_hashtags == 0 and c["reddit"].title_max == 120
     assert (c["facebook"].min_hashtags, c["facebook"].max_hashtags, c["facebook"].max_chars) == (0, 3, 2000)
@@ -491,7 +491,7 @@ def test_ai_output_is_repaired_to_each_channels_limits(client, seed_ws, monkeypa
         assert by[platform].content.count("{link}") == 1, platform
     assert len(by["instagram"].hashtags) == 15 and by["instagram"].hashtags[0] == "#tag0"
     assert channels.has_visual_plan("instagram", by["instagram"].media_prompt)  # "a photo" was replaced
-    assert by["tiktok"].hashtags[:2] == ["#one", "#two"] and len(by["tiktok"].hashtags) >= 8  # topped up
+    assert by["tiktok"].hashtags[:2] == ["#one", "#two"] and len(by["tiktok"].hashtags) >= 3  # topped up
     assert channels.final_length(by["x"].content, link_len) <= 270
     assert by["x"].content.endswith("{link}") and len(by["x"].hashtags) == 3
     assert by["linkedin"].hashtags == ["#a", "#b", "#c"]
