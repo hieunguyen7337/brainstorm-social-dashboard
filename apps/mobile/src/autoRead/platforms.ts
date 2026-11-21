@@ -171,7 +171,9 @@ const instagram: Flow = (() => {
     script: (ctx) => readerScript('instagram', 1, ctx),
     finish: (data) => {
       const parsed = parseInstagramJson(data);
-      return hasNumbers(parsed) ? read(parsed, 'high') : { kind: 'empty', hint: { username: parsed.handle ?? null } };
+      // `diag.vis` false: the reader looked at this profile and its header showed no counts.
+      const noCounts = rec(rec(data).diag).vis === false;
+      return hasNumbers(parsed) ? read(parsed, 'high') : { kind: 'empty', hint: { username: parsed.handle ?? null, noCounts } };
     },
     showsNumbers: true,
   });

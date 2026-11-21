@@ -1,6 +1,6 @@
 import { AutoReadRunner, type RunnerDeps, type RunnerStatus } from '../runner';
 import { FALLBACK_LOAD_MS, INJECT_DELAY_MS, MAX_INJECTIONS, READ_TIMEOUT_MS, SETTLE_MS, STALE_PAGE_MS } from '../config';
-import { AUTO_READ_FAILED, type DeviceRead } from '../types';
+import { AUTO_READ_FAILED, AUTO_READ_NO_COUNTS, type DeviceRead } from '../types';
 import { flowFor, parsePageUrl } from '../platforms';
 import { readerScript } from '../readers';
 import { feedJson, makeEnv } from './igHarness';
@@ -624,5 +624,37 @@ describe('instagram runner', () => {
       await expect(s.adv(INJECT_DELAY_MS + 10)).resolves.toBeUndefined();
       expect(s.log.closes).toEqual([AUTO_READ_FAILED]);
     });
+  });
+});
+
+describe('profile header without counts (Samsung, 2026-11-21: Instagram limiting reads)', () => {
+  it('step 1 marks the hint noCounts only when the reader saw the header without counts', () => {
+    const f = flowFor('instagram');
+    const ctx = { handle: 'jane.doe' };
+    expect(f.steps[1].finish({ username: 'jane.doe', diag: { vis: false } }, ctx)).toEqual({
+      kind: 'empty',
+      hint: { username: 'jane.doe', noCounts: true },
+    });
+    expect(f.steps[1].finish({ username: 'jane.doe' }, ctx)).toMatchObject({ kind: 'empty', hint: { noCounts: false } });
+  });
+
+  it('the screenshot fallback then finding no numbers ends with the reason, after scrolling the page to the top', async () => {
+    const { runner, log, adv } = setup({ readScreenshot: async () => shot({ followers: null }) as any });
+    runner.start();
+    runner.navigated(FEED, false);
+    runner.loadEnded(FEED);
+    await adv(INJECT_DELAY_MS + 10);
+    runner.message(msg('ok', { ...okData, go: 'jane.doe' }));
+    await adv(10);
+    runner.navigated(PROFILE, false);
+    runner.loadEnded(PROFILE);
+    await adv(INJECT_DELAY_MS + 10);
+    const before = log.injects.length;
+    runner.message(msg('empty', { username: 'jane.doe', diag: { vis: false } }, { step: 1 }));
+    await adv(400);
+    expect(log.injects.length).toBe(before + 1);
+    expect(log.captures).toBe(1);
+    expect(log.closes).toEqual([AUTO_READ_NO_COUNTS]);
+    expect(log.results).toHaveLength(0);
   });
 });

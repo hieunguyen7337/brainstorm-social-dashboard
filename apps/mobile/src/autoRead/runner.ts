@@ -25,6 +25,7 @@ import { hasNumbers, toScreenshotRead } from './parse';
 import { flowFor, parsePageUrl, type Flow, type PageUrl, type StepOutcome } from './platforms';
 import {
   AUTO_READ_FAILED,
+  AUTO_READ_NO_COUNTS,
   type DeviceRead,
   type PageMessage,
   type ParsedRead,
@@ -154,6 +155,8 @@ export class AutoReadRunner {
   private navigations = 0;
   private injections = 0;
   private fallbackTarget: PageUrl | null = null;
+  /** The profile was read and its header showed no counts: a failure from here says so (AUTO_READ_NO_COUNTS). */
+  private noCounts = false;
   private lastInject: { url: string; at: number; ran: boolean } | null = null;
   private disposed = false;
   private lastFillAt: number | null = null;
@@ -446,6 +449,9 @@ export class AutoReadRunner {
     }
     this.setPhase('fallback');
     this.fallbackTarget = t;
+    // From a step's finish (`noCounts`), or straight from the reader's `empty` message (`diag.vis` false).
+    const h = (typeof hint === 'object' && hint !== null ? hint : {}) as { noCounts?: unknown; diag?: { vis?: unknown } | null };
+    this.noCounts = h.noCounts === true || (typeof h.diag === 'object' && h.diag !== null && h.diag.vis === false);
     if (target && t && !(this.currentUrl && this.currentUrl.host === t.host && samePath(this.currentUrl.path, t.path))) {
       this.navigateTo(target);
       this.arm(FALLBACK_LOAD_MS, () => void this.captureNow());
@@ -506,7 +512,8 @@ export class AutoReadRunner {
 
   private fail(): Promise<void> {
     this.t('fail', { phase: this.phase });
-    return this.end(() => this.deps.emitClose(AUTO_READ_FAILED));
+    const why = this.noCounts ? AUTO_READ_NO_COUNTS : AUTO_READ_FAILED;
+    return this.end(() => this.deps.emitClose(why));
   }
 
   /** Marks the run finished, drops the sign-in, then reports back once (unless the sheet went away meanwhile). */
