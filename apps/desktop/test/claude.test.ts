@@ -16,6 +16,8 @@ const script = (name: string, body: string): string => {
   fs.chmodSync(file, 0o755);
   return file;
 };
+// Windows ignores POSIX mode bits (files report 0o666), so mode assertions run on POSIX only.
+const posixMode = process.platform !== 'win32';
 const UUID = '123e4567-e89b-42d3-a456-426614174000';
 
 before(() => {
@@ -58,7 +60,7 @@ test('validateRun', () => {
 test('mcp config: token and desktop server presence, mode 0600, removal', () => {
   const file = path.join(tmp, 'mcp.json');
   writeMcpConfig(file, 'https://api.example', 'tok-1', { url: 'http://127.0.0.1:5000/mcp', token: 'loc-2' });
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  if (posixMode) assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), {
     mcpServers: {
       pulse: { type: 'http', url: 'https://api.example/mcp', headers: { Authorization: 'Bearer tok-1' } },
@@ -67,7 +69,7 @@ test('mcp config: token and desktop server presence, mode 0600, removal', () => 
   });
   fs.chmodSync(file, 0o644); // an existing looser file is tightened on rewrite
   writeMcpConfig(file, 'https://api.example', null, null);
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  if (posixMode) assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { mcpServers: {} });
   assert.deepEqual(Object.keys(buildMcpConfig('https://a', 'T', null).mcpServers), ['pulse']);
   assert.deepEqual(Object.keys(buildMcpConfig('https://a', null, { url: 'u', token: 't' }).mcpServers), ['pulse_desktop']);
@@ -181,31 +183,31 @@ test('status parsing helpers', () => {
 });
 
 test('status: ready (label has no email), signed_out, too_old, not_found', async () => {
-  const ready = fakeCli('s-ready', '2.1.311 (Claude Code)',
+  const ready = fakeCli('s-ready.js', '2.1.311 (Claude Code)',
     `console.log(JSON.stringify({loggedIn:true,authMethod:'claude.ai',email:'a@b.c',orgName:'Org',subscriptionType:'pro'}))`);
   const s = await checkStatus(ready);
   assert.deepEqual(s, { state: 'ready', version: '2.1.311', account: 'claude.ai pro' });
   assert.ok(!JSON.stringify(s).includes('@'));
 
-  const out = fakeCli('s-out', '2.1.311 (Claude Code)', `console.log(JSON.stringify({loggedIn:false})); process.exit(1)`);
+  const out = fakeCli('s-out.js', '2.1.311 (Claude Code)', `console.log(JSON.stringify({loggedIn:false})); process.exit(1)`);
   assert.deepEqual(await checkStatus(out), { state: 'signed_out', version: '2.1.311' });
 
-  const garbage = fakeCli('s-garbage', '2.1.311', `console.log('Not logged in'); process.exit(1)`);
+  const garbage = fakeCli('s-garbage.js', '2.1.311', `console.log('Not logged in'); process.exit(1)`);
   assert.deepEqual(await checkStatus(garbage), { state: 'signed_out', version: '2.1.311' });
 
-  const old = fakeCli('s-old', '1.0.5 (Claude Code)', `console.log('{"loggedIn":true}')`);
+  const old = fakeCli('s-old.js', '1.0.5 (Claude Code)', `console.log('{"loggedIn":true}')`);
   assert.deepEqual(await checkStatus(old), { state: 'too_old', version: '1.0.5', minimum: '2.0.0' });
 
   assert.deepEqual(await checkStatus(null), { state: 'not_found' });
   assert.deepEqual(await checkStatus(path.join(tmp, 'missing')), { state: 'not_found' });
-  const broken = script('s-broken', `process.exit(1)`);
+  const broken = script('s-broken.js', `process.exit(1)`);
   assert.deepEqual(await checkStatus(broken), { state: 'not_found' });
 });
 
 test('status: a hung CLI times out instead of hanging', async () => {
-  const hung = script('s-hung', `setInterval(()=>{},1000)`);
+  const hung = script('s-hung.js', `setInterval(()=>{},1000)`);
   assert.deepEqual(await checkStatus(hung, { versionTimeoutMs: 200 }), { state: 'not_found' });
-  const hungAuth = script('s-hung-auth', `if (process.argv[2]==='--version') console.log('2.1.0'); else setInterval(()=>{},1000)`);
+  const hungAuth = script('s-hung-auth.js', `if (process.argv[2]==='--version') console.log('2.1.0'); else setInterval(()=>{},1000)`);
   assert.deepEqual(await checkStatus(hungAuth, { authTimeoutMs: 200 }), { state: 'signed_out', version: '2.1.0' });
 });
 
@@ -216,22 +218,23 @@ test('locate order: env > saved > login shell > fallbacks', async () => {
   const saved = script('saved-claude', '');
   const shellBin = script('shell-claude', '');
   const home = fs.mkdtempSync(path.join(tmp, 'home-'));
+  const platform = 'darwin' as const; // POSIX order; the Windows order is covered by claude-windows.test.ts
   const shellResolve = async () => shellBin;
-  assert.equal(await locateClaude({ envBin: '/env/claude', settingsFile, shellResolve, home }), '/env/claude');
-  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve, home }), shellBin);
+  assert.equal(await locateClaude({ envBin: '/env/claude', settingsFile, shellResolve, home, platform }), '/env/claude');
+  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve, home, platform }), shellBin);
   saveBin(settingsFile, saved);
   assert.equal(readSavedBin(settingsFile), saved);
-  assert.equal(fs.statSync(settingsFile).mode & 0o777, 0o600);
-  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve, home }), saved);
+  if (posixMode) assert.equal(fs.statSync(settingsFile).mode & 0o777, 0o600);
+  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve, home, platform }), saved);
   fs.rmSync(saved);
-  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve, home }), shellBin);
+  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve, home, platform }), shellBin);
   fs.mkdirSync(path.join(home, '.claude', 'local'), { recursive: true });
   const local = path.join(home, '.claude', 'local', 'claude');
   fs.writeFileSync(local, '');
   fs.chmodSync(local, 0o755);
-  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve: async () => null, home }), local);
+  assert.equal(await locateClaude({ envBin: null, settingsFile, shellResolve: async () => null, home, platform }), local);
   const none = await locateClaude({
-    envBin: null, settingsFile, shellResolve: async () => null, home: path.join(tmp, 'nohome'), isExecutable: () => false,
+    envBin: null, settingsFile, shellResolve: async () => null, home: path.join(tmp, 'nohome'), isExecutable: () => false, platform,
   });
   assert.equal(none, null);
 });
