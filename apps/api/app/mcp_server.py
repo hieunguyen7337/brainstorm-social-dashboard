@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from app import redact
 from app.mcp_browser import BROWSER_RULES, register_browser_tools
 
 POST_FIELDS = (
@@ -168,6 +169,7 @@ def _summarise_dashboard(d: dict[str, Any]) -> dict[str, Any]:
 
 
 def mount_mcp(app: FastAPI) -> None:
+    redact.install_log_filter()  # header-less clients send ?token=<bearer> on every request: keep it out of the access log
     mcp = FastMCP(
         "pulse",
         instructions=(

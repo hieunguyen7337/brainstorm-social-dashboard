@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from app import templates_room
+from app import redact, templates_room
 from app.auth import get_workspace
 from app.config import settings
 from app.db import get_db
@@ -19,6 +19,7 @@ from app.services import rooms
 from app.services.rooms import RoomError
 
 router = APIRouter()
+redact.install_log_filter()  # the big screen opens /room/{code}?token=<bearer>: keep it out of the access log
 
 NO_STORE = {"Cache-Control": "no-store"}
 MAX_FORM_BYTES = 4096
