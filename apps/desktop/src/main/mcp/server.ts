@@ -35,20 +35,21 @@ function reply(res: http.ServerResponse, status: number, message: string): void 
   res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }));
 }
 
+/**
+ * The body, or null when it is over MAX_BODY_BYTES. Always resolves only once the request has been read to the end:
+ * answering (413) while the client is still sending makes the socket close with unread data, and the client then sees
+ * a reset (EPIPE/ECONNRESET) instead of the response.
+ */
 function readBody(req: http.IncomingMessage): Promise<Buffer | null> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY_BYTES) {
-        chunks.length = 0;
-        resolve(null); // keeps draining without storing
-        return;
-      }
-      if (size <= MAX_BODY_BYTES) chunks.push(c);
+      if (size > MAX_BODY_BYTES) chunks.length = 0; // keep draining without storing
+      else chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('end', () => resolve(size > MAX_BODY_BYTES ? null : Buffer.concat(chunks)));
     req.on('error', () => resolve(null));
   });
 }
@@ -70,12 +71,7 @@ export async function startMcpServer(tools: Tools, token: string = crypto.random
       res.setHeader('Allow', 'POST');
       return reply(res, 405, 'Method not allowed');
     }
-    const declared = Number(req.headers['content-length'] ?? 0);
-    if (declared > MAX_BODY_BYTES) {
-      res.setHeader('Connection', 'close');
-      req.resume(); // drain (only an authenticated caller gets here)
-      return reply(res, 413, 'Body too large');
-    }
+    // An oversized body is drained (only an authenticated caller gets here) before the 413, see readBody.
     const raw = await readBody(req);
     if (raw === null) {
       res.setHeader('Connection', 'close');

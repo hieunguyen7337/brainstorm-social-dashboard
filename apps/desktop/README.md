@@ -16,7 +16,7 @@ npm run renderer   # exports the Pulse web app into apps/desktop/renderer
 npm run dev        # bundles main + preloads into dist/, then starts Electron
 ```
 
-Other scripts: `npm run build`, `npm run typecheck`, `npm test`.
+Other scripts: `npm run build`, `npm run dist` (see Packaging), `npm run typecheck`, `npm test`.
 
 ## Environment
 
@@ -67,3 +67,29 @@ per-launch bearer token passed to Claude only through the 0600 MCP config; wrong
   confirm dialog (caption, photo picker); a cancel or no answer within 10 minutes posts nothing. After an OK the poster
   (`src/main/social/post.ts`, the Android `buildIgPostScript` flow) runs in a hidden Instagram window, once, with no
   automatic retry. One post in flight, at most 5 a day.
+
+## Packaging
+
+`npm run dist:mac`, `npm run dist:win` or `npm run dist` (both) build installers into `apps/desktop/release/`
+(git-ignored) with electron-builder (`electron-builder.yml`). `prepackage` first checks that `renderer/index.html`
+exists (run `npm run renderer` before; it fails with a clear message otherwise) and re-bundles `dist/`. esbuild bundles
+the MCP SDK and zod into `dist/main.js`, so they are devDependencies and the app ships no `node_modules`; the asar
+holds only `dist/`, `renderer/` and `package.json`. Both commands work from macOS (no Wine needed:
+`win.signAndEditExecutable: false`, so the .exe carries the default Electron icon/metadata; the installer uses
+`build/icon.png`). Windows installers cannot be run on a Mac, so test them on Windows.
+
+Outputs (version from `package.json`, about 115-125 MB each):
+
+- macOS: `Pulse-<v>-mac-arm64.dmg`, `Pulse-<v>-mac-x64.dmg` and matching `.zip`.
+- Windows: `Pulse-<v>-win-x64.exe`, `Pulse-<v>-win-arm64.exe` and a combined `Pulse-<v>-win.exe` (both arches, bigger).
+  NSIS, per-user install, choose the install folder, desktop and Start menu shortcuts.
+
+Nothing is signed with a purchased certificate:
+
+- macOS: `identity: null` plus `scripts/after-pack.cjs`, which signs the `.app` ad hoc (`codesign --sign -`), so no
+  Developer ID or notarisation. Gatekeeper will block the first launch: right-click Pulse.app > Open > Open, or run
+  `xattr -cr /Applications/Pulse.app`.
+- Windows: unsigned, so SmartScreen warns: "More info" > "Run anyway".
+
+CI (`.github/workflows/desktop.yml`) builds both on macos-latest and windows-latest and uploads `release/` installers
+as artifacts. The app has no auto-update.

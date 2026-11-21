@@ -3,6 +3,8 @@ import type { ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { ClaudeEvent } from '@/src/desktop/types';
 import { buildArgs, validateRun } from './args.ts';
+import { killChild, resolveLaunch } from './launch.ts';
+import type { KillDeps, Launch } from './launch.ts';
 
 export function lineSplitter(onLine: (line: string) => void) {
   let buf = '';
@@ -31,6 +33,9 @@ export interface BridgeDeps {
   workDir: string;
   send: (runId: string, event: ClaudeEvent) => void;
   killGraceMs?: number;
+  /** Test seams. */
+  resolveLaunch?: (bin: string) => Launch;
+  kill?: KillDeps;
 }
 
 export class ClaudeBridge {
@@ -52,7 +57,7 @@ export class ClaudeBridge {
       const bin = await this.deps.resolveBin();
       if (!bin) throw new Error('Claude Code was not found');
       const args = buildArgs(req, this.deps.writeMcpConfig());
-      this.start(slot, bin, args);
+      this.start(slot, (this.deps.resolveLaunch ?? resolveLaunch)(bin), args);
     } catch (e) {
       this.active = null;
       throw e;
@@ -60,7 +65,7 @@ export class ClaudeBridge {
     return { runId };
   }
 
-  private start(slot: NonNullable<ClaudeBridge['active']>, bin: string, args: string[]): void {
+  private start(slot: NonNullable<ClaudeBridge['active']>, launch: Launch, args: string[]): void {
     const { runId } = slot;
     const send = (event: ClaudeEvent) => this.deps.send(runId, event);
     let child: ChildProcess;
@@ -84,7 +89,12 @@ export class ClaudeBridge {
     });
     const err = lineSplitter((line) => send({ type: 'stderr', line }));
     try {
-      child = spawn(bin, args, { cwd: this.deps.workDir, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(launch.command, [...launch.prefixArgs, ...args], {
+        cwd: this.deps.workDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ...launch.env },
+        windowsHide: true,
+      });
     } catch (e) {
       // Give the renderer time to subscribe before the failure arrives.
       setTimeout(() => finish(-1, `spawn failed: ${(e as Error).message}`), 50);
@@ -105,14 +115,14 @@ export class ClaudeBridge {
     });
   }
 
-  /** SIGTERM, then SIGKILL after the grace period. Unknown run ids are ignored. */
+  /** SIGTERM, then SIGKILL (Windows: taskkill /T /F on the process tree) after the grace period. Unknown run ids are ignored. */
   stop(runId: unknown): void {
     const slot = this.active;
     if (!slot || slot.runId !== runId || !slot.child || slot.killTimer) return;
     const child = slot.child;
-    child.kill('SIGTERM');
+    killChild(child, 'SIGTERM', this.deps.kill);
     slot.killTimer = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      if (child.exitCode === null && child.signalCode === null) killChild(child, 'SIGKILL', this.deps.kill);
     }, this.deps.killGraceMs ?? 3000);
     slot.killTimer.unref();
   }
@@ -120,7 +130,7 @@ export class ClaudeBridge {
   /** App quit: no events, no waiting. */
   killAll(): void {
     const child = this.active?.child;
-    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    if (child && child.exitCode === null && child.signalCode === null) killChild(child, 'SIGKILL', this.deps.kill);
   }
 
   get running(): boolean {
