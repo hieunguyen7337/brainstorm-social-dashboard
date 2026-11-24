@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:8000';
+// QA sandbox only: WebKit is not installed there, so QA_IPHONE_CHROMIUM=1 keeps the iPhone 15
+// viewport, user agent and touch settings but runs them on Chromium. Unset = WebKit, as before.
+const IPHONE_ON_CHROMIUM = process.env.QA_IPHONE_CHROMIUM === '1';
 
 export default defineConfig({
   testDir: './tests',
@@ -16,7 +19,13 @@ export default defineConfig({
     screenshot: 'off', // taken manually in the afterEach hook (tests/fixtures.ts)
   },
   projects: [
-    { name: 'iphone', use: { ...devices['iPhone 15'] } },
+    {
+      name: 'iphone',
+      use: {
+        ...devices['iPhone 15'],
+        ...(IPHONE_ON_CHROMIUM ? { browserName: 'chromium', defaultBrowserType: 'chromium' } : {}),
+      },
+    },
     { name: 'android', use: { ...devices['Pixel 7'] } },
   ],
 });

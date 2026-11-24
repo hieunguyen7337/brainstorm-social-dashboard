@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect, SHARED_TOKEN } from './fixtures';
 
 test('health endpoint', async ({ request }) => {
   const r = await request.get('/api/health');
@@ -7,9 +7,12 @@ test('health endpoint', async ({ request }) => {
 });
 
 test('/mcp tools/list returns 10 tools', async ({ request }) => {
-  const ws = await request.post('/api/workspaces', { data: {} });
-  expect(ws.ok()).toBeTruthy();
-  const { token } = await ws.json();
+  let token = SHARED_TOKEN;
+  if (!token) {
+    const ws = await request.post('/api/workspaces', { data: {} });
+    expect(ws.ok()).toBeTruthy();
+    token = (await ws.json()).token;
+  }
   const headers = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',

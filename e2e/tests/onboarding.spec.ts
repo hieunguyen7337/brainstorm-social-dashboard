@@ -1,7 +1,7 @@
 import { test, expect, onboard, getToken, auth } from './fixtures';
 
 test('onboarding creates a workspace and shows dashboard with KPIs and funnel', async ({ page, request }) => {
-  await onboard(page);
+  await onboard(page, { real: true });
   await expect(page.getByText('Sales funnel')).toBeVisible();
   const token = await getToken(page, request);
   const r = await request.get('/api/dashboard?days=30', { headers: auth(token) });

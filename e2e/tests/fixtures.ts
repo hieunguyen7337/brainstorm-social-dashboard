@@ -6,6 +6,13 @@ export { expect };
 
 const SHOTS = path.resolve(__dirname, '..', 'screenshots');
 
+/**
+ * QA_WORKSPACE_TOKEN (unset by default): reuse one existing guest workspace instead of creating one per test.
+ * The live site is shared with judges, so a live QA run must stay inside a fixed workspace budget.
+ * `onboard(page, { real: true })` still goes through the UI onboarding flow.
+ */
+export const SHARED_TOKEN = process.env.QA_WORKSPACE_TOKEN ?? '';
+
 /** Collects console errors / page errors; tests assert on `errors`. */
 export const test = base.extend<{ errors: string[] }>({
   errors: async ({ page }, use) => {
@@ -29,7 +36,19 @@ test.afterEach(async ({ page }, info) => {
 });
 
 /** Onboard through the UI. Lands on the dashboard. */
-export async function onboard(page: Page) {
+export async function onboard(page: Page, opts: { real?: boolean } = {}) {
+  if (SHARED_TOKEN && !opts.real) {
+    await page.addInitScript((t: string) => {
+      try {
+        window.localStorage.setItem('pulse.token', t);
+      } catch {
+        /* storage blocked */
+      }
+    }, SHARED_TOKEN);
+    await page.goto('/');
+    await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+    return;
+  }
   await page.goto('/');
   await page.getByRole('button', { name: /start my demo/i }).click();
   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
@@ -37,6 +56,7 @@ export async function onboard(page: Page) {
 
 /** Bearer token stored by the app: look for a localStorage value that the API accepts. */
 export async function getToken(page: Page, request: APIRequestContext): Promise<string> {
+  if (SHARED_TOKEN) return SHARED_TOKEN;
   const entries: [string, string][] = await page.evaluate(() =>
     Object.keys(localStorage).map((k) => [k, localStorage.getItem(k) ?? ''] as [string, string]),
   );
