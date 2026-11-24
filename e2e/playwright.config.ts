@@ -4,6 +4,9 @@ const BASE_URL = process.env.BASE_URL ?? 'http://localhost:8000';
 // QA sandbox only: WebKit is not installed there, so QA_IPHONE_CHROMIUM=1 keeps the iPhone 15
 // viewport, user agent and touch settings but runs them on Chromium. Unset = WebKit, as before.
 const IPHONE_ON_CHROMIUM = process.env.QA_IPHONE_CHROMIUM === '1';
+// QA sandbox only: Playwright's API client does not use HTTPS_PROXY, so the sandbox cannot resolve the live host.
+// QA_USE_PROXY=1 hands the sandbox's own proxy to Playwright (browser and API client). Unset = direct, as before.
+const SANDBOX_PROXY = process.env.QA_USE_PROXY === '1' ? process.env.HTTPS_PROXY : undefined;
 
 export default defineConfig({
   testDir: './tests',
@@ -17,6 +20,7 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'off', // taken manually in the afterEach hook (tests/fixtures.ts)
+    ...(SANDBOX_PROXY ? { proxy: { server: SANDBOX_PROXY } } : {}),
   },
   projects: [
     {

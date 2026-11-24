@@ -1,0 +1,319 @@
+
+Running 14 tests using 2 workers
+
+  ✓   1 [iphone] › tests/api-smoke.spec.ts:3:1 › health endpoint (949ms)
+  ✘   3 [iphone] › tests/api-smoke.spec.ts:9:1 › /mcp tools/list returns 10 tools (1.4s)
+  ✘   2 [iphone] › tests/console.spec.ts:3:1 › no console errors on load of each tab (20.8s)
+  ✘   4 [iphone] › tests/create.spec.ts:3:1 › create two variants, publish one, see it in Queue with growing views (20.7s)
+  ✘   5 [iphone] › tests/onboarding.spec.ts:3:1 › onboarding creates a workspace and shows dashboard with KPIs and funnel (20.8s)
+  ✘   6 [iphone] › tests/tracked-link.spec.ts:3:1 › real click and conversion on a tracked link show up on the dashboard (20.9s)
+  ✓   8 [android] › tests/api-smoke.spec.ts:3:1 › health endpoint (748ms)
+  ✘   9 [android] › tests/api-smoke.spec.ts:9:1 › /mcp tools/list returns 10 tools (1.6s)
+  ✘   7 [iphone] › tests/trends.spec.ts:3:1 › trends list loads with at least 5 items (20.9s)
+  ✘  10 [android] › tests/console.spec.ts:3:1 › no console errors on load of each tab (20.6s)
+  ✘  11 [android] › tests/create.spec.ts:3:1 › create two variants, publish one, see it in Queue with growing views (20.7s)
+  ✘  12 [android] › tests/onboarding.spec.ts:3:1 › onboarding creates a workspace and shows dashboard with KPIs and funnel (20.6s)
+  ✘  13 [android] › tests/tracked-link.spec.ts:3:1 › real click and conversion on a tracked link show up on the dashboard (20.7s)
+  ✘  14 [android] › tests/trends.spec.ts:3:1 › trends list loads with at least 5 items (20.6s)
+
+
+  1) [iphone] › tests/api-smoke.spec.ts:9:1 › /mcp tools/list returns 10 tools ─────────────────────
+
+    Error: expect(received).toHaveLength(expected)
+
+    Expected length: 10
+    Received length: 24
+    Received array:  [{"description": "Summarise the workspace dashboard: totals, sales funnel (views -> engagements -> clicks ->
+    conversions), views share by platform and the top 3 posts. `days` is the window (default 30);
+    `platform` optionally filters to linkedin or instagram (X, TikTok, Facebook, Reddit: coming soon).", "inputSchema": {"properties": {"days": {"default": 30, "title": "Days", "type": "integer"}, "platform": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Platform"}}, "title": "get_dashboardArguments", "type": "object"}, "name": "get_dashboard", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "get_dashboardOutput", "type": "object"}}, {"description": "List posts (newest first) with their key fields and metrics. Optional filters: `status`
+    (draft, pending_approval, scheduled, published...) and `platform`. `limit` defaults to 20.", "inputSchema": {"properties": {"limit": {"default": 20, "title": "Limit", "type": "integer"}, "platform": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Platform"}, "status": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Status"}}, "title": "list_postsArguments", "type": "object"}, "name": "list_posts", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "list_postsOutput", "type": "object"}}, {"description": "Create a post on one live platform (linkedin or instagram; the others are coming soon and refused) with the
+    given text and hashtags. `status` is normally \"draft\"; use publish_post to publish it.", "inputSchema": {"properties": {"content": {"title": "Content", "type": "string"}, "hashtags": {"anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}], "default": null, "title": "Hashtags"}, "platform": {"title": "Platform", "type": "string"}, "status": {"default": "draft", "title": "Status", "type": "string"}}, "required": ["platform", "content"], "title": "create_postArguments", "type": "object"}, "name": "create_post", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "create_postOutput", "type": "object"}}, {"description": "Publish an existing draft/pending post by id (sandbox mode: simulated audience then
+    accrues views and engagement over time).", "inputSchema": {"properties": {"post_id": {"title": "Post Id", "type": "string"}}, "required": ["post_id"], "title": "publish_postArguments", "type": "object"}, "name": "publish_post", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "publish_postOutput", "type": "object"}}, {"description": "Have Claude write one post variant per platform, saved as draft posts. Steer it with a
+    content theme (`theme_id`, see list_themes), a trend (`trend_id`, see list_trends) and/or a
+    free-text `brief`. Returns the drafts.", "inputSchema": {"properties": {"brief": {"default": "", "title": "Brief", "type": "string"}, "platforms": {"items": {"type": "string"}, "title": "Platforms", "type": "array"}, "theme_id": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Theme Id"}, "trend_id": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Trend Id"}}, "required": ["platforms"], "title": "generate_postsArguments", "type": "object"}, "name": "generate_posts", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "generate_postsOutput", "type": "object"}}, {"description": "List current outside trends (Hacker News, Reddit, Google Trends AU) ranked for this
+    workspace's brand. Use a trend's id with generate_posts.", "inputSchema": {"properties": {"limit": {"default": 10, "title": "Limit", "type": "integer"}}, "title": "list_trendsArguments", "type": "object"}, "name": "list_trends", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "list_trendsOutput", "type": "object"}}, {"description": "List the workspace's content themes (pillars) that steer generation.", "inputSchema": {"properties": {}, "title": "list_themesArguments", "type": "object"}, "name": "list_themes", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "list_themesOutput", "type": "object"}}, {"description": "Show AI generation usage for this workspace against its limit.", "inputSchema": {"properties": {}, "title": "get_ai_usageArguments", "type": "object"}, "name": "get_ai_usage", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "get_ai_usageOutput", "type": "object"}}, {"description": "Configure autopilot, which every `interval_min` minutes picks a trend and theme and drafts
+    posts for `platforms`. With `require_approval` true they wait for approval; otherwise they
+    are published automatically (sandbox).", "inputSchema": {"properties": {"enabled": {"title": "Enabled", "type": "boolean"}, "interval_min": {"default": 30, "title": "Interval Min", "type": "integer"}, "platforms": {"anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}], "default": null, "title": "Platforms"}, "require_approval": {"default": true, "title": "Require Approval", "type": "boolean"}}, "required": ["enabled"], "title": "set_autopilotArguments", "type": "object"}, "name": "set_autopilot", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "set_autopilotOutput", "type": "object"}}, {"description": "Run one autopilot cycle right now and return what it drafted or published.", "inputSchema": {"properties": {}, "title": "run_autopilotArguments", "type": "object"}, "name": "run_autopilot", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "run_autopilotOutput", "type": "object"}}, …]
+
+      38 |   const line = text.startsWith('{') ? text : (text.split('\n').find((l) => l.startsWith('data:')) ?? '').slice(5);
+      39 |   const body = JSON.parse(line);
+    > 40 |   expect(body.result.tools).toHaveLength(10);
+         |                             ^
+      41 | });
+      42 |
+        at /home/user/brainstorm-social-dashboard/e2e/tests/api-smoke.spec.ts:40:29
+
+    Error Context: test-results/api-smoke--mcp-tools-list-returns-10-tools-iphone/error-context.md
+
+  2) [iphone] › tests/console.spec.ts:3:1 › no console errors on load of each tab ──────────────────
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/console.spec.ts:4:3
+
+    Error Context: test-results/console-no-console-errors-on-load-of-each-tab-iphone/error-context.md
+
+  3) [iphone] › tests/create.spec.ts:3:1 › create two variants, publish one, see it in Queue with growing views 
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/create.spec.ts:4:3
+
+    Error Context: test-results/create-create-two-variants-54b4e-in-Queue-with-growing-views-iphone/error-context.md
+
+  4) [iphone] › tests/onboarding.spec.ts:3:1 › onboarding creates a workspace and shows dashboard with KPIs and funnel 
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/onboarding.spec.ts:4:3
+
+    Error Context: test-results/onboarding-onboarding-crea-8a7de-hboard-with-KPIs-and-funnel-iphone/error-context.md
+
+  5) [iphone] › tests/tracked-link.spec.ts:3:1 › real click and conversion on a tracked link show up on the dashboard 
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/tracked-link.spec.ts:4:3
+
+    Error Context: test-results/tracked-link-real-click-an-673ea-nk-show-up-on-the-dashboard-iphone/error-context.md
+
+  6) [iphone] › tests/trends.spec.ts:3:1 › trends list loads with at least 5 items ─────────────────
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/trends.spec.ts:4:3
+
+    Error Context: test-results/trends-trends-list-loads-with-at-least-5-items-iphone/error-context.md
+
+  7) [android] › tests/api-smoke.spec.ts:9:1 › /mcp tools/list returns 10 tools ────────────────────
+
+    Error: expect(received).toHaveLength(expected)
+
+    Expected length: 10
+    Received length: 24
+    Received array:  [{"description": "Summarise the workspace dashboard: totals, sales funnel (views -> engagements -> clicks ->
+    conversions), views share by platform and the top 3 posts. `days` is the window (default 30);
+    `platform` optionally filters to linkedin or instagram (X, TikTok, Facebook, Reddit: coming soon).", "inputSchema": {"properties": {"days": {"default": 30, "title": "Days", "type": "integer"}, "platform": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Platform"}}, "title": "get_dashboardArguments", "type": "object"}, "name": "get_dashboard", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "get_dashboardOutput", "type": "object"}}, {"description": "List posts (newest first) with their key fields and metrics. Optional filters: `status`
+    (draft, pending_approval, scheduled, published...) and `platform`. `limit` defaults to 20.", "inputSchema": {"properties": {"limit": {"default": 20, "title": "Limit", "type": "integer"}, "platform": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Platform"}, "status": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Status"}}, "title": "list_postsArguments", "type": "object"}, "name": "list_posts", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "list_postsOutput", "type": "object"}}, {"description": "Create a post on one live platform (linkedin or instagram; the others are coming soon and refused) with the
+    given text and hashtags. `status` is normally \"draft\"; use publish_post to publish it.", "inputSchema": {"properties": {"content": {"title": "Content", "type": "string"}, "hashtags": {"anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}], "default": null, "title": "Hashtags"}, "platform": {"title": "Platform", "type": "string"}, "status": {"default": "draft", "title": "Status", "type": "string"}}, "required": ["platform", "content"], "title": "create_postArguments", "type": "object"}, "name": "create_post", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "create_postOutput", "type": "object"}}, {"description": "Publish an existing draft/pending post by id (sandbox mode: simulated audience then
+    accrues views and engagement over time).", "inputSchema": {"properties": {"post_id": {"title": "Post Id", "type": "string"}}, "required": ["post_id"], "title": "publish_postArguments", "type": "object"}, "name": "publish_post", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "publish_postOutput", "type": "object"}}, {"description": "Have Claude write one post variant per platform, saved as draft posts. Steer it with a
+    content theme (`theme_id`, see list_themes), a trend (`trend_id`, see list_trends) and/or a
+    free-text `brief`. Returns the drafts.", "inputSchema": {"properties": {"brief": {"default": "", "title": "Brief", "type": "string"}, "platforms": {"items": {"type": "string"}, "title": "Platforms", "type": "array"}, "theme_id": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Theme Id"}, "trend_id": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Trend Id"}}, "required": ["platforms"], "title": "generate_postsArguments", "type": "object"}, "name": "generate_posts", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "generate_postsOutput", "type": "object"}}, {"description": "List current outside trends (Hacker News, Reddit, Google Trends AU) ranked for this
+    workspace's brand. Use a trend's id with generate_posts.", "inputSchema": {"properties": {"limit": {"default": 10, "title": "Limit", "type": "integer"}}, "title": "list_trendsArguments", "type": "object"}, "name": "list_trends", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "list_trendsOutput", "type": "object"}}, {"description": "List the workspace's content themes (pillars) that steer generation.", "inputSchema": {"properties": {}, "title": "list_themesArguments", "type": "object"}, "name": "list_themes", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "list_themesOutput", "type": "object"}}, {"description": "Show AI generation usage for this workspace against its limit.", "inputSchema": {"properties": {}, "title": "get_ai_usageArguments", "type": "object"}, "name": "get_ai_usage", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "get_ai_usageOutput", "type": "object"}}, {"description": "Configure autopilot, which every `interval_min` minutes picks a trend and theme and drafts
+    posts for `platforms`. With `require_approval` true they wait for approval; otherwise they
+    are published automatically (sandbox).", "inputSchema": {"properties": {"enabled": {"title": "Enabled", "type": "boolean"}, "interval_min": {"default": 30, "title": "Interval Min", "type": "integer"}, "platforms": {"anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}], "default": null, "title": "Platforms"}, "require_approval": {"default": true, "title": "Require Approval", "type": "boolean"}}, "required": ["enabled"], "title": "set_autopilotArguments", "type": "object"}, "name": "set_autopilot", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "set_autopilotOutput", "type": "object"}}, {"description": "Run one autopilot cycle right now and return what it drafted or published.", "inputSchema": {"properties": {}, "title": "run_autopilotArguments", "type": "object"}, "name": "run_autopilot", "outputSchema": {"properties": {"result": {"title": "Result", "type": "string"}}, "required": ["result"], "title": "run_autopilotOutput", "type": "object"}}, …]
+
+      38 |   const line = text.startsWith('{') ? text : (text.split('\n').find((l) => l.startsWith('data:')) ?? '').slice(5);
+      39 |   const body = JSON.parse(line);
+    > 40 |   expect(body.result.tools).toHaveLength(10);
+         |                             ^
+      41 | });
+      42 |
+        at /home/user/brainstorm-social-dashboard/e2e/tests/api-smoke.spec.ts:40:29
+
+    Error Context: test-results/api-smoke--mcp-tools-list-returns-10-tools-android/error-context.md
+
+  8) [android] › tests/console.spec.ts:3:1 › no console errors on load of each tab ─────────────────
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/console.spec.ts:4:3
+
+    Error Context: test-results/console-no-console-errors-on-load-of-each-tab-android/error-context.md
+
+  9) [android] › tests/create.spec.ts:3:1 › create two variants, publish one, see it in Queue with growing views 
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/create.spec.ts:4:3
+
+    Error Context: test-results/create-create-two-variants-54b4e-in-Queue-with-growing-views-android/error-context.md
+
+  10) [android] › tests/onboarding.spec.ts:3:1 › onboarding creates a workspace and shows dashboard with KPIs and funnel 
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/onboarding.spec.ts:4:3
+
+    Error Context: test-results/onboarding-onboarding-crea-8a7de-hboard-with-KPIs-and-funnel-android/error-context.md
+
+  11) [android] › tests/tracked-link.spec.ts:3:1 › real click and conversion on a tracked link show up on the dashboard 
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/tracked-link.spec.ts:4:3
+
+    Error Context: test-results/tracked-link-real-click-an-673ea-nk-show-up-on-the-dashboard-android/error-context.md
+
+  12) [android] › tests/trends.spec.ts:3:1 › trends list loads with at least 5 items ───────────────
+
+    Test timeout of 20000ms exceeded.
+
+    Error: locator.click: Test timeout of 20000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /start my demo/i })
+
+
+       at fixtures.ts:53
+
+      51 |   }
+      52 |   await page.goto('/');
+    > 53 |   await page.getByRole('button', { name: /start my demo/i }).click();
+         |                                                              ^
+      54 |   await expect(page.getByText('Views by platform')).toBeVisible({ timeout: 30_000 });
+      55 | }
+      56 |
+        at onboard (/home/user/brainstorm-social-dashboard/e2e/tests/fixtures.ts:53:62)
+        at /home/user/brainstorm-social-dashboard/e2e/tests/trends.spec.ts:4:3
+
+    Error Context: test-results/trends-trends-list-loads-with-at-least-5-items-android/error-context.md
+
+  12 failed
+    [iphone] › tests/api-smoke.spec.ts:9:1 › /mcp tools/list returns 10 tools ──────────────────────
+    [iphone] › tests/console.spec.ts:3:1 › no console errors on load of each tab ───────────────────
+    [iphone] › tests/create.spec.ts:3:1 › create two variants, publish one, see it in Queue with growing views 
+    [iphone] › tests/onboarding.spec.ts:3:1 › onboarding creates a workspace and shows dashboard with KPIs and funnel 
+    [iphone] › tests/tracked-link.spec.ts:3:1 › real click and conversion on a tracked link show up on the dashboard 
+    [iphone] › tests/trends.spec.ts:3:1 › trends list loads with at least 5 items ──────────────────
+    [android] › tests/api-smoke.spec.ts:9:1 › /mcp tools/list returns 10 tools ─────────────────────
+    [android] › tests/console.spec.ts:3:1 › no console errors on load of each tab ──────────────────
+    [android] › tests/create.spec.ts:3:1 › create two variants, publish one, see it in Queue with growing views 
+    [android] › tests/onboarding.spec.ts:3:1 › onboarding creates a workspace and shows dashboard with KPIs and funnel 
+    [android] › tests/tracked-link.spec.ts:3:1 › real click and conversion on a tracked link show up on the dashboard 
+    [android] › tests/trends.spec.ts:3:1 › trends list loads with at least 5 items ─────────────────
+  2 passed (1.9m)
